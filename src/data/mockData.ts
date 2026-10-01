@@ -18,7 +18,7 @@ import {
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'starter',
-    name: 'Starter Plan',
+    name: 'Starter Batch',
     priceMonthly: 599,
     priceYearly: 5990,
     maxStudents: 100,
@@ -37,7 +37,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'growth',
-    name: 'Growth Plan',
+    name: 'Growth Academy',
     priceMonthly: 1299,
     priceYearly: 12990,
     maxStudents: 300,
@@ -57,13 +57,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'pro',
-    name: 'Pro Academy Plan',
+    name: 'Multi-Branch Pro',
     priceMonthly: 2199,
     priceYearly: 21990,
     maxStudents: 1000,
     maxBranches: 5,
     popular: false,
-    description: 'For premier competitive coaching, JEE/NEET foundations, and multi-branch academies.',
+    description: 'For large coaching networks and test prep academies.',
     features: [
       'Up to 1,000 Students',
       'Up to 5 Branches',

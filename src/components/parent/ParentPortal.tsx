@@ -181,24 +181,24 @@ export const ParentPortal: React.FC = () => {
           <StatusChip label="OTP VERIFIED" variant="success" size="xs" />
         }
         actions={
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ConsoleButton
               variant="secondary"
               size="sm"
               icon={<UserCheck className="w-3.5 h-3.5 text-[#1A73E8]" />}
               onClick={() => setShowEditProfileModal(true)}
             >
-              Edit Parent Profile
+              Profile
             </ConsoleButton>
-            <span className="text-xs text-[#5F6368] dark:text-[#9AA0A6] font-medium hidden sm:inline">Active Child:</span>
-            <div className="flex items-center space-x-1.5 bg-[#F1F3F4] dark:bg-[#282A2C] p-1 rounded-xl border border-[#DADCE0] dark:border-[#3C4043]">
+            <div className="flex items-center space-x-1.5 bg-[#F1F3F4] dark:bg-[#282A2C] p-1 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] overflow-x-auto max-w-full">
+              <span className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] font-medium px-1.5 hidden xs:inline">Child:</span>
               {parentLinkedChildren.map(child => {
                 const isSelected = child.id === selectedChildId;
                 return (
                   <button
                     key={child.id}
                     onClick={() => setSelectedChildId(child.id)}
-                    className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                       isSelected
                         ? 'bg-white dark:bg-[#1E1F20] text-[#FFA000] dark:text-[#FFCA28] shadow-xs'
                         : 'text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
@@ -207,9 +207,9 @@ export const ParentPortal: React.FC = () => {
                     <img
                       src={child.avatar}
                       alt={child.name}
-                      className="w-4 h-4 rounded-full object-cover"
+                      className="w-5 h-5 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
                     />
-                    <span>{child.name.split(' ')[0]}</span>
+                    <span className="truncate max-w-[90px]">{child.name.split(' ')[0]}</span>
                   </button>
                 );
               })}
@@ -218,8 +218,8 @@ export const ParentPortal: React.FC = () => {
         }
       />
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] overflow-x-auto custom-scrollbar pb-1">
+      {/* Navigation Sub-Tabs (Scrollable with sticky touch UX) */}
+      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] overflow-x-auto custom-scrollbar pb-1 -mx-2 px-2 sm:mx-0 sm:px-0">
         {[
           { id: 'overview', label: 'Summary', icon: TrendingUp },
           { id: 'attendance', label: `Attendance (${attendanceRate}%)`, icon: Calendar },
@@ -227,7 +227,7 @@ export const ParentPortal: React.FC = () => {
           { id: 'results', label: 'Report Cards & Exams', icon: Award },
           { id: 'schedule', label: 'Timetable', icon: Clock },
           { id: 'materials', label: 'Homework & Notes', icon: BookOpen },
-          { id: 'discussions', label: 'VidyaChat (Class & Teacher Desk)', icon: MessageSquare },
+          { id: 'discussions', label: 'VidyaChat', icon: MessageSquare },
         ].map(tab => {
           const Icon = tab.icon;
           const isActive = activeParentTab === tab.id;

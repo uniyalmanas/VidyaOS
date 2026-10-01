@@ -5,10 +5,13 @@
   "start_url": "/",
   "id": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
   "background_color": "#1E1F20",
   "theme_color": "#FFA000",
   "lang": "en-IN",
+  "scope": "/",
+  "prefer_related_applications": false,
   "categories": ["education", "productivity", "finance"],
   "icons": [
     {
@@ -23,10 +26,39 @@
       "purpose": "any maskable"
     },
     {
+      "src": "/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Fee Collection",
+      "short_name": "Fees",
+      "description": "Collect fees and view invoices",
+      "url": "/?tab=fees",
+      "icons": [{ "src": "/favicon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Attendance",
+      "short_name": "Attendance",
+      "description": "Mark and view student attendance",
+      "url": "/?tab=attendance",
+      "icons": [{ "src": "/favicon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Students Roster",
+      "short_name": "Students",
+      "description": "View student roster and admissions",
+      "url": "/?tab=students",
+      "icons": [{ "src": "/favicon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }

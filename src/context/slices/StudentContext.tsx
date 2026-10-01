@@ -6,7 +6,9 @@ import {
   subscribeToBatches,
   persistStudentToFirestore,
   deleteStudentFromFirestore,
-  persistBatchToFirestore
+  persistBatchToFirestore,
+  persistStudentWithBatchAtomically,
+  deleteStudentAtomically
 } from '../../lib/firestoreService';
 
 export interface StudentContextType {
@@ -148,20 +150,25 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
       enrollmentNo
     };
 
-    setStudents(prev => [newStudent, ...prev]);
-    persistStudentToFirestore(newStudent);
-
-    // Also update batch memberships
+    const batchesToUpdate: Batch[] = [];
     if (data.batchIds && data.batchIds.length > 0) {
-      setBatches(prev => prev.map(b => {
+      batches.forEach(b => {
         if (data.batchIds.includes(b.id) && !b.studentIds.includes(newStudent.id)) {
-          const updatedBatch = { ...b, studentIds: [...b.studentIds, newStudent.id] };
-          persistBatchToFirestore(updatedBatch);
-          return updatedBatch;
+          batchesToUpdate.push({ ...b, studentIds: [...b.studentIds, newStudent.id] });
         }
-        return b;
+      });
+    }
+
+    setStudents(prev => [newStudent, ...prev]);
+    if (batchesToUpdate.length > 0) {
+      setBatches(prev => prev.map(b => {
+        const found = batchesToUpdate.find(up => up.id === b.id);
+        return found || b;
       }));
     }
+
+    // Atomically persist student AND batch updates together
+    persistStudentWithBatchAtomically(newStudent, batchesToUpdate);
 
     return newStudent;
   };
@@ -178,8 +185,19 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
   };
 
   const deleteStudent = (studentId: string) => {
+    const batchesToClean = batches.filter(b => b.studentIds.includes(studentId));
     setStudents(prev => prev.filter(s => s.id !== studentId));
-    deleteStudentFromFirestore(studentId);
+    if (batchesToClean.length > 0) {
+      setBatches(prev => prev.map(b => {
+        if (b.studentIds.includes(studentId)) {
+          return { ...b, studentIds: b.studentIds.filter(id => id !== studentId) };
+        }
+        return b;
+      }));
+    }
+
+    // Atomically delete student and clean student ID from all batches
+    deleteStudentAtomically(studentId, batchesToClean);
   };
 
   const addBatch = (data: Omit<Batch, 'id' | 'orgId'>): Batch => {

@@ -25,17 +25,27 @@ import { doc, setDoc, db } from '../../lib/firebase';
 interface RegisterCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialPlanId?: 'starter' | 'growth' | 'pro';
 }
 
 export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  initialPlanId = 'growth'
 }) => {
   const { createNewOrganization, setCurrentOrgId, switchRole, showToast } = useApp();
   const { setShowLoginModal, signupWithPhonePassword, loginWithGoogle, updateUserProfile } = useAuth();
   const { navigate } = useRouter();
 
   const [authMethod, setAuthMethod] = useState<'phone' | 'google'>('phone');
+  const [selectedPlanId, setSelectedPlanId] = useState<'starter' | 'growth' | 'pro'>(initialPlanId);
+
+  React.useEffect(() => {
+    if (initialPlanId) {
+      setSelectedPlanId(initialPlanId);
+    }
+  }, [initialPlanId]);
+
   const [centerName, setCenterName] = useState<string>('');
   const [directorName, setDirectorName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
@@ -90,7 +100,7 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
         upiId: `${cleanCenter.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`, // default placeholder until updated in Settings
         upiMerchantName: cleanCenter.toUpperCase(),
         tagline: centerType === 'Board level' ? 'Premier Board Level Institute' : centerType === 'Coaching' ? 'Premier Coaching Institute' : 'Premier Board Level & Coaching Institute',
-        planId: 'growth'
+        planId: selectedPlanId
       });
 
       // 2. Create Director user account & save credentials in Firestore
@@ -188,7 +198,7 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
         upiId: `${cleanCenter.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`,
         upiMerchantName: cleanCenter.toUpperCase(),
         tagline: centerType === 'Board level' ? 'Premier Board Level Institute' : centerType === 'Coaching' ? 'Premier Coaching Institute' : 'Premier Board Level & Coaching Institute',
-        planId: 'growth'
+        planId: selectedPlanId
       });
 
       // Directly bind the authenticated user to this newly registered organization!
@@ -285,6 +295,73 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
           </div>
         ) : (
           <div className="p-6 space-y-4">
+            {/* 3-Tier Plan Selection */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-[#202124] dark:text-[#E8EAED]">Choose Your VidyaOS Plan</span>
+                <span className="text-[10px] font-bold text-[#188038] dark:text-[#81C995] bg-[#E6F4EA] dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-[#CEEAD6] dark:border-emerald-800/40">
+                  14-Day Free Trial
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  {
+                    id: 'starter',
+                    name: 'Starter Batch',
+                    price: '₹599/mo',
+                    students: '100 Students',
+                    branches: '1 Branch'
+                  },
+                  {
+                    id: 'growth',
+                    name: 'Growth Academy',
+                    price: '₹1,299/mo',
+                    students: '300 Students',
+                    branches: '2 Branches',
+                    popular: true
+                  },
+                  {
+                    id: 'pro',
+                    name: 'Multi-Branch Pro',
+                    price: '₹2,199/mo',
+                    students: '1,000 Students',
+                    branches: '5 Branches'
+                  }
+                ].map(p => {
+                  const isSelected = selectedPlanId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedPlanId(p.id as any)}
+                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer relative flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-2 border-[#FFA000] bg-amber-50/50 dark:bg-amber-950/30 shadow-sm'
+                          : 'border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] opacity-75 hover:opacity-100'
+                      }`}
+                    >
+                      {p.popular && (
+                        <span className="absolute -top-2 right-1.5 bg-[#FFA000] text-slate-950 text-[8px] font-extrabold px-1 rounded-sm shadow-xs">
+                          POPULAR
+                        </span>
+                      )}
+                      <div>
+                        <div className="text-[11px] font-bold text-[#202124] dark:text-white truncate">
+                          {p.name}
+                        </div>
+                        <div className="text-xs font-bold text-[#E65100] dark:text-[#FFCA28] mt-0.5">
+                          {p.price}
+                        </div>
+                      </div>
+                      <div className="text-[9px] text-[#5F6368] dark:text-[#9AA0A6] mt-1 leading-tight">
+                        {p.students} • {p.branches}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Auth Method Switcher Tabs */}
             <div className="flex p-1 bg-slate-100 dark:bg-[#282A2C] rounded-xl border border-[#DADCE0] dark:border-[#3C4043]">
               <button

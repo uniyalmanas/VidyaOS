@@ -31,18 +31,21 @@ import {
   Sun,
   Moon,
   Search,
-  Bell
+  Bell,
+  DownloadCloud
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { ConsoleButton, StatusChip, VidyaLogo } from '../ui';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { PwaInstallModal } from '../common/PwaInstallModal';
 
 interface LandingPageProps {
   onSelectRole: (role: UserRole) => void;
   onOpenLogin: () => void;
   onOpenArchitecture: () => void;
   onEnterApp: () => void;
-  onOpenRegister?: () => void;
+  onOpenRegister?: (planId?: 'starter' | 'growth' | 'pro') => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -53,6 +56,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenRegister
 }) => {
   const { resolvedTheme, toggleTheme, theme } = useTheme();
+  const pwaState = usePwaInstall();
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState<boolean>(false);
 
   // Interactive Live Demo preview tab
   const [activePreviewTab, setActivePreviewTab] = useState<UserRole>('CENTER_ADMIN');
@@ -60,6 +65,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   // ROI Calculator state
   const [studentCount, setStudentCount] = useState<number>(250);
   const [monthlyFee, setMonthlyFee] = useState<number>(2500);
+
+  // Recommended plan based on enrolled student scale
+  const recommendedPlan =
+    studentCount <= 100
+      ? { id: 'starter' as const, name: 'Starter Batch', price: '₹599/mo', desc: 'Up to 100 students' }
+      : studentCount <= 300
+      ? { id: 'growth' as const, name: 'Growth Academy', price: '₹1,299/mo', desc: 'Up to 300 students' }
+      : { id: 'pro' as const, name: 'Multi-Branch Pro', price: '₹2,199/mo', desc: 'Up to 1,000 students' };
 
   // FAQ accordion state
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -112,6 +125,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {/* Right Action Buttons */}
           <div className="flex items-center space-x-2">
+            {/* Install App Link/Button in Header for iOS, Android, Laptop */}
+            <button
+              onClick={() => setIsPwaModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold shadow-sm transition cursor-pointer"
+              title="Install VidyaOS PWA on iOS, Android or Laptop"
+              aria-label="Install App"
+            >
+              <DownloadCloud className="w-3.5 h-3.5 text-[#FFA000] dark:text-[#FFCA28]" />
+              <span className="hidden sm:inline">Install App</span>
+              <span className="sm:hidden">App</span>
+              {pwaState.platform !== 'unknown' && (
+                <span className="hidden md:inline text-[9px] uppercase px-1 py-0.2 rounded bg-amber-500/20 font-mono">
+                  {pwaState.platform === 'ios' ? 'iOS' : pwaState.platform === 'android' ? 'Android' : 'Laptop'}
+                </span>
+              )}
+            </button>
+
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
@@ -131,7 +161,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 variant="primary"
                 size="xs"
                 icon={<Sparkles className="w-3.5 h-3.5" />}
-                onClick={onOpenRegister}
+                onClick={() => onOpenRegister?.()}
                 className="hidden md:inline-flex"
               >
                 Register Center
@@ -216,7 +246,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 size="lg"
                 icon={<Sparkles className="w-4 h-4" />}
                 iconRight={<ArrowRight className="w-4 h-4" />}
-                onClick={onOpenRegister}
+                onClick={() => onOpenRegister?.()}
                 className="shadow-[0_4px_14px_rgba(255,160,0,0.35)] hover:shadow-[0_6px_20px_rgba(255,160,0,0.45)] transform hover:-translate-y-0.5 transition"
               >
                 Register Your Center (Free Trial)
@@ -732,6 +762,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </span>
               </div>
 
+              <div className="p-3 bg-[#FEF7E0] dark:bg-amber-950/40 rounded-xl border border-[#FEEFC3] dark:border-amber-900/40 text-left flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-[#E65100] dark:text-[#FFCA28] uppercase tracking-wider block">
+                    Recommended Plan
+                  </span>
+                  <span className="text-xs font-bold text-[#202124] dark:text-white">
+                    {recommendedPlan.name} ({recommendedPlan.price})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenRegister ? onOpenRegister(recommendedPlan.id) : onSelectRole('CENTER_ADMIN')}
+                  className="text-xs font-bold text-[#E65100] dark:text-[#FFCA28] hover:underline cursor-pointer"
+                >
+                  Select Plan →
+                </button>
+              </div>
+
               <div className="text-xs text-[#1A73E8] font-semibold">
                 ⚡ ~{staffHoursSaved} Staff Hours Saved Every Month
               </div>
@@ -739,10 +787,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <ConsoleButton
                 variant="primary"
                 size="md"
-                onClick={() => onSelectRole('CENTER_ADMIN')}
+                onClick={() => onOpenRegister ? onOpenRegister(recommendedPlan.id) : onSelectRole('CENTER_ADMIN')}
                 className="w-full justify-center"
               >
-                Start Recovering Revenue Today
+                Start with {recommendedPlan.name}
               </ConsoleButton>
             </div>
           </div>
@@ -785,10 +833,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <ConsoleButton
               variant="secondary"
               size="md"
-              onClick={() => onSelectRole('CENTER_ADMIN')}
+              onClick={() => onOpenRegister ? onOpenRegister('starter') : onSelectRole('CENTER_ADMIN')}
               className="w-full justify-center"
             >
-              Choose Starter
+              Choose Starter Batch
             </ConsoleButton>
           </div>
 
@@ -817,7 +865,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <ConsoleButton
               variant="primary"
               size="md"
-              onClick={() => onSelectRole('CENTER_ADMIN')}
+              onClick={() => onOpenRegister ? onOpenRegister('growth') : onSelectRole('CENTER_ADMIN')}
               className="w-full justify-center"
             >
               Start Free 14-Day Trial
@@ -845,10 +893,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <ConsoleButton
               variant="secondary"
               size="md"
-              onClick={() => onSelectRole('CENTER_ADMIN')}
+              onClick={() => onOpenRegister ? onOpenRegister('pro') : onSelectRole('CENTER_ADMIN')}
               className="w-full justify-center"
             >
-              Choose Pro Plan
+              Choose Multi-Branch Pro
             </ConsoleButton>
           </div>
         </div>
@@ -946,6 +994,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
       </footer>
+
+      {/* PWA Install Modal for iOS, Android, Laptop */}
+      <PwaInstallModal
+        isOpen={isPwaModalOpen}
+        onClose={() => setIsPwaModalOpen(false)}
+        pwaState={pwaState}
+      />
     </div>
   );
 };

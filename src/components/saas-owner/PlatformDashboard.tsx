@@ -189,9 +189,9 @@ export const PlatformDashboard: React.FC = () => {
                 onChange={e => changeOrgPlan(org.id, e.target.value as any)}
                 className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[#202124] dark:text-[#E8EAED] font-semibold text-xs rounded-lg px-2.5 py-1 focus:outline-none"
               >
-                <option value="starter">Starter (₹599)</option>
-                <option value="growth">Growth (₹1,299)</option>
-                <option value="pro">Pro (₹2,199)</option>
+                <option value="starter">Starter Batch (₹599/mo)</option>
+                <option value="growth">Growth Academy (₹1,299/mo)</option>
+                <option value="pro">Multi-Branch Pro (₹2,199/mo)</option>
               </select>
             )
           },
@@ -382,9 +382,9 @@ export const PlatformDashboard: React.FC = () => {
                     onChange={e => setNewOrgPlan(e.target.value as any)}
                     className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-medium"
                   >
-                    <option value="starter">Starter (₹599/mo)</option>
-                    <option value="growth">Growth (₹1,299/mo)</option>
-                    <option value="pro">Pro (₹2,199/mo)</option>
+                    <option value="starter">Starter Batch (₹599/mo)</option>
+                    <option value="growth">Growth Academy (₹1,299/mo)</option>
+                    <option value="pro">Multi-Branch Pro (₹2,199/mo)</option>
                   </select>
                 </div>
               </div>

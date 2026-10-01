@@ -18,7 +18,7 @@ interface MobileBottomNavProps {
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) => {
-  const { currentUser, activeTab, setActiveTab, invoices, notifications } = useApp();
+  const { currentUser, currentOrg, activeTab, setActiveTab, invoices, notifications } = useApp();
   const { navigate } = useRouter();
 
   // Calculate pending dues count for badge
@@ -32,6 +32,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) 
   const getNavItems = (role: UserRole) => {
     switch (role) {
       case 'CENTER_ADMIN':
+      case 'STAFF':
         return [
           { id: 'overview', label: 'Home', icon: LayoutDashboard },
           { id: 'batches', label: 'Batches', icon: BookOpen },
@@ -75,6 +76,14 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) 
           { id: 'menu', label: 'Menu', icon: Menu, isMenuTrigger: true }
         ];
 
+      case 'PLATFORM_OWNER':
+        return [
+          { id: 'tenants', label: 'Centers', icon: LayoutDashboard },
+          { id: 'plans', label: 'Plans', icon: Award },
+          { id: 'users', label: 'Users', icon: Users },
+          { id: 'menu', label: 'Menu', icon: Menu, isMenuTrigger: true }
+        ];
+
       default:
         return [
           { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
@@ -104,18 +113,24 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) 
                   onOpenMenu();
                 } else {
                   setActiveTab(item.id);
-                  if (currentUser.role === 'CENTER_ADMIN') {
-                    navigate(`/admin/${item.id}`);
+                  if (currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF') {
+                    if (currentOrg?.id) {
+                      navigate(`/admin/${currentOrg.id}/${item.id}`);
+                    } else {
+                      navigate(`/admin/${item.id}`);
+                    }
                   } else if (currentUser.role === 'TEACHER') {
                     navigate(`/teacher/${item.id}`);
                   } else if (currentUser.role === 'PARENT') {
                     navigate(`/parent/${item.id}`);
                   } else if (currentUser.role === 'STUDENT') {
                     navigate(`/student/${item.id}`);
+                  } else if (currentUser.role === 'PLATFORM_OWNER') {
+                    navigate(`/platform/${item.id}`);
                   }
                 }
               }}
-              className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] rounded-xl transition-all relative cursor-pointer active:scale-95 ${
+              className={`flex flex-col items-center justify-center py-1 px-3 min-w-[56px] min-h-[48px] rounded-xl transition-all relative cursor-pointer active:scale-95 ${
                 isActive
                   ? 'text-[#E65100] dark:text-[#FFD54F]'
                   : 'text-slate-500 dark:text-[#9AA0A6] hover:text-slate-900 dark:hover:text-white'

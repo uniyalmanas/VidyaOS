@@ -196,14 +196,14 @@ export const TeacherPortal: React.FC = () => {
         subtitle={`Faculty Instructor · ${currentUser.subjects?.join(', ') || 'Senior Faculty'} · ${currentOrg.name}`}
         badge={<StatusChip label="FACULTY ACTIVE" variant="success" size="xs" />}
         actions={
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ConsoleButton
               variant="secondary"
               size="sm"
               icon={<UserCheck className="w-3.5 h-3.5 text-[#1A73E8]" />}
               onClick={() => setShowEditProfileModal(true)}
             >
-              Edit Faculty Profile
+              Profile
             </ConsoleButton>
             <ConsoleButton
               variant="blue"
@@ -225,13 +225,13 @@ export const TeacherPortal: React.FC = () => {
       )}
 
       {/* Sub Tabs */}
-      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] pb-1 overflow-x-auto custom-scrollbar">
+      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] pb-1 overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
         {[
           { id: 'overview', label: 'Faculty Console', icon: LayoutDashboard },
           { id: 'attendance', label: '1-Tap Attendance', icon: Calendar },
           { id: 'marks', label: 'Enter Test Marks', icon: Award },
           { id: 'assignments', label: 'Homework & Notes', icon: BookOpen },
-          { id: 'discussions', label: 'VidyaChat (Doubts & Groups)', icon: MessageSquare }
+          { id: 'discussions', label: 'VidyaChat', icon: MessageSquare }
         ].map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -246,13 +246,13 @@ export const TeacherPortal: React.FC = () => {
                   navigate(`/teacher/${tab.id}`);
                 }
               }}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold transition cursor-pointer border-b-2 ${
+              className={`flex items-center space-x-1.5 px-3.5 py-2.5 min-h-[40px] text-xs font-semibold transition cursor-pointer border-b-2 whitespace-nowrap active:scale-95 ${
                 isActive
                   ? 'border-[#FFA000] text-[#202124] dark:text-white font-bold'
                   : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{tab.label}</span>
             </button>
           );
@@ -508,11 +508,11 @@ export const TeacherPortal: React.FC = () => {
           title="Batch Attendance Roster"
           subtitle="Mark student presence with 1-tap toggles or broadcast absentee WhatsApp alerts"
           action={
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={selectedBatchId}
                 onChange={e => setSelectedBatchId(e.target.value)}
-                className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#202124] dark:text-[#E8EAED]"
+                className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#202124] dark:text-[#E8EAED] min-h-[36px]"
               >
                 {batches.map(b => (
                   <option key={b.id} value={b.id}>
@@ -525,12 +525,12 @@ export const TeacherPortal: React.FC = () => {
                 type="date"
                 value={attendanceDate}
                 onChange={e => setAttendanceDate(e.target.value)}
-                className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2 py-1 text-xs text-[#202124] dark:text-[#E8EAED]"
+                className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2 py-1.5 text-xs text-[#202124] dark:text-[#E8EAED] min-h-[36px]"
               />
 
               <ConsoleButton
                 variant="blue"
-                size="xs"
+                size="sm"
                 icon={<Check className="w-3.5 h-3.5" />}
                 onClick={handleMarkAllPresent}
               >
@@ -550,35 +550,36 @@ export const TeacherPortal: React.FC = () => {
               return (
                 <div
                   key={student.id}
-                  className="py-3 flex items-center justify-between gap-2"
+                  className="py-3 sm:py-3.5 flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-center space-x-2.5 min-w-0">
+                  <div className="flex items-center space-x-3 min-w-0">
                     <img
                       src={student.avatar}
                       alt={student.name}
-                      className="w-8 h-8 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043] flex-shrink-0"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043] flex-shrink-0"
                     />
                     <div className="min-w-0">
-                      <div className="font-bold text-xs text-[#202124] dark:text-[#E8EAED] truncate">{student.name}</div>
-                      <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">Roll: {student.rollNo}</div>
+                      <div className="font-bold text-xs sm:text-sm text-[#202124] dark:text-[#E8EAED] truncate">{student.name}</div>
+                      <div className="text-[10px] sm:text-xs text-[#5F6368] dark:text-[#9AA0A6]">Roll: {student.rollNo}</div>
                     </div>
                   </div>
 
-                  {/* Quick Toggle Status Buttons */}
-                  <div className="flex items-center space-x-1 flex-shrink-0">
+                  {/* Quick Toggle Status Buttons (Touch ergonomic 44px min targets) */}
+                  <div className="flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0">
                     {[
-                      { status: 'present', label: 'P', activeBg: 'bg-[#188038] text-white' },
-                      { status: 'absent', label: 'A', activeBg: 'bg-[#D93025] text-white' },
-                      { status: 'late', label: 'L', activeBg: 'bg-[#FFA000] text-white' }
+                      { status: 'present', label: 'P', title: 'Present', activeBg: 'bg-[#188038] text-white shadow-xs' },
+                      { status: 'absent', label: 'A', title: 'Absent', activeBg: 'bg-[#D93025] text-white shadow-xs' },
+                      { status: 'late', label: 'L', title: 'Late', activeBg: 'bg-[#FFA000] text-white shadow-xs' }
                     ].map(btn => {
                       const isSelected = currentStatus === btn.status;
                       return (
                         <button
                           key={btn.status}
                           onClick={() => handleStatusChange(student.id, btn.status as any)}
-                          className={`w-8 h-8 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          title={`Mark ${btn.title}`}
+                          className={`w-10 h-10 sm:w-11 sm:h-10 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer active:scale-90 flex items-center justify-center ${
                             isSelected
-                              ? `${btn.activeBg} shadow-xs`
+                              ? `${btn.activeBg} font-black`
                               : 'bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#E8EAED] dark:hover:bg-[#3C4043]'
                           }`}
                         >

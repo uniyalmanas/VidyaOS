@@ -31,11 +31,14 @@ import {
   ExternalLink,
   CheckCircle2,
   UserCheck,
-  PanelLeft
+  PanelLeft,
+  DownloadCloud
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { VidyaLogo } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { PwaInstallModal } from './PwaInstallModal';
 
 interface HeaderProps {
   sidebarOpen?: boolean;
@@ -90,6 +93,10 @@ export const Header: React.FC<HeaderProps> = ({
   const [showNotifDropdown, setShowNotifDropdown] = useState<boolean>(false);
   const [showUserDropdown, setShowUserDropdown] = useState<boolean>(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState<boolean>(false);
+
+  // PWA Install state
+  const pwaState = usePwaInstall();
+  const [showPwaModal, setShowPwaModal] = useState<boolean>(false);
 
   // Omnibox Global Search state
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -427,6 +434,20 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right Section: Utility actions, Notifications, Help & Profile */}
         <div className="flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0">
 
+          {/* Install App Quick Action (Visible if not in standalone) */}
+          {!pwaState.isInstalled && (
+            <button
+              onClick={() => setShowPwaModal(true)}
+              className="px-2 py-1 rounded-lg text-[#FFA000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition focus:outline-none cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+              title="Install VidyaOS App on Android, iOS, or Laptop"
+              aria-label="Install VidyaOS App"
+            >
+              <DownloadCloud className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
+              <span className="text-xs font-semibold hidden sm:inline">Install App</span>
+              <span className="text-[11px] font-semibold sm:hidden">App</span>
+            </button>
+          )}
+
           {/* Theme Quick Toggle */}
           <button
             onClick={toggleTheme}
@@ -638,6 +659,13 @@ export const Header: React.FC<HeaderProps> = ({
       <EditProfileModal
         isOpen={showEditProfileModal}
         onClose={() => setShowEditProfileModal(false)}
+      />
+
+      {/* PWA Install Modal */}
+      <PwaInstallModal
+        isOpen={showPwaModal}
+        onClose={() => setShowPwaModal(false)}
+        pwaState={pwaState}
       />
     </header>
   );

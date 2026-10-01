@@ -41,7 +41,8 @@ import {
   Trash2,
   Building2,
   Sparkles,
-  Copy
+  Copy,
+  Edit2
 } from 'lucide-react';
 import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
@@ -244,12 +245,88 @@ export const AdminDashboard: React.FC = () => {
   const [isSavingUpi, setIsSavingUpi] = useState<boolean>(false);
   const [upiSaveSuccess, setUpiSaveSuccess] = useState<boolean>(false);
 
+  // Center Profile Settings state
+  const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
+  const [profileName, setProfileName] = useState<string>(currentOrg?.name || '');
+  const [profileTagline, setProfileTagline] = useState<string>(currentOrg?.tagline || '');
+  const [profileOwnerName, setProfileOwnerName] = useState<string>(currentOrg?.ownerName || '');
+  const [profilePhone, setProfilePhone] = useState<string>(currentOrg?.phone || '');
+  const [profileEmail, setProfileEmail] = useState<string>(currentOrg?.email || '');
+  const [profileAddress, setProfileAddress] = useState<string>(currentOrg?.address || '');
+  const [profileCity, setProfileCity] = useState<string>(currentOrg?.city || '');
+  const [profileState, setProfileState] = useState<string>(currentOrg?.state || '');
+  const [profileLogoText, setProfileLogoText] = useState<string>(currentOrg?.logoText || '');
+  const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+
   useEffect(() => {
     if (currentOrg) {
       setUpiSettingsId(currentOrg.upiId || '');
       setUpiMerchantName(currentOrg.upiMerchantName || currentOrg.name || '');
+      setProfileName(currentOrg.name || '');
+      setProfileTagline(currentOrg.tagline || '');
+      setProfileOwnerName(currentOrg.ownerName || '');
+      setProfilePhone(currentOrg.phone || '');
+      setProfileEmail(currentOrg.email || '');
+      setProfileAddress(currentOrg.address || '');
+      setProfileCity(currentOrg.city || '');
+      setProfileState(currentOrg.state || '');
+      setProfileLogoText(currentOrg.logoText || '');
     }
   }, [currentOrg]);
+
+  const handleCancelProfileEdit = () => {
+    if (currentOrg) {
+      setProfileName(currentOrg.name || '');
+      setProfileTagline(currentOrg.tagline || '');
+      setProfileOwnerName(currentOrg.ownerName || '');
+      setProfilePhone(currentOrg.phone || '');
+      setProfileEmail(currentOrg.email || '');
+      setProfileAddress(currentOrg.address || '');
+      setProfileCity(currentOrg.city || '');
+      setProfileState(currentOrg.state || '');
+      setProfileLogoText(currentOrg.logoText || '');
+    }
+    setIsEditingProfile(false);
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanName = profileName.trim();
+    const cleanOwner = profileOwnerName.trim();
+    const cleanPhone = profilePhone.trim();
+
+    if (!cleanName) {
+      showToast('Please enter the institute display name', 'error');
+      return;
+    }
+    if (!cleanOwner) {
+      showToast('Please enter the director / center owner name', 'error');
+      return;
+    }
+    if (!cleanPhone) {
+      showToast('Please enter the contact phone / WhatsApp number', 'error');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    updateOrganization(currentOrg.id, {
+      name: cleanName,
+      tagline: profileTagline.trim(),
+      ownerName: cleanOwner,
+      phone: cleanPhone,
+      email: profileEmail.trim(),
+      address: profileAddress.trim(),
+      city: profileCity.trim(),
+      state: profileState.trim(),
+      logoText: (profileLogoText.trim() || cleanName.slice(0, 4)).toUpperCase()
+    });
+
+    setTimeout(() => {
+      setIsSavingProfile(false);
+      setIsEditingProfile(false);
+      showToast('Coaching & Education Center profile updated successfully in Firestore!', 'success');
+    }, 400);
+  };
 
   const handleSaveUpiSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -479,7 +556,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Header primary actions
   const headerActions = (
-    <div className="flex items-center space-x-2">
+    <div className="flex flex-wrap items-center gap-2">
       <ConsoleButton
         variant="primary"
         size="sm"
@@ -571,7 +648,7 @@ export const AdminDashboard: React.FC = () => {
             />
           ) : (
             <StatusChip
-              label={`${currentOrg.planId.toUpperCase()} TIER · ${currentOrg.city}, ${currentOrg.state}`}
+              label={`${currentOrg.planId === 'starter' ? 'STARTER BATCH' : currentOrg.planId === 'growth' ? 'GROWTH ACADEMY' : 'MULTI-BRANCH PRO'} · ${currentOrg.city}, ${currentOrg.state}`}
               variant="warning"
               size="xs"
             />
@@ -2265,81 +2342,290 @@ export const AdminDashboard: React.FC = () => {
           {/* Card 2: Coaching Center Profile & Campus Details */}
           <ConsoleCard
             title="Coaching & Education Center Profile"
-            subtitle="Campus address, director information, and branch network"
+            subtitle="Campus address, director information, branding, and branch network"
+            action={
+              isEditingProfile ? (
+                <div className="flex items-center gap-2">
+                  <ConsoleButton
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={handleCancelProfileEdit}
+                  >
+                    Cancel
+                  </ConsoleButton>
+                  <ConsoleButton
+                    type="button"
+                    variant="primary"
+                    size="xs"
+                    loading={isSavingProfile}
+                    onClick={handleSaveProfile}
+                    icon={<Check className="w-3.5 h-3.5" />}
+                  >
+                    Save Changes
+                  </ConsoleButton>
+                </div>
+              ) : (
+                <ConsoleButton
+                  type="button"
+                  variant="secondary"
+                  size="xs"
+                  onClick={() => setIsEditingProfile(true)}
+                  icon={<Edit2 className="w-3.5 h-3.5" />}
+                >
+                  Edit Profile
+                </ConsoleButton>
+              )
+            }
           >
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
-                    Institute Display Name
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={currentOrg.name}
-                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-semibold"
-                  />
+            {isEditingProfile ? (
+              <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Institute Display Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={profileName}
+                      onChange={e => setProfileName(e.target.value)}
+                      placeholder="e.g. Apex IIT Academy"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] font-semibold focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Logo Monogram (2-4 Chars)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={profileLogoText}
+                      onChange={e => setProfileLogoText(e.target.value.toUpperCase())}
+                      placeholder="e.g. APEX"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] font-mono font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40 uppercase"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
-                    Director / Center Owner
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={currentOrg.ownerName}
-                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-semibold"
-                  />
-                </div>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Tagline & Focus
+                    </label>
+                    <input
+                      type="text"
+                      value={profileTagline}
+                      onChange={e => setProfileTagline(e.target.value)}
+                      placeholder="e.g. Excellence in CBSE & JEE/NEET Foundations"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
-                    Registered City & State
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${currentOrg.city}, ${currentOrg.state}`}
-                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
-                  />
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Director / Center Owner <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={profileOwnerName}
+                      onChange={e => setProfileOwnerName(e.target.value)}
+                      placeholder="e.g. Er. Manoj Verma"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] font-semibold focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
-                    Contact Phone / WhatsApp
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={currentOrg.phone}
-                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-mono"
-                  />
-                </div>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Contact Phone / WhatsApp <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={profilePhone}
+                      onChange={e => setProfilePhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] font-mono focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
-                  Active Branches & Campuses
-                </label>
-                <div className="p-3 bg-[#F8F9FA] dark:bg-[#282A2C] rounded-lg border border-[#DADCE0] dark:border-[#3C4043] space-y-1.5">
-                  {currentOrg.branches.map(b => (
-                    <div key={b.id} className="text-[#202124] dark:text-[#E8EAED] font-medium flex items-center justify-between">
-                      <div>
-                        <strong>{b.name}</strong> — <span className="text-[#5F6368] dark:text-[#9AA0A6]">{b.address}</span>
-                      </div>
-                      {b.isMain && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
-                          Main Branch
-                        </span>
-                      )}
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Official Institute Email
+                    </label>
+                    <input
+                      type="email"
+                      value={profileEmail}
+                      onChange={e => setProfileEmail(e.target.value)}
+                      placeholder="e.g. admissions@apexacademy.in"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                      Campus Physical Address
+                    </label>
+                    <input
+                      type="text"
+                      value={profileAddress}
+                      onChange={e => setProfileAddress(e.target.value)}
+                      placeholder="e.g. Plot 42, Knowledge Park III"
+                      className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        value={profileCity}
+                        onChange={e => setProfileCity(e.target.value)}
+                        placeholder="e.g. Kota"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                      />
                     </div>
-                  ))}
+
+                    <div>
+                      <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
+                        State
+                      </label>
+                      <input
+                        type="text"
+                        value={profileState}
+                        onChange={e => setProfileState(e.target.value)}
+                        placeholder="e.g. Rajasthan"
+                        className="w-full px-3 py-2.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#DADCE0]/60 dark:border-[#3C4043]">
+                  <ConsoleButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelProfileEdit}
+                  >
+                    Cancel
+                  </ConsoleButton>
+                  <ConsoleButton
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    loading={isSavingProfile}
+                    icon={<Check className="w-4 h-4" />}
+                  >
+                    Save Profile Changes
+                  </ConsoleButton>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4 text-xs">
+                {/* Visual Identity Header Card */}
+                <div className="p-3.5 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent rounded-2xl border border-amber-200/60 dark:border-amber-900/30 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FFA000] to-[#E65100] text-white font-bold font-mono text-base flex items-center justify-center shadow-md">
+                      {currentOrg.logoText || (currentOrg.name || 'V').slice(0, 4).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-[#202124] dark:text-white font-google-sans">
+                        {currentOrg.name}
+                      </div>
+                      <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                        {currentOrg.tagline || 'Premier Coaching Institute'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <StatusChip
+                    label={currentOrg.planId === 'starter' ? 'STARTER BATCH' : currentOrg.planId === 'growth' ? 'GROWTH ACADEMY' : 'MULTI-BRANCH PRO'}
+                    variant="warning"
+                    size="xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                      Director / Center Owner
+                    </label>
+                    <div className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-semibold">
+                      {currentOrg.ownerName || 'Not configured'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                      Contact Phone / WhatsApp
+                    </label>
+                    <div className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-mono">
+                      {currentOrg.phone || 'Not configured'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                      Official Institute Email
+                    </label>
+                    <div className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5">
+                      {currentOrg.email || 'Not configured'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                      Registered Location
+                    </label>
+                    <div className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5">
+                      {currentOrg.city}, {currentOrg.state}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                    Campus Physical Address
+                  </label>
+                  <div className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5">
+                    {currentOrg.address || 'Civil Lines'}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                    Active Branches & Campuses ({currentOrg.branches?.length || 1} / {currentOrg.maxBranches})
+                  </label>
+                  <div className="p-3 bg-[#F8F9FA] dark:bg-[#282A2C] rounded-lg border border-[#DADCE0] dark:border-[#3C4043] space-y-1.5">
+                    {(currentOrg.branches || []).map(b => (
+                      <div key={b.id} className="text-[#202124] dark:text-[#E8EAED] font-medium flex items-center justify-between">
+                        <div>
+                          <strong>{b.name}</strong> — <span className="text-[#5F6368] dark:text-[#9AA0A6]">{b.address || `${currentOrg.city}, ${currentOrg.state}`}</span>
+                        </div>
+                        {b.isMain && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                            Main Branch
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </ConsoleCard>
 
           {/* Card 3: Dedicated Front Desk Staff Account */}
@@ -2399,7 +2685,11 @@ export const AdminDashboard: React.FC = () => {
             subtitle="Multi-tenant isolated coaching tier, resource limits & billing"
             action={
               <div className="flex items-center gap-2">
-                <StatusChip label={`${currentOrg.planId.toUpperCase()} TIER`} variant="warning" size="xs" />
+                <StatusChip
+                  label={currentOrg.planId === 'starter' ? 'STARTER BATCH' : currentOrg.planId === 'growth' ? 'GROWTH ACADEMY' : 'MULTI-BRANCH PRO'}
+                  variant="warning"
+                  size="xs"
+                />
                 <StatusChip label={currentOrg.subscriptionStatus.toUpperCase()} variant="success" size="xs" />
               </div>
             }

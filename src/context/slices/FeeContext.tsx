@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { FeeInvoice, PaymentRecord, Organization, User } from '../../types';
 import { MOCK_INVOICES } from '../../data/mockData';
-import { subscribeToInvoices, persistInvoiceToFirestore } from '../../lib/firestoreService';
+import { subscribeToInvoices, persistInvoiceToFirestore, recordPaymentAtomically } from '../../lib/firestoreService';
 
 export interface FeeContextType {
   invoices: FeeInvoice[];
@@ -93,7 +93,7 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
           status: newStatus,
           payments: [...inv.payments, newPayment]
         };
-        persistInvoiceToFirestore(updatedInvoice);
+        recordPaymentAtomically(invoiceId, updatedInvoice);
         return updatedInvoice;
       }
       return inv;

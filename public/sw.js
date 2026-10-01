@@ -1,6 +1,6 @@
 // VidyaOS Progressive Web App Service Worker
-// Version: 1.0.0
-const CACHE_NAME = 'vidyaos-cache-v1';
+// Version: 2.5.0
+const CACHE_NAME = 'vidyaos-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   '/favicon.ico',
   '/favicon.svg',
   '/favicon-192x192.png',
+  '/favicon-512x512.png',
   '/favicon-32x32.png'
 ];
 

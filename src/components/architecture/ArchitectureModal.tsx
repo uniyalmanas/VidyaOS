@@ -437,7 +437,7 @@ CREATE TABLE payment_records (
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                   <div className="border rounded-xl p-3 bg-slate-50 space-y-2">
-                    <div className="font-bold text-slate-900 text-sm">Starter Plan</div>
+                    <div className="font-bold text-slate-900 text-sm">Starter Batch</div>
                     <div className="text-xl font-extrabold text-indigo-700">₹599 <span className="text-xs font-normal text-slate-500">/month</span></div>
                     <div className="text-[11px] text-slate-500">Up to 100 students • 1 Branch</div>
                     <p className="text-slate-600">Replaces paper register. 1-tap mobile attendance, UPI fee logging, digital receipts & parent portal.</p>
@@ -445,17 +445,17 @@ CREATE TABLE payment_records (
 
                   <div className="border-2 border-indigo-500 rounded-xl p-3 bg-indigo-50/50 space-y-2 relative">
                     <span className="absolute -top-2.5 right-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">POPULAR</span>
-                    <div className="font-bold text-slate-900 text-sm">Growth Plan</div>
+                    <div className="font-bold text-slate-900 text-sm">Growth Academy</div>
                     <div className="text-xl font-extrabold text-indigo-700">₹1,299 <span className="text-xs font-normal text-slate-500">/month</span></div>
                     <div className="text-[11px] text-slate-500">Up to 300 students • 2 Branches</div>
                     <p className="text-slate-600">Unlimited teachers, timetable clash detector, automated WhatsApp fee reminders, exam ranking analytics.</p>
                   </div>
 
                   <div className="border rounded-xl p-3 bg-slate-50 space-y-2">
-                    <div className="font-bold text-slate-900 text-sm">Pro Academy</div>
+                    <div className="font-bold text-slate-900 text-sm">Multi-Branch Pro</div>
                     <div className="text-xl font-extrabold text-indigo-700">₹2,199 <span className="text-xs font-normal text-slate-500">/month</span></div>
                     <div className="text-[11px] text-slate-500">Up to 1,000 students • 5 Branches</div>
-                    <p className="text-slate-600">Consolidated multi-branch P&L, custom institute branding on parent apps, priority support.</p>
+                    <p className="text-slate-600">For large coaching networks and test prep academies. Consolidated multi-branch P&L, custom institute branding, dedicated account manager.</p>
                   </div>
                 </div>
               </div>

@@ -148,14 +148,14 @@ export const StudentPortal: React.FC = () => {
           <StatusChip label={`${attendanceRate}% ATTENDANCE`} variant={attendanceRate >= 80 ? 'success' : 'warning'} size="xs" />
         }
         actions={
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ConsoleButton
               variant="secondary"
               size="sm"
               icon={<UserCheck className="w-3.5 h-3.5 text-[#1A73E8]" />}
               onClick={() => setShowEditProfileModal(true)}
             >
-              Edit Student Profile
+              Profile
             </ConsoleButton>
             <span className="text-xs text-[#5F6368] dark:text-[#9AA0A6] font-medium hidden sm:inline">
               {enrolledBatches.length} Enrolled Batches
@@ -165,13 +165,13 @@ export const StudentPortal: React.FC = () => {
       />
 
       {/* Tabs */}
-      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] pb-1 overflow-x-auto custom-scrollbar">
+      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] pb-1 overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
         {[
           { id: 'schedule', label: 'My Schedule', icon: Clock },
           { id: 'assignments', label: 'Homework & Tasks', icon: BookOpen },
           { id: 'results', label: 'Exam Results', icon: Award },
           { id: 'materials', label: 'Study Vault', icon: FileText },
-          { id: 'discussions', label: 'VidyaChat (Doubts & Peers)', icon: MessageSquare }
+          { id: 'discussions', label: 'VidyaChat', icon: MessageSquare }
         ].map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -179,13 +179,13 @@ export const StudentPortal: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => handleSelectTab(tab.id)}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold transition cursor-pointer border-b-2 ${
+              className={`flex items-center space-x-1.5 px-3.5 py-2.5 min-h-[40px] text-xs font-semibold transition cursor-pointer border-b-2 whitespace-nowrap active:scale-95 ${
                 isActive
                   ? 'border-[#FFA000] text-[#202124] dark:text-white font-bold'
                   : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{tab.label}</span>
             </button>
           );

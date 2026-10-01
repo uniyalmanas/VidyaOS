@@ -114,6 +114,15 @@ const MainView: React.FC = () => {
   });
   const [switcherMinimized, setSwitcherMinimized] = useState<boolean>(true);
   const [showRegisterModal, setShowRegisterModal] = useState<boolean>(false);
+  const [registerPlanId, setRegisterPlanId] = useState<'starter' | 'growth' | 'pro'>('growth');
+
+  const handleOpenRegister = (planId?: 'starter' | 'growth' | 'pro') => {
+    if (planId) {
+      setRegisterPlanId(planId);
+    }
+    setShowRegisterModal(true);
+  };
+
   const { currentPath, navigate } = useRouter();
   const {
     currentUser,
@@ -138,6 +147,16 @@ const MainView: React.FC = () => {
 
   // Normalize path (handle trailing slashes and lowercase)
   const normalizedPath = currentPath.toLowerCase().replace(/\/$/, '') || '/';
+
+  // Smooth scroll to pricing when navigating to /pricing
+  useEffect(() => {
+    if (normalizedPath === '/pricing') {
+      const el = document.getElementById('pricing');
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    }
+  }, [normalizedPath]);
 
   // Automatically ensure sidebar is open when navigating into admin routes on desktop
   useEffect(() => {
@@ -332,10 +351,11 @@ const MainView: React.FC = () => {
   if (isAuthRoute) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#131314]">
-        <LoginPage onOpenRegister={() => setShowRegisterModal(true)} />
+        <LoginPage onOpenRegister={handleOpenRegister} />
         <RegisterCenterModal
           isOpen={showRegisterModal}
           onClose={() => setShowRegisterModal(false)}
+          initialPlanId={registerPlanId}
         />
       </div>
     );
@@ -358,13 +378,14 @@ const MainView: React.FC = () => {
           }}
           onOpenLogin={() => setShowLoginModal(true)}
           onOpenArchitecture={() => setShowArchitectureModal(true)}
-          onOpenRegister={() => setShowRegisterModal(true)}
+          onOpenRegister={handleOpenRegister}
         />
-        <LoginModal onOpenRegister={() => setShowRegisterModal(true)} />
+        <LoginModal onOpenRegister={handleOpenRegister} />
         <ArchitectureModal />
         <RegisterCenterModal
           isOpen={showRegisterModal}
           onClose={() => setShowRegisterModal(false)}
+          initialPlanId={registerPlanId}
         />
       </div>
     );
@@ -376,7 +397,7 @@ const MainView: React.FC = () => {
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         onOpenLanding={() => navigate('/')}
-        onOpenRegister={() => setShowRegisterModal(true)}
+        onOpenRegister={handleOpenRegister}
       />
 
       {/* Main role-based protected view */}
@@ -557,10 +578,11 @@ const MainView: React.FC = () => {
       )}
 
       {/* Global Modals */}
-      <LoginModal onOpenRegister={() => setShowRegisterModal(true)} />
+      <LoginModal onOpenRegister={handleOpenRegister} />
       <RegisterCenterModal
         isOpen={showRegisterModal}
         onClose={() => setShowRegisterModal(false)}
+        initialPlanId={registerPlanId}
       />
       <ArchitectureModal />
       <HelpSupportModal />

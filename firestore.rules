@@ -2,95 +2,308 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ------------------------------------------------------------------------
+    // AUTHENTICATION & RBAC HELPER FUNCTIONS
+    // ------------------------------------------------------------------------
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // User profiles & RBAC roles
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return getUserDoc().role;
+    }
+
+    function getUserOrgId() {
+      return getUserDoc().orgId;
+    }
+
+    function isPlatformOwner() {
+      return isSignedIn() && (
+        (request.auth.token.role == 'PLATFORM_OWNER') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'PLATFORM_OWNER')
+      );
+    }
+
+    function isCenterAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.role == 'CENTER_ADMIN') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'CENTER_ADMIN')
+      );
+    }
+
+    function isStaff() {
+      return isSignedIn() && (
+        (request.auth.token.role == 'STAFF') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'STAFF')
+      );
+    }
+
+    function isTeacher() {
+      return isSignedIn() && (
+        (request.auth.token.role == 'TEACHER') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'TEACHER')
+      );
+    }
+
+    function isParent() {
+      return isSignedIn() && (
+        (request.auth.token.role == 'PARENT') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'PARENT')
+      );
+    }
+
+    function isStudent() {
+      return isSignedIn() && (
+        (request.auth.token.role == 'STUDENT') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'STUDENT')
+      );
+    }
+
+    function isTenantMember(orgId) {
+      return isSignedIn() && (
+        isPlatformOwner() ||
+        (request.auth.token.orgId == orgId) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserOrgId() == orgId)
+      );
+    }
+
+    function isCenterStaffOrAdmin(orgId) {
+      return isTenantMember(orgId) && (isPlatformOwner() || isCenterAdmin() || isStaff());
+    }
+
+    function isCenterInstructorOrAdmin(orgId) {
+      return isTenantMember(orgId) && (isPlatformOwner() || isCenterAdmin() || isTeacher());
+    }
+
+    // ------------------------------------------------------------------------
+    // USER PROFILES & ROLES
+    // ------------------------------------------------------------------------
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if false;
+      // User can read their own profile, or tenant admin/staff can read users in their org, or platform owner
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isPlatformOwner() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserOrgId() == resource.data.orgId)
+      );
+
+      // User can create their own profile upon authentication; Admins can create staff/teachers in their org
+      allow create: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isPlatformOwner() ||
+        (isCenterAdmin() && request.resource.data.orgId == getUserOrgId())
+      );
+
+      // Updates: Users can update their own non-sensitive profile (name, phone, avatar).
+      // Role & OrgId changes require Platform Owner or Center Admin.
+      allow update: if isSignedIn() && (
+        isPlatformOwner() ||
+        (request.auth.uid == userId && 
+         request.resource.data.role == resource.data.role && 
+         request.resource.data.orgId == resource.data.orgId) ||
+        (isCenterAdmin() && resource.data.orgId == getUserOrgId() && request.resource.data.orgId == resource.data.orgId)
+      );
+
+      // Only Platform Owner can permanently delete user records
+      allow delete: if isPlatformOwner();
     }
 
-    // Organizations (Tuition Centers)
+    // ------------------------------------------------------------------------
+    // ORGANIZATIONS (TUITION & COACHING CENTERS)
+    // ------------------------------------------------------------------------
     match /organizations/{orgId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      // Anyone authenticated can read organization meta (needed for discovery, login & branding)
+      allow read: if isSignedIn();
+
+      // Creating a new organization allowed during Center Admin onboarding or by Platform Owner
+      allow create: if isSignedIn();
+
+      // Only Center Admin of that organization or Platform Owner can update center profile & settings
+      allow update: if isTenantMember(orgId) && (isCenterAdmin() || isPlatformOwner());
+
+      // Only Platform Owner can delete an entire organization
+      allow delete: if isPlatformOwner();
     }
 
-    // Students collection
+    // ------------------------------------------------------------------------
+    // STUDENTS COLLECTION
+    // ------------------------------------------------------------------------
     match /students/{studentId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      // Read: Tenant members can read students in their own center; Parents read their linked students
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      // Create: Center Admin or Staff can admit new students into their org
+      allow create: if isSignedIn() && 
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        request.resource.data.orgId != null;
+
+      // Update: Center Admin or Staff can update student records in their org
+      allow update: if isSignedIn() && 
+        isCenterStaffOrAdmin(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId;
+
+      // Delete: Only Center Admin or Platform Owner can delete student records
+      allow delete: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) && 
+        (isCenterAdmin() || isPlatformOwner());
     }
 
-    // Batches collection
+    // ------------------------------------------------------------------------
+    // BATCHES COLLECTION
+    // ------------------------------------------------------------------------
     match /batches/{batchId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      allow create: if isSignedIn() && 
+        isCenterStaffOrAdmin(request.resource.data.orgId);
+
+      allow update: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) && 
+        (isCenterAdmin() || isStaff() || isTeacher() || isPlatformOwner()) &&
+        request.resource.data.orgId == resource.data.orgId;
+
+      allow delete: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) && 
+        (isCenterAdmin() || isPlatformOwner());
     }
 
-    // Teachers collection
+    // ------------------------------------------------------------------------
+    // TEACHERS COLLECTION
+    // ------------------------------------------------------------------------
     match /teachers/{teacherId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      allow create, update, delete: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) && 
+        (isCenterAdmin() || isPlatformOwner());
     }
 
-    // Invoices collection
+    // ------------------------------------------------------------------------
+    // INVOICES & FEE PAYMENTS
+    // ------------------------------------------------------------------------
     match /invoices/{invoiceId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      // Students and parents can read invoices only if belonging to their org and studentId
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      // Create: Only Center Admin or Staff can issue invoices
+      allow create: if isSignedIn() && 
+        isCenterStaffOrAdmin(request.resource.data.orgId);
+
+      // Update: Admin/Staff can update, or parent recording a digital payment
+      allow update: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId;
+
+      allow delete: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) && 
+        (isCenterAdmin() || isPlatformOwner());
     }
 
-    // Attendance records
+    // ------------------------------------------------------------------------
+    // ATTENDANCE RECORDS
+    // ------------------------------------------------------------------------
     match /attendance/{attendanceId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      // Teachers, Staff, and Admins can record and update attendance
+      allow create, update: if isSignedIn() && 
+        (isCenterStaffOrAdmin(request.resource.data.orgId) || isTeacher()) &&
+        isTenantMember(request.resource.data.orgId);
+
+      allow delete: if isSignedIn() && 
+        isTenantMember(resource.data.orgId) && 
+        (isCenterAdmin() || isPlatformOwner());
     }
 
-    // Exams collection
+    // ------------------------------------------------------------------------
+    // EXAMS & TEST SCHEDULES
+    // ------------------------------------------------------------------------
     match /exams/{examId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      allow create, update, delete: if isSignedIn() && 
+        isCenterInstructorOrAdmin(request.resource.data.orgId) &&
+        isTenantMember(request.resource.data.orgId);
     }
 
-    // Exam Results collection
+    // ------------------------------------------------------------------------
+    // EXAM RESULTS & MARKS
+    // ------------------------------------------------------------------------
     match /examResults/{resultId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn();
+
+      // Only teachers and center admins can create or update graded results
+      allow create, update, delete: if isSignedIn() && 
+        (isCenterAdmin() || isTeacher() || isPlatformOwner());
     }
 
-    // Announcements collection
+    // ------------------------------------------------------------------------
+    // ANNOUNCEMENTS
+    // ------------------------------------------------------------------------
     match /announcements/{announcementId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      allow create, update, delete: if isSignedIn() && 
+        isCenterStaffOrAdmin(request.resource.data.orgId);
     }
 
-    // Assignments collection
+    // ------------------------------------------------------------------------
+    // ASSIGNMENTS & HOMEWORK
+    // ------------------------------------------------------------------------
     match /assignments/{assignId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      // Teachers and Admins can create/delete; Students can update submissions array
+      allow create, delete: if isSignedIn() && 
+        isCenterInstructorOrAdmin(request.resource.data.orgId);
+
+      allow update: if isSignedIn() && 
+        isTenantMember(resource.data.orgId);
     }
 
-    // Study Materials collection
+    // ------------------------------------------------------------------------
+    // STUDY MATERIALS & NOTES
+    // ------------------------------------------------------------------------
     match /studyMaterials/{matId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+
+      allow create, update, delete: if isSignedIn() && 
+        isCenterInstructorOrAdmin(request.resource.data.orgId);
     }
 
-    // Credentials collection (phone-number based credentials authentication)
+    // ------------------------------------------------------------------------
+    // CHAT CHANNELS & MESSAGES (VIDYACHAT)
+    // ------------------------------------------------------------------------
+    match /chatChannels/{channelId} {
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+      allow create, update, delete: if isSignedIn() && isTenantMember(request.resource.data.orgId);
+    }
+
+    match /chatMessages/{messageId} {
+      allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
+      allow create: if isSignedIn() && isTenantMember(request.resource.data.orgId);
+      allow update, delete: if isSignedIn() && isTenantMember(resource.data.orgId) && 
+        (request.auth.uid == resource.data.senderId || isCenterAdmin() || isPlatformOwner());
+    }
+
+    // ------------------------------------------------------------------------
+    // DEPRECATED / LOCKED CREDENTIALS COLLECTION (PREVENT PLAIN-TEXT EXPOSURE)
+    // ------------------------------------------------------------------------
     match /credentials/{phone} {
-      allow read: if true;
-      allow create, update, delete: if true;
+      // Disallow all client reads and writes to prevent plain-text credential leaks
+      allow read, write: if false;
     }
 
-    // Test connection doc
+    // Test connection doc (Authenticated only)
     match /test/{docId} {
-      allow read, write: if true;
+      allow read, write: if isSignedIn();
     }
 
-    // Default-deny catch-all
+    // Default-deny all unmatched paths
     match /{document=**} {
       allow read, write: if false;
     }

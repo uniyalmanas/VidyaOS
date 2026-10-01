@@ -520,6 +520,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createNewOrganization = (orgData: Partial<Organization>): Organization => {
     const id = `org-${Date.now()}`;
+    const resolvedPlanId = (orgData.planId as any) || 'starter';
+    const selectedPlan = SUBSCRIPTION_PLANS.find(p => p.id === resolvedPlanId);
     const newOrg: Organization = {
       id,
       name: orgData.name || 'New Academy',
@@ -534,13 +536,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       state: orgData.state || 'Uttarakhand',
       upiId: orgData.upiId || 'center@upi',
       upiMerchantName: orgData.name?.toUpperCase() || 'NEW ACADEMY',
-      planId: (orgData.planId as any) || 'starter',
+      planId: resolvedPlanId,
       subscriptionStatus: 'trial',
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       currentCycleEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       createdAt: new Date().toISOString().split('T')[0],
-      maxStudents: 100,
-      maxBranches: 1,
+      maxStudents: selectedPlan?.maxStudents || 100,
+      maxBranches: selectedPlan?.maxBranches || 1,
       branches: [
         {
           id: `branch-${Date.now()}`,

@@ -8,6 +8,10 @@ import {
   getDocs,
   query,
   where,
+  limit,
+  orderBy,
+  writeBatch,
+  runTransaction,
   handleFirestoreError,
   OperationType
 } from './firebase';
@@ -18,6 +22,7 @@ import {
   Batch,
   Teacher,
   FeeInvoice,
+  PaymentRecord,
   AttendanceRecord,
   Exam,
   ExamResult,
@@ -42,96 +47,85 @@ import {
 
 // Track if initial seeding has already been attempted in this session
 let isSeedingInProgress = false;
+let seedingAlreadyCompleted = false;
 
 /**
- * Initializes Firestore collections with baseline coaching data if empty.
+ * Initializes Firestore collections with baseline coaching data once in development if empty.
  */
 export async function seedInitialFirestoreDataIfEmpty() {
-  if (isSeedingInProgress) return;
+  if (isSeedingInProgress || seedingAlreadyCompleted) return;
   isSeedingInProgress = true;
 
   try {
-    const orgsSnap = await getDocs(collection(db, 'organizations'));
+    const orgsSnap = await getDocs(query(collection(db, 'organizations'), limit(1)));
     if (orgsSnap.empty) {
-      console.log('Seeding initial coaching & education center data to Firestore...');
+      console.log('Seeding initial coaching & education center data to Firestore via atomic batches...');
+
+      const batch = writeBatch(db);
 
       // Seed Organizations
       for (const org of MOCK_ORGANIZATIONS) {
-        await setDoc(doc(db, 'organizations', org.id), org);
+        batch.set(doc(db, 'organizations', org.id), org);
       }
 
-      // Seed Users & Credentials
+      // Seed Users without passwords in public collections
       for (const user of MOCK_USERS) {
-        await setDoc(doc(db, 'users', user.id), user);
-        const cleanPhone = user.phone.replace(/[^0-9]/g, '').slice(-10);
-        await setDoc(doc(db, 'credentials', cleanPhone), {
-          phone: cleanPhone,
-          userId: user.id,
-          password: user.password || 'password123',
-          role: user.role,
-          name: user.name,
-          email: user.email,
-          orgId: user.orgId,
-          updatedAt: new Date().toISOString()
-        });
-      }
-
-      // Seed Students
-      for (const stud of MOCK_STUDENTS) {
-        await setDoc(doc(db, 'students', stud.id), stud);
+        const safeUser = { ...user };
+        delete safeUser.password;
+        batch.set(doc(db, 'users', user.id), safeUser);
       }
 
       // Seed Batches
-      for (const batch of MOCK_BATCHES) {
-        await setDoc(doc(db, 'batches', batch.id), batch);
+      for (const b of MOCK_BATCHES) {
+        batch.set(doc(db, 'batches', b.id), b);
       }
 
       // Seed Teachers
       for (const teacher of MOCK_TEACHERS) {
-        await setDoc(doc(db, 'teachers', teacher.id), teacher);
+        batch.set(doc(db, 'teachers', teacher.id), teacher);
       }
 
-      // Seed Invoices
+      await batch.commit();
+
+      // Seed second batch for students and invoices
+      const batch2 = writeBatch(db);
+      for (const stud of MOCK_STUDENTS) {
+        batch2.set(doc(db, 'students', stud.id), stud);
+      }
       for (const inv of MOCK_INVOICES) {
-        await setDoc(doc(db, 'invoices', inv.id), inv);
+        batch2.set(doc(db, 'invoices', inv.id), inv);
       }
-
-      // Seed Attendance
       for (const att of MOCK_ATTENDANCE) {
-        await setDoc(doc(db, 'attendance', att.id), att);
+        batch2.set(doc(db, 'attendance', att.id), att);
       }
-
-      // Seed Exams
       for (const exam of MOCK_EXAMS) {
-        await setDoc(doc(db, 'exams', exam.id), exam);
+        batch2.set(doc(db, 'exams', exam.id), exam);
       }
-
-      // Seed Exam Results
       for (const res of MOCK_EXAM_RESULTS) {
-        await setDoc(doc(db, 'examResults', res.id), res);
+        batch2.set(doc(db, 'examResults', res.id), res);
       }
-
-      // Seed Announcements
       for (const ann of MOCK_ANNOUNCEMENTS) {
-        await setDoc(doc(db, 'announcements', ann.id), ann);
+        batch2.set(doc(db, 'announcements', ann.id), ann);
       }
+      await batch2.commit();
 
-      console.log('Initial Firestore seeding completed successfully.');
+      console.log('Initial Firestore seeding completed successfully with zero credentials leaks.');
     }
+    seedingAlreadyCompleted = true;
   } catch (error) {
-    console.warn('Firestore seeding skipped or restricted by network/offline:', error);
+    console.warn('Firestore seeding skipped or restricted by rules/offline:', error);
   } finally {
     isSeedingInProgress = false;
   }
 }
 
 // ----------------------------------------------------
-// REAL-TIME LISTENERS
+// REAL-TIME SCOPED LISTENERS (Bounded reads & query performance)
 // ----------------------------------------------------
 
 export function subscribeToOrganizations(onData: (orgs: Organization[]) => void) {
   try {
-    const colRef = collection(db, 'organizations');
+    const colRef = query(collection(db, 'organizations'), limit(50));
     return onSnapshot(
       colRef,
       (snapshot) => {
@@ -157,8 +151,8 @@ export function subscribeToOrganizations(onData: (orgs: Organization[]) => void)
 export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'users'), where('orgId', '==', orgId))
-      : collection(db, 'users');
+      ? query(collection(db, 'users'), where('orgId', '==', orgId), limit(100))
+      : query(collection(db, 'users'), limit(100));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -186,8 +180,8 @@ export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string
 export function subscribeToStudents(onData: (students: Student[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'students'), where('orgId', '==', orgId))
-      : collection(db, 'students');
+      ? query(collection(db, 'students'), where('orgId', '==', orgId), limit(250))
+      : query(collection(db, 'students'), limit(250));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -215,8 +209,8 @@ export function subscribeToStudents(onData: (students: Student[]) => void, orgId
 export function subscribeToBatches(onData: (batches: Batch[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'batches'), where('orgId', '==', orgId))
-      : collection(db, 'batches');
+      ? query(collection(db, 'batches'), where('orgId', '==', orgId), limit(100))
+      : query(collection(db, 'batches'), limit(100));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -244,8 +238,8 @@ export function subscribeToBatches(onData: (batches: Batch[]) => void, orgId?: s
 export function subscribeToTeachers(onData: (teachers: Teacher[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'teachers'), where('orgId', '==', orgId))
-      : collection(db, 'teachers');
+      ? query(collection(db, 'teachers'), where('orgId', '==', orgId), limit(100))
+      : query(collection(db, 'teachers'), limit(100));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -273,8 +267,8 @@ export function subscribeToTeachers(onData: (teachers: Teacher[]) => void, orgId
 export function subscribeToInvoices(onData: (invoices: FeeInvoice[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'invoices'), where('orgId', '==', orgId))
-      : collection(db, 'invoices');
+      ? query(collection(db, 'invoices'), where('orgId', '==', orgId), limit(250))
+      : query(collection(db, 'invoices'), limit(250));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -302,8 +296,8 @@ export function subscribeToInvoices(onData: (invoices: FeeInvoice[]) => void, or
 export function subscribeToAttendance(onData: (records: AttendanceRecord[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'attendance'), where('orgId', '==', orgId))
-      : collection(db, 'attendance');
+      ? query(collection(db, 'attendance'), where('orgId', '==', orgId), limit(500))
+      : query(collection(db, 'attendance'), limit(500));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -331,8 +325,8 @@ export function subscribeToAttendance(onData: (records: AttendanceRecord[]) => v
 export function subscribeToExams(onData: (exams: Exam[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'exams'), where('orgId', '==', orgId))
-      : collection(db, 'exams');
+      ? query(collection(db, 'exams'), where('orgId', '==', orgId), limit(100))
+      : query(collection(db, 'exams'), limit(100));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -360,8 +354,8 @@ export function subscribeToExams(onData: (exams: Exam[]) => void, orgId?: string
 export function subscribeToAnnouncements(onData: (announcements: Announcement[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'announcements'), where('orgId', '==', orgId))
-      : collection(db, 'announcements');
+      ? query(collection(db, 'announcements'), where('orgId', '==', orgId), limit(100))
+      : query(collection(db, 'announcements'), limit(100));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -389,8 +383,8 @@ export function subscribeToAnnouncements(onData: (announcements: Announcement[])
 export function subscribeToStudyMaterials(onData: (materials: StudyMaterial[]) => void, orgId?: string) {
   try {
     const targetRef = orgId
-      ? query(collection(db, 'studyMaterials'), where('orgId', '==', orgId))
-      : collection(db, 'studyMaterials');
+      ? query(collection(db, 'studyMaterials'), where('orgId', '==', orgId), limit(150))
+      : query(collection(db, 'studyMaterials'), limit(150));
     return onSnapshot(
       targetRef,
       (snapshot) => {
@@ -416,8 +410,65 @@ export function subscribeToStudyMaterials(onData: (materials: StudyMaterial[]) =
 }
 
 // ----------------------------------------------------
-// FIRESTORE MUTATIONS
+// ATOMIC FIRESTORE MUTATIONS & CONSISTENCY (writeBatch & runTransaction)
 // ----------------------------------------------------
+
+/**
+ * Atomically enrolls a student and updates the associated batch document's studentIds array.
+ */
+export async function persistStudentWithBatchAtomically(
+  student: Student,
+  batchesToUpdate: Batch[]
+): Promise<void> {
+  try {
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'students', student.id), student);
+
+    for (const b of batchesToUpdate) {
+      batch.set(doc(db, 'batches', b.id), b);
+    }
+
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `students/${student.id}`);
+  }
+}
+
+/**
+ * Atomically deletes a student and removes student ID from all batch rosters.
+ */
+export async function deleteStudentAtomically(
+  studentId: string,
+  batchesToClean: Batch[]
+): Promise<void> {
+  try {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'students', studentId));
+
+    for (const b of batchesToClean) {
+      const cleanedIds = b.studentIds.filter(id => id !== studentId);
+      batch.set(doc(db, 'batches', b.id), { ...b, studentIds: cleanedIds });
+    }
+
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `students/${studentId}`);
+  }
+}
+
+/**
+ * Atomically records a payment and updates the invoice paidAmount and status.
+ */
+export async function recordPaymentAtomically(
+  invoiceId: string,
+  updatedInvoice: FeeInvoice
+): Promise<void> {
+  try {
+    await setDoc(doc(db, 'invoices', invoiceId), updatedInvoice);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `invoices/${invoiceId}`);
+  }
+}
 
 export async function persistStudentToFirestore(student: Student): Promise<void> {
   try {
@@ -485,7 +536,9 @@ export async function persistOrganizationToFirestore(org: Organization): Promise
 
 export async function persistUserRoleToFirestore(user: User): Promise<void> {
   try {
-    await setDoc(doc(db, 'users', user.id), user);
+    const safeUser = { ...user };
+    delete safeUser.password;
+    await setDoc(doc(db, 'users', user.id), safeUser, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
   }

@@ -22,7 +22,11 @@ import {
   getDocFromServer,
   deleteDoc,
   query,
-  where
+  where,
+  limit,
+  orderBy,
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import {
   getStorage,
@@ -165,6 +169,10 @@ export {
   deleteDoc,
   query,
   where,
+  limit,
+  orderBy,
+  writeBatch,
+  runTransaction,
   ref,
   uploadBytes,
   uploadBytesResumable,
