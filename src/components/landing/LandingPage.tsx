@@ -125,25 +125,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* Dynamic Top App Bar: Apple Frosted Glass with Liquid Blur */}
       <nav
-        className={`sticky top-0 z-50 w-full transition-all duration-200 px-3.5 sm:px-6 lg:px-8 ${
+        className={`sticky top-0 z-50 w-full transition-all duration-200 px-4 sm:px-6 lg:px-8 ${
           isScrolled
-            ? 'bg-white/85 dark:bg-[#000000]/85 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] shadow-xs py-2'
-            : 'bg-white/75 dark:bg-[#000000]/75 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.06] py-2.5'
+            ? 'bg-white/90 dark:bg-[#000000]/90 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] shadow-xs py-3 sm:py-3.5'
+            : 'bg-white/80 dark:bg-[#000000]/80 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.06] py-4 sm:py-5'
         }`}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4 w-full">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-6 w-full">
           {/* Brand Anchor: VidyaOS Emblem */}
           <a href="#" className="flex items-center flex-shrink-0 cursor-pointer group">
-            <VidyaLogo size="sm" showBadge={true} badgeText="v2.5" />
+            <VidyaLogo size="md" showBadge={true} badgeText="v2.5" />
           </a>
 
           {/* Desktop Navigation Links: Clean Pill Cluster, placed close together */}
-          <div className="hidden lg:flex items-center gap-0.5 bg-black/[0.04] dark:bg-white/[0.06] p-1 rounded-full border border-black/[0.06] dark:border-white/[0.08] shadow-2xs">
+          <div className="hidden lg:flex items-center gap-1 bg-black/[0.04] dark:bg-white/[0.06] p-1.5 rounded-full border border-black/[0.06] dark:border-white/[0.08] shadow-2xs">
             {navLinks.map(l => (
               <a
                 key={l.href}
                 href={l.href}
-                className="px-3 py-1.5 rounded-full text-xs font-medium text-[#1D1D1F]/80 dark:text-[#F5F5F7]/80 hover:text-[#0071E3] dark:hover:text-[#2997FF] hover:bg-white dark:hover:bg-white/10 hover:shadow-2xs transition-all duration-150 whitespace-nowrap"
+                className="px-3.5 lg:px-4 py-2 rounded-full text-[13px] font-semibold text-[#1D1D1F]/80 dark:text-[#F5F5F7]/80 hover:text-[#0071E3] dark:hover:text-[#2997FF] hover:bg-white dark:hover:bg-white/10 hover:shadow-2xs transition-all duration-150 whitespace-nowrap"
               >
                 {l.label}
               </a>
@@ -151,38 +151,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Right Action Cluster: Space-Optimized Minimalist Controls */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
             {/* Install App - Compact circular icon pill */}
             {!pwaState.isInstalled && (
               <button
                 onClick={() => setIsPwaModalOpen(true)}
-                className="p-1.5 sm:p-2 rounded-full border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20 text-[#C96B00] dark:text-[#FFCA28] transition cursor-pointer flex-shrink-0 active:scale-95"
+                className="p-2 sm:p-2.5 rounded-full border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20 text-[#C96B00] dark:text-[#FFCA28] transition cursor-pointer flex-shrink-0 active:scale-95"
                 title="Install VidyaOS App"
                 aria-label="Install App"
               >
-                <DownloadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFA000] dark:text-[#FFCA28]" />
+                <DownloadCloud className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
               </button>
             )}
 
             {/* Theme Toggle: Apple Minimalist Glass Pill */}
             <button
               onClick={toggleTheme}
-              className="p-1.5 sm:p-2 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition-all cursor-pointer flex-shrink-0 active:scale-95"
+              className="p-2 sm:p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition-all cursor-pointer flex-shrink-0 active:scale-95"
               title={`Toggle Theme (${resolvedTheme === 'dark' ? 'Dark' : 'Light'})`}
               aria-label="Toggle Theme"
             >
               {resolvedTheme === 'dark'
-                ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFCA28]" />
-                : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0071E3]" />}
+                ? <Sun className="w-4 h-4 text-[#FFCA28]" />
+                : <Moon className="w-4 h-4 text-[#0071E3]" />}
             </button>
 
             {/* Register Center - Sleek subtle link on ultra-wide screens */}
             {onOpenRegister && (
               <button
                 onClick={() => onOpenRegister()}
-                className="hidden xl:inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full text-amber-700 dark:text-[#FFCA28] hover:bg-amber-500/10 transition cursor-pointer whitespace-nowrap active:scale-95"
+                className="hidden xl:inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold px-3 py-2 rounded-full text-amber-700 dark:text-[#FFCA28] hover:bg-amber-500/10 transition cursor-pointer whitespace-nowrap active:scale-95"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[#FFA000] dark:text-[#FFCA28]" />
+                <Sparkles className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
                 <span>Register</span>
               </button>
             )}
@@ -190,7 +190,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Sign In - Sleek text ghost button */}
             <button
               onClick={onOpenLogin}
-              className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition cursor-pointer active:scale-95 whitespace-nowrap"
+              className="text-xs sm:text-[13px] font-semibold px-3.5 sm:px-4 py-2 rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition cursor-pointer active:scale-95 whitespace-nowrap"
             >
               Sign In
             </button>
@@ -198,10 +198,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Console Button - Apple Key Blue Pill */}
             <ConsoleButton
               variant="blue"
-              size="xs"
-              iconRight={<ArrowRight className="w-3 h-3 hidden sm:inline" />}
+              size="sm"
+              iconRight={<ArrowRight className="w-3.5 h-3.5 hidden sm:inline" />}
               onClick={onEnterApp}
-              className="px-3 sm:px-3.5 text-xs whitespace-nowrap font-medium shadow-xs"
+              className="px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-[13px] whitespace-nowrap font-semibold shadow-xs"
             >
               <span className="hidden sm:inline">Go to Console</span>
               <span className="sm:hidden">Console</span>
@@ -210,10 +210,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Mobile/Tablet Menu Hamburger Button */}
             <button
               onClick={() => setMobileMenuOpen(prev => !prev)}
-              className="lg:hidden p-1.5 sm:p-2 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] transition cursor-pointer active:scale-95"
+              className="lg:hidden p-2 sm:p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] transition cursor-pointer active:scale-95"
               aria-label="Toggle navigation menu"
             >
-              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
