@@ -1,0 +1,81 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Flame Left Facet Gradient: Bright Scarlet Red -->
+    <linearGradient id="vidya-left-flame" x1="12" y1="4" x2="24" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FF1744" />
+      <stop offset="100%" stopColor="#D50000" />
+    </linearGradient>
+
+    <!-- Flame Right Facet Gradient: Bright Fiery Orange -->
+    <linearGradient id="vidya-right-flame" x1="36" y1="4" x2="24" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFAB00" />
+      <stop offset="45%" stopColor="#FF6D00" />
+      <stop offset="100%" stopColor="#FF3D00" />
+    </linearGradient>
+
+    <!-- Center Radiant Core Spine -->
+    <linearGradient id="vidya-core-spine" x1="24" y1="6" x2="24" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FFE082" />
+      <stop offset="60%" stopColor="#FF9100" />
+      <stop offset="100%" stopColor="#FF3D00" />
+    </linearGradient>
+
+    <!-- Base Foundation Arc: Pure Bright Red to Radiant Orange (Zero Black) -->
+    <linearGradient id="vidya-os-base" x1="8" y1="36" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#D50000" />
+      <stop offset="50%" stopColor="#FF3D00" />
+      <stop offset="100%" stopColor="#FF6D00" />
+    </linearGradient>
+
+    <!-- Ambient Subtle Shadow/Glow -->
+    <filter id="vidya-ambient-glow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#FF3D00" floodOpacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- Background Soft Glow Disc -->
+  <circle cx="24" cy="24" r="22" fill="#FF3D00" fill-opacity="0.12" />
+
+  <!-- Layer 1: The OS Architectural Pedestal (Diya Wisdom Base / Open Knowledge Foundation) -->
+  <path
+    d="M8 36.5C13.5 35 19 36 24 38.5C29 36 34.5 35 40 36.5C38 41 31.5 43.5 24 43.5C16.5 43.5 10 41 8 36.5Z"
+    fill="url(#vidya-os-base)"
+  />
+  <!-- Upper Foundation Edge highlight -->
+  <path
+    d="M8.5 36.5C13.8 35.1 19.1 36.1 24 38.5C28.9 36.1 34.2 35.1 39.5 36.5"
+    stroke="#FF9100"
+    stroke-width="1.25"
+    stroke-linecap="round"
+    stroke-opacity="0.95"
+  />
+
+  <!-- Layer 2: Left Geometric Flame Wing (Knowledge Ascent) -->
+  <path
+    d="M24 6.5C24 6.5 13 17 11 26C9.5 32.5 15.5 36.5 24 38.5C20.5 33 21 24 24 16.5V6.5Z"
+    fill="url(#vidya-left-flame)"
+    filter="url(#vidya-ambient-glow)"
+  />
+
+  <!-- Layer 3: Right Geometric Flame Wing (Action & Intelligence) -->
+  <path
+    d="M24 6.5V16.5C27 24 27.5 33 24 38.5C32.5 36.5 38.5 32.5 37 26C35 17 24 6.5 24 6.5Z"
+    fill="url(#vidya-right-flame)"
+  />
+
+  <!-- Layer 4: Internal Floating Diamond Core (Fiery Orange-Red Core) -->
+  <path
+    d="M24 18L27.5 24.5L24 31L20.5 24.5L24 18Z"
+    fill="#FF3D00"
+    stroke="#FFD54F"
+    stroke-width="0.8"
+  />
+
+  <!-- Layer 5: Luminous Center Spine Highlight -->
+  <path
+    d="M24 8.5L24.8 20L24 34"
+    stroke="url(#vidya-core-spine)"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
+</svg>
