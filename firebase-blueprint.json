@@ -1,0 +1,187 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "User profile with role, email, and authentication details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["PLATFORM_OWNER", "CENTER_ADMIN", "TEACHER", "STUDENT", "PARENT"] },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "avatar": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["id", "role", "name"]
+    },
+    "organizations": {
+      "title": "Organization",
+      "description": "Tuition center institute with branches and subscription tier",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 128 },
+        "slug": { "type": "string", "maxLength": 64 },
+        "ownerName": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "city": { "type": "string", "maxLength": 64 },
+        "state": { "type": "string", "maxLength": 64 },
+        "upiId": { "type": "string", "maxLength": 64 },
+        "planId": { "type": "string", "enum": ["starter", "growth", "pro"] },
+        "subscriptionStatus": { "type": "string", "enum": ["active", "trial", "suspended", "expired"] },
+        "maxStudents": { "type": "number" },
+        "maxBranches": { "type": "number" }
+      },
+      "required": ["id", "name", "ownerName"]
+    },
+    "students": {
+      "title": "Student",
+      "description": "Coaching student enrolled in batches",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "enrollmentNo": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 128 },
+        "classGrade": { "type": "string", "maxLength": 64 },
+        "board": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["id", "name", "orgId"]
+    },
+    "batches": {
+      "title": "Batch",
+      "description": "Tuition batch class schedule",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "maxLength": 64 },
+        "classGrade": { "type": "string", "maxLength": 64 },
+        "monthlyFee": { "type": "number" },
+        "teacherId": { "type": "string", "maxLength": 64 },
+        "roomNumber": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "name", "orgId"]
+    },
+    "teachers": {
+      "title": "Teacher",
+      "description": "Faculty member or instructor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "branchId": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "qualification": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["id", "name", "orgId"]
+    },
+    "invoices": {
+      "title": "Invoice",
+      "description": "Tuition fee invoice with UPI payments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "invoiceNo": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 64 },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["paid", "pending", "partially_paid", "overdue"] }
+      },
+      "required": ["id", "studentId", "amount", "status"]
+    },
+    "attendance": {
+      "title": "AttendanceRecord",
+      "description": "Daily student batch attendance record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "batchId": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 64 },
+        "date": { "type": "string", "maxLength": 32 },
+        "status": { "type": "string", "enum": ["present", "absent", "late", "excused"] }
+      },
+      "required": ["id", "batchId", "studentId", "date", "status"]
+    },
+    "exams": {
+      "title": "Exam",
+      "description": "Internal test or exam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "maxLength": 64 },
+        "totalMarks": { "type": "number" },
+        "date": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "title", "subject", "totalMarks"]
+    },
+    "announcements": {
+      "title": "Announcement",
+      "description": "Center announcement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "orgId": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 128 },
+        "content": { "type": "string", "maxLength": 1024 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "content"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profiles and RBAC roles"
+    },
+    "/organizations/{orgId}": {
+      "schema": "organizations",
+      "description": "Tuition center tenant institutes"
+    },
+    "/students/{studentId}": {
+      "schema": "students",
+      "description": "Students collection"
+    },
+    "/batches/{batchId}": {
+      "schema": "batches",
+      "description": "Batches collection"
+    },
+    "/teachers/{teacherId}": {
+      "schema": "teachers",
+      "description": "Teachers collection"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "invoices",
+      "description": "Fee invoices collection"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "attendance",
+      "description": "Attendance logs"
+    },
+    "/exams/{examId}": {
+      "schema": "exams",
+      "description": "Exams collection"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "announcements",
+      "description": "Center announcements collection"
+    }
+  }
+}

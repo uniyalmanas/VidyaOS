@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // User profiles & RBAC roles
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
+    // Organizations (Tuition Centers)
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Students collection
+    match /students/{studentId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Batches collection
+    match /batches/{batchId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Teachers collection
+    match /teachers/{teacherId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Invoices collection
+    match /invoices/{invoiceId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Attendance records
+    match /attendance/{attendanceId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Exams collection
+    match /exams/{examId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Exam Results collection
+    match /examResults/{resultId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Announcements collection
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Assignments collection
+    match /assignments/{assignId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Study Materials collection
+    match /studyMaterials/{matId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Credentials collection (phone-number based credentials authentication)
+    match /credentials/{phone} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    // Test connection doc
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
