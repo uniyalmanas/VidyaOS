@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2, Users, BookOpen, GraduationCap, ShieldCheck, ArrowRight, Sparkles,
   Smartphone, QrCode, Shield, Clock, ChevronDown, ChevronUp, TrendingUp, Check,
-  ExternalLink, Sun, Moon, DownloadCloud, Menu, X
+  ExternalLink, Sun, Moon, DownloadCloud
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -89,8 +89,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const { resolvedTheme, toggleTheme, theme } = useTheme();
   const pwaState = usePwaInstall();
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const closeMenu = () => setMenuOpen(false);
 
   // Dynamic scroll state to elevate header on scroll
   const [isScrolled, setIsScrolled] = useState(false);
@@ -185,8 +183,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </ConsoleButton>
             )}
 
-            {/* Sign In - Tablet & Desktop */}
-            <ConsoleButton variant="secondary" size="xs" onClick={onOpenLogin} className="hidden sm:inline-flex">
+            {/* Sign In */}
+            <ConsoleButton variant="secondary" size="xs" onClick={onOpenLogin} className="inline-flex">
               Sign In
             </ConsoleButton>
 
@@ -197,59 +195,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="hidden sm:inline">Go to Console</span>
               <span className="sm:hidden">Console</span>
             </ConsoleButton>
-
-            {/* Mobile Hamburger / Close toggle with rotation effect */}
-            <button
-              onClick={() => setMenuOpen(o => !o)}
-              className={`lg:hidden p-1.5 sm:p-2 rounded-lg ${border} ${muted} hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer flex-shrink-0 active:scale-95`}
-              aria-label="Toggle navigation menu"
-              aria-expanded={menuOpen}
-            >
-              <div className="relative w-4 h-4 flex items-center justify-center">
-                {menuOpen ? <X className="w-4 h-4 text-[#FFA000]" /> : <Menu className="w-4 h-4" />}
-              </div>
-            </button>
           </div>
         </div>
-
-        {/* Mobile & Tablet Expandable Drawer Sheet */}
-        {menuOpen && (
-          <div className="lg:hidden max-w-7xl mx-auto mt-2.5 pt-2.5 border-t border-[#DADCE0] dark:border-[#3C4043] flex flex-col space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
-            {navLinks.map(l => (
-              <a
-                key={l.href}
-                href={l.href}
-                onClick={closeMenu}
-                className="py-2.5 px-3 text-xs font-semibold text-[#202124] dark:text-[#E8EAED] rounded-lg hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition-colors"
-              >
-                {l.label}
-              </a>
-            ))}
-
-            {/* PWA Install link inside mobile drawer */}
-            <button
-              onClick={() => { closeMenu(); setIsPwaModalOpen(true); }}
-              className="flex items-center gap-2.5 py-2.5 px-3 text-xs font-semibold text-[#B06000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/15 rounded-lg transition text-left cursor-pointer"
-            >
-              <DownloadCloud className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
-              <span>Install VidyaOS App (iOS, Android, Laptop)</span>
-            </button>
-
-            {/* Action buttons inside mobile drawer */}
-            <div className="flex gap-2 pt-2.5 pb-1 border-t border-[#DADCE0]/60 dark:border-[#3C4043]/60 mt-1">
-              <ConsoleButton variant="secondary" size="sm" className="flex-1 justify-center text-xs"
-                onClick={() => { closeMenu(); onOpenLogin(); }}>
-                Sign In
-              </ConsoleButton>
-              {onOpenRegister && (
-                <ConsoleButton variant="primary" size="sm" className="flex-1 justify-center text-xs"
-                  onClick={() => { closeMenu(); onOpenRegister(); }}>
-                  Register Center
-                </ConsoleButton>
-              )}
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Hero */}
