@@ -112,47 +112,42 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <nav className="sticky top-0 z-40 bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] px-4 lg:px-8 py-2.5 transition-colors">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Official VidyaOS Console Brand Anchor */}
-          <VidyaLogo size="sm" badgeText="CONSOLE v2.5" subtitle="Coaching & Education Center OS" />
+          <VidyaLogo size="sm" badgeText="CONSOLE" />
 
           {/* Center Navigation Links */}
           <div className="hidden lg:flex items-center space-x-6 text-xs font-semibold text-[#5F6368] dark:text-[#9AA0A6]">
-            <a href="#features" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Platform Features</a>
-            <a href="#interactive-demo" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Console Demo</a>
-            <a href="#roi-calculator" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Fee Calculator</a>
-            <a href="#pricing" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Pricing Tiers</a>
+            <a href="#features" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Features</a>
+            <a href="#interactive-demo" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Demo</a>
+            <a href="#roi-calculator" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Calculator</a>
+            <a href="#pricing" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">Pricing</a>
             <a href="#faqs" className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">FAQs</a>
           </div>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 sm:space-x-2">
             {/* Install App Link/Button in Header for iOS, Android, Laptop */}
             <button
               onClick={() => setIsPwaModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold shadow-sm transition cursor-pointer"
+              className="inline-flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold shadow-2xs transition cursor-pointer flex-shrink-0"
               title="Install VidyaOS PWA on iOS, Android or Laptop"
               aria-label="Install App"
             >
               <DownloadCloud className="w-3.5 h-3.5 text-[#FFA000] dark:text-[#FFCA28]" />
               <span className="hidden sm:inline">Install App</span>
-              <span className="sm:hidden">App</span>
-              {pwaState.platform !== 'unknown' && (
-                <span className="hidden md:inline text-[9px] uppercase px-1 py-0.2 rounded bg-amber-500/20 font-mono">
-                  {pwaState.platform === 'ios' ? 'iOS' : pwaState.platform === 'android' ? 'Android' : 'Laptop'}
-                </span>
-              )}
+              <span className="sm:hidden text-[11px]">App</span>
             </button>
 
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
-              className="p-1.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer"
+              className="p-1 sm:p-1.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer flex-shrink-0"
               title={`Toggle Theme (Current: ${theme})`}
               aria-label="Toggle Theme"
             >
               {resolvedTheme === 'dark' ? (
-                <Sun className="w-4 h-4 text-[#FFCA28]" />
+                <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFCA28]" />
               ) : (
-                <Moon className="w-4 h-4 text-[#FFA000]" />
+                <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFA000]" />
               )}
             </button>
 
@@ -164,7 +159,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 onClick={() => onOpenRegister?.()}
                 className="hidden md:inline-flex"
               >
-                Register Center
+                Register
               </ConsoleButton>
             )}
 
@@ -172,17 +167,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               variant="secondary"
               size="xs"
               onClick={onOpenLogin}
+              className="px-2 sm:px-3 text-xs"
             >
-              Sign In
+              <span className="sm:inline hidden">Sign In</span>
+              <span className="sm:hidden">Login</span>
             </ConsoleButton>
 
             <ConsoleButton
               variant="primary"
               size="xs"
-              iconRight={<ArrowRight className="w-3 h-3" />}
+              iconRight={<ArrowRight className="w-3 h-3 hidden sm:inline" />}
               onClick={onEnterApp}
+              className="px-2 sm:px-3 text-xs"
             >
-              Go to Console
+              <span className="sm:inline hidden">Go to Console</span>
+              <span className="sm:hidden">Console</span>
             </ConsoleButton>
           </div>
         </div>

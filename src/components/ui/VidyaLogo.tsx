@@ -152,7 +152,7 @@ export const VidyaLogo: React.FC<VidyaLogoProps> = ({
 
             {showBadge && (
               <span
-                className={`font-mono font-bold tracking-wider uppercase rounded-md bg-orange-500/10 text-[#FF5722] dark:text-[#FF9100] border border-orange-500/30 ${current.badgeClass}`}
+                className={`font-mono font-bold tracking-wider uppercase rounded-md bg-orange-500/10 text-[#FF5722] dark:text-[#FF9100] border border-orange-500/30 hidden sm:inline-block ${current.badgeClass}`}
               >
                 {badgeText}
               </span>
@@ -160,7 +160,7 @@ export const VidyaLogo: React.FC<VidyaLogoProps> = ({
           </div>
 
           {subtitle && (
-            <span className={`text-[#5F6368] dark:text-[#9AA0A6] font-medium tracking-tight -mt-0.5 ${current.subClass}`}>
+            <span className={`text-[#5F6368] dark:text-[#9AA0A6] font-medium tracking-tight -mt-0.5 hidden sm:block ${current.subClass}`}>
               {subtitle}
             </span>
           )}
