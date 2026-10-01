@@ -60,7 +60,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const { resolvedTheme, toggleTheme, theme } = useTheme();
   const pwaState = usePwaInstall();
   const [isPwaModalOpen, setIsPwaModalOpen] = useState<boolean>(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Interactive Live Demo preview tab
   const [activePreviewTab, setActivePreviewTab] = useState<UserRole>('CENTER_ADMIN');
@@ -133,7 +132,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Install App Link/Button in Header for iOS, Android, Laptop */}
             <button
               onClick={() => setIsPwaModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold shadow-2xs transition cursor-pointer flex-shrink-0"
+              className="inline-flex items-center gap-1 px-2 py-1.5 sm:px-2.5 sm:py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold shadow-2xs transition cursor-pointer flex-shrink-0"
               title="Install VidyaOS PWA on iOS, Android or Laptop"
               aria-label="Install App"
             >
@@ -163,13 +162,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 size="xs"
                 icon={<Sparkles className="w-3.5 h-3.5" />}
                 onClick={() => onOpenRegister?.()}
-                className="hidden md:inline-flex"
+                className="hidden lg:inline-flex"
               >
                 Register Center
               </ConsoleButton>
             )}
 
-            {/* Sign In - Hidden on very small mobile, visible in drawer */}
+            {/* Sign In - Desktop & Tablet */}
             <ConsoleButton
               variant="secondary"
               size="xs"
@@ -190,82 +189,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="hidden sm:inline">Go to Console</span>
               <span className="sm:hidden">Console</span>
             </ConsoleButton>
-
-            {/* Mobile Hamburger Menu Toggle */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer md:hidden flex-shrink-0 border border-[#DADCE0]/60 dark:border-[#3C4043]/60"
-              title="Menu"
-              aria-label="Toggle mobile menu"
-            >
-              {isMobileMenuOpen ? (
-                <X className="w-4 h-4 text-[#202124] dark:text-white" />
-              ) : (
-                <Menu className="w-4 h-4 text-[#202124] dark:text-white" />
-              )}
-            </button>
           </div>
         </div>
-
-        {/* Mobile Dropdown Drawer */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden mt-2.5 pt-3 pb-2 border-t border-[#DADCE0] dark:border-[#3C4043] animate-fadeIn space-y-2">
-            <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-[#5F6368] dark:text-[#9AA0A6]">
-              <a
-                href="#features"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 rounded-lg bg-[#F8F9FA] dark:bg-[#282A2C] hover:text-[#FFA000] text-center"
-              >
-                Platform Features
-              </a>
-              <a
-                href="#interactive-demo"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 rounded-lg bg-[#F8F9FA] dark:bg-[#282A2C] hover:text-[#FFA000] text-center"
-              >
-                Console Demo
-              </a>
-              <a
-                href="#roi-calculator"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 rounded-lg bg-[#F8F9FA] dark:bg-[#282A2C] hover:text-[#FFA000] text-center"
-              >
-                Fee Calculator
-              </a>
-              <a
-                href="#pricing"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 rounded-lg bg-[#F8F9FA] dark:bg-[#282A2C] hover:text-[#FFA000] text-center"
-              >
-                Pricing Tiers
-              </a>
-            </div>
-
-            <div className="pt-2 flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  onOpenLogin();
-                }}
-                className="w-full py-2 px-3 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-xs font-semibold text-[#202124] dark:text-white text-center cursor-pointer shadow-2xs"
-              >
-                Sign In to Institute Account
-              </button>
-
-              {onOpenRegister && (
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    onOpenRegister();
-                  }}
-                  className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000] text-white text-xs font-bold text-center cursor-pointer shadow-xs"
-                >
-                  Register New Coaching Center
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* 2. Hero Section (Ultra-Premium Google/Firebase Style) */}
