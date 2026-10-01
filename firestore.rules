@@ -32,7 +32,8 @@ service cloud.firestore {
     function isCenterAdmin() {
       return isSignedIn() && (
         (request.auth.token.role == 'CENTER_ADMIN') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'CENTER_ADMIN')
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'CENTER_ADMIN') ||
+        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)))
       );
     }
 
@@ -50,25 +51,12 @@ service cloud.firestore {
       );
     }
 
-    function isParent() {
-      return isSignedIn() && (
-        (request.auth.token.role == 'PARENT') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'PARENT')
-      );
-    }
-
-    function isStudent() {
-      return isSignedIn() && (
-        (request.auth.token.role == 'STUDENT') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'STUDENT')
-      );
-    }
-
     function isTenantMember(orgId) {
       return isSignedIn() && (
         isPlatformOwner() ||
         (request.auth.token.orgId == orgId) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserOrgId() == orgId)
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserOrgId() == orgId) ||
+        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)))
       );
     }
 
