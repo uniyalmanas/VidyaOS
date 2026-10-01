@@ -219,16 +219,16 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] hidden sm:block mx-0.5" />
 
-          {/* Coaching Center Display: When logged in, show ONLY current coaching name without dropdown */}
+          {/* Coaching Center Display: Responsive so it never overflows mobile viewport */}
           {isAuthenticated && currentUser.role !== 'PLATFORM_OWNER' ? (
             <div
-              className="flex items-center space-x-2 px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-left shadow-2xs select-none"
+              className="flex items-center space-x-1.5 sm:space-x-2 px-1.5 sm:px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-left shadow-2xs select-none min-w-0"
               title={`Active Coaching Center: ${currentOrg.name}`}
             >
-              <div className="w-4 h-4 rounded bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0">
+              <div className="w-5 h-5 rounded bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
                 {currentOrg.logoText.slice(0, 2)}
               </div>
-              <div className="max-w-[120px] sm:max-w-[200px] truncate">
+              <div className="max-w-[70px] xs:max-w-[110px] sm:max-w-[180px] md:max-w-[220px] truncate hidden xxs:block">
                 <span className="text-xs font-semibold font-google-sans text-[#202124] dark:text-[#E8EAED] truncate block leading-tight">
                   {currentOrg.name}
                 </span>
@@ -432,27 +432,27 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Right Section: Utility actions, Notifications, Help & Profile */}
-        <div className="flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0">
+        {/* Right Section: Utility actions, Notifications, Help & Profile */}
+        <div className="flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0 z-10">
 
-          {/* Install App Quick Action (Visible if not in standalone) */}
+          {/* Install App Quick Action (Desktop & Tablet only to conserve mobile space) */}
           {!pwaState.isInstalled && (
             <button
               onClick={() => setShowPwaModal(true)}
-              className="px-2 py-1 rounded-lg text-[#FFA000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition focus:outline-none cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95"
+              className="hidden md:inline-flex px-2 py-1 rounded-lg text-[#FFA000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition focus:outline-none cursor-pointer items-center gap-1.5 shadow-2xs active:scale-95 flex-shrink-0"
               title="Install VidyaOS App on Android, iOS, or Laptop"
               aria-label="Install VidyaOS App"
             >
               <DownloadCloud className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
-              <span className="text-xs font-semibold hidden sm:inline">Install App</span>
-              <span className="text-[11px] font-semibold sm:hidden">App</span>
+              <span className="text-xs font-semibold">Install App</span>
             </button>
           )}
 
           {/* Theme Quick Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer tooltip-bottom"
-            data-tooltip={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer flex-shrink-0"
+            title={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             aria-label="Toggle dark/light theme"
           >
             {resolvedTheme === 'dark' ? (
@@ -462,22 +462,22 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Help & Support Button */}
+          {/* Help & Support Button (hidden on narrow screens to prevent crowding) */}
           <button
             onClick={() => setShowHelpModal(true)}
-            className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer tooltip-bottom"
-            data-tooltip="Help & Documentation"
+            className="hidden sm:inline-flex p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer flex-shrink-0"
+            title="Help & Documentation"
             aria-label="Help & Documentation"
           >
             <HelpCircle className="w-4 h-4" />
           </button>
 
           {/* Notifications Center */}
-          <div ref={notifDropdownRef} className="relative">
+          <div ref={notifDropdownRef} className="relative flex-shrink-0">
             <button
               onClick={() => setShowNotifDropdown(!showNotifDropdown)}
-              className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition relative focus:outline-none cursor-pointer tooltip-bottom"
-              data-tooltip="Notifications"
+              className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition relative focus:outline-none cursor-pointer"
+              title="Notifications"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
@@ -487,7 +487,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {showNotifDropdown && (
-              <div className="absolute right-0 mt-1.5 w-80 bg-white dark:bg-[#1E1F20] rounded-xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-3 z-50 animate-in fade-in slide-in-from-top-1">
+              <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-[#1E1F20] rounded-xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-3 z-50 animate-in fade-in slide-in-from-top-1">
                 <div className="flex items-center justify-between pb-2 border-b border-[#DADCE0] dark:border-[#3C4043]">
                   <span className="text-xs font-bold text-[#202124] dark:text-[#E8EAED]">Notifications</span>
                   <span className="text-[10px] text-[#1A73E8] dark:text-[#8AB4F8] font-medium cursor-pointer hover:underline">
@@ -523,8 +523,8 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] mx-0.5" />
 
-          {/* User Account Avatar & Dropdown (Google Account Menu) */}
-          <div ref={userDropdownRef} className="relative">
+          {/* User Account Avatar & Dropdown (Always visible and accessible) */}
+          <div ref={userDropdownRef} className="relative flex-shrink-0">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               className="flex items-center space-x-1.5 p-0.5 rounded-full hover:ring-2 hover:ring-[#FFA000]/40 transition cursor-pointer"
@@ -534,16 +534,16 @@ export const Header: React.FC<HeaderProps> = ({
               <img
                 src={currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
                 alt={currentUser.name}
-                className="w-7 h-7 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border-2 border-[#FFA000]/50 dark:border-[#FFA000]/60 shadow-2xs"
               />
             </button>
 
             {showUserDropdown && (
-              <div className="absolute right-0 mt-1.5 w-72 bg-white dark:bg-[#1E1F20] rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-3 z-50 animate-in fade-in slide-in-from-top-1 text-left">
+              <div className="absolute right-0 mt-1.5 w-72 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-[#1E1F20] rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-3 z-50 animate-in fade-in slide-in-from-top-1 text-left">
                 {/* Account Header */}
                 <div className="flex items-center space-x-3 pb-3 border-b border-[#DADCE0] dark:border-[#3C4043]">
                   <img
-                    src={currentUser.avatar}
+                    src={currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
                     alt={currentUser.name}
                     className="w-10 h-10 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
                   />

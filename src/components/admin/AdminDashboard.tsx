@@ -42,7 +42,10 @@ import {
   Building2,
   Sparkles,
   Copy,
-  Edit2
+  Edit2,
+  Eye,
+  EyeOff,
+  KeyRound
 } from 'lucide-react';
 import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
@@ -117,7 +120,7 @@ export const AdminDashboard: React.FC = () => {
   } = useApp();
 
   const { navigate } = useRouter();
-  const { currentUser } = useAuth();
+  const { currentUser, registerUserCredentials } = useAuth();
   const isStaff = currentUser?.role === 'STAFF';
   const STAFF_RESTRICTED_MODULES = ['teachers', 'analytics', 'reports', 'settings', 'subscription'];
 
@@ -148,6 +151,8 @@ export const AdminDashboard: React.FC = () => {
   const [teacherName, setTeacherName] = useState<string>('');
   const [teacherEmail, setTeacherEmail] = useState<string>('');
   const [teacherPhone, setTeacherPhone] = useState<string>('');
+  const [teacherPassword, setTeacherPassword] = useState<string>('teacher123');
+  const [showTeacherPassword, setShowTeacherPassword] = useState<boolean>(false);
   const [teacherQualification, setTeacherQualification] = useState<string>('B.Tech / M.Sc');
   const [teacherSubject, setTeacherSubject] = useState<string>('Mathematics');
   const [teacherSalary, setTeacherSalary] = useState<number>(35000);
@@ -432,15 +437,19 @@ export const AdminDashboard: React.FC = () => {
     setBatchName('');
   };
 
-  const handleCreateTeacher = (e: React.FormEvent) => {
+  const handleCreateTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!teacherName.trim()) return;
 
-    addTeacher({
+    const cleanDigits = teacherPhone.replace(/[^0-9]/g, '').slice(-10) || '9876500000';
+    const assignedPassword = (teacherPassword || 'teacher123').trim();
+    const assignedEmail = teacherEmail.trim() || `${teacherName.toLowerCase().replace(/\s+/g, '.')}@${currentOrg.slug}.in`;
+
+    const newTeacher = addTeacher({
       branchId: currentOrg.branches[0]?.id || 'branch-1',
       name: teacherName.trim(),
-      phone: teacherPhone.trim() || '+91 98765 00000',
-      email: teacherEmail.trim() || `${teacherName.toLowerCase().replace(/\s+/g, '.')}@${currentOrg.slug}.in`,
+      phone: `+91 ${cleanDigits}`,
+      email: assignedEmail,
       qualification: teacherQualification.trim() || 'Graduate / Subject Specialist',
       subjects: teacherSubject.split(',').map(s => s.trim()).filter(Boolean),
       salary: teacherSalary || 35000,
@@ -449,11 +458,27 @@ export const AdminDashboard: React.FC = () => {
       status: 'active'
     });
 
+    // Provision teacher credentials so they can log in via phone + password immediately
+    try {
+      await registerUserCredentials(
+        cleanDigits,
+        assignedPassword,
+        'TEACHER',
+        teacherName.trim(),
+        assignedEmail,
+        currentOrg.id,
+        newTeacher.userId
+      );
+    } catch (credErr) {
+      console.warn('Teacher credentials registration note:', credErr);
+    }
+
     setShowAddTeacherModal(false);
     setTeacherName('');
     setTeacherEmail('');
     setTeacherPhone('');
-    showToast(`Faculty ${teacherName} added successfully!`, 'success');
+    setTeacherPassword('teacher123');
+    showToast(`Faculty ${teacherName} added! Teacher can log in with phone & password: "${assignedPassword}"`, 'success');
   };
 
   // Dynamic Academic & Center Analytics Calculations
@@ -3061,14 +3086,14 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Mobile Contact (+91)</label>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Mobile Contact (+91) *</label>
                   <input
                     type="text"
                     required
                     placeholder="+91 98765 43210"
                     value={teacherPhone}
                     onChange={e => setTeacherPhone(e.target.value)}
-                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-mono"
                   />
                 </div>
                 <div>
@@ -3081,6 +3106,39 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
                   />
                 </div>
+              </div>
+
+              {/* Faculty Login Password */}
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[#B06000] dark:text-[#FFCA28] font-bold flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Faculty Login Password *</span>
+                  </label>
+                  <span className="text-[10px] text-amber-700 dark:text-amber-300 font-mono font-semibold">
+                    Default: teacher123
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showTeacherPassword ? 'text' : 'password'}
+                    required
+                    value={teacherPassword}
+                    onChange={e => setTeacherPassword(e.target.value)}
+                    placeholder="Enter password (min 6 characters)"
+                    className="w-full border border-amber-500/40 bg-white dark:bg-[#1E1F20] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2 font-mono pr-9 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTeacherPassword(!showTeacherPassword)}
+                    className="absolute right-2.5 top-2.5 text-[#5F6368] hover:text-[#202124] dark:hover:text-white cursor-pointer"
+                  >
+                    {showTeacherPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] leading-tight">
+                  The teacher will use their mobile number and this password to log into their Faculty Portal.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">

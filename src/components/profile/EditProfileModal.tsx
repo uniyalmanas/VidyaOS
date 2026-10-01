@@ -106,14 +106,52 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
   if (!isOpen || !activeUser) return null;
 
-  // Handle local avatar file selection
+  // Handle local avatar file selection with client-side compression
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setAvatarFile(file);
+
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatarPreview(reader.result as string);
+      reader.onload = (event) => {
+        const rawResult = event.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 256;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const compressed = canvas.toDataURL('image/jpeg', 0.88);
+              setAvatarPreview(compressed);
+              setAvatar(compressed);
+              return;
+            }
+          } catch (_) {}
+          setAvatarPreview(rawResult);
+          setAvatar(rawResult);
+        };
+        img.onerror = () => {
+          setAvatarPreview(rawResult);
+          setAvatar(rawResult);
+        };
+        img.src = rawResult;
       };
       reader.readAsDataURL(file);
     }
@@ -137,14 +175,21 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
     setSaving(true);
     try {
-      let finalAvatarUrl = avatar;
+      let finalAvatarUrl = avatar || avatarPreview;
 
-      // 1. If an image file was selected, upload directly to Firebase Cloud Storage!
+      // 1. If an image file was selected, attempt upload to Firebase Cloud Storage, with seamless local fallback
       if (avatarFile) {
         setUploadingAvatar(true);
-        const storagePath = `avatars/${activeUser.id}_${Date.now()}_${avatarFile.name.replace(/\s+/g, '_')}`;
-        finalAvatarUrl = await uploadFileToStorage(storagePath, avatarFile, avatarFile.type);
-        setUploadingAvatar(false);
+        try {
+          const storagePath = `avatars/${activeUser.id}_${Date.now()}_${avatarFile.name.replace(/\s+/g, '_')}`;
+          finalAvatarUrl = await uploadFileToStorage(storagePath, avatarFile, avatarFile.type);
+        } catch (storageErr) {
+          console.warn('Cloud Storage upload skipped/failed; using compressed image data directly:', storageErr);
+          // Fall back gracefully to the compressed data URL from avatarPreview
+          finalAvatarUrl = avatarPreview || avatar;
+        } finally {
+          setUploadingAvatar(false);
+        }
       }
 
       // Parse subjects array

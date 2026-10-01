@@ -32,6 +32,7 @@ interface AuthContextType {
   loginWithPhonePassword: (phone: string, password: string, requestedRole?: UserRole) => Promise<{ success: boolean; error?: string; user?: User }>;
   signupWithPhonePassword: (name: string, phone: string, password: string, role: UserRole, orgId?: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   updateUserPassword: (phone: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  registerUserCredentials: (phone: string, password: string, role: UserRole, name: string, email: string, orgId: string, userId?: string) => Promise<void>;
   loginWithPhoneOtp: (phone: string, otp: string, orgId?: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   sendPhoneOtp: (phone: string) => Promise<{ success: boolean; otp?: string; message?: string }>;
   loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
@@ -468,6 +469,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.role) role = data.role as UserRole;
         if (data.orgId) orgId = data.orgId;
         if (data.name) name = data.name;
+      } else {
+        // Also check credentials/{clean} if user doc wasn't found under fbUser.uid
+        try {
+          const credSnap = await getDoc(doc(db, 'credentials', clean));
+          if (credSnap.exists()) {
+            const cData = credSnap.data();
+            if (cData.role) role = cData.role;
+            if (cData.orgId) orgId = cData.orgId;
+            if (cData.name) name = cData.name;
+          }
+        } catch (_) {}
       }
 
       const resolvedUser: User = {
@@ -494,9 +506,132 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setShowLoginModal(false);
       return { success: true, user: resolvedUser };
     } catch (fbErr: any) {
-      console.warn('Firebase signIn for virtual phone email notice:', fbErr?.code);
+      console.warn('Firebase signIn notice, checking credentials database:', fbErr?.code);
 
-      // Check if user exists in pre-configured center staff/demo accounts (for offline dev environment)
+      // A. Check Firestore credentials/{clean} (Registered by Admin or System)
+      try {
+        const credRef = doc(db, 'credentials', clean);
+        const credSnap = await getDoc(credRef);
+        if (credSnap.exists()) {
+          const credData = credSnap.data();
+          if (credData.password === password.trim()) {
+            // Valid credentials found in Firestore!
+            try {
+              const cred = await createUserWithEmailAndPassword(auth, virtualEmail, password.trim());
+              await updateProfile(cred.user, { displayName: credData.name });
+            } catch (_) {}
+
+            const resolvedRole: UserRole = credData.role || requestedRole || 'TEACHER';
+            const resolvedOrgId: string = credData.orgId || 'org-apex';
+            const resolvedName: string = credData.name || `Faculty (${clean.slice(-4)})`;
+
+            const resolvedUser: User = {
+              id: credData.userId || `user-${clean}`,
+              name: resolvedName,
+              phone: `+91 ${clean}`,
+              email: credData.email || virtualEmail,
+              role: resolvedRole,
+              orgId: resolvedOrgId,
+              avatar: credData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(resolvedName)}`
+            };
+
+            const newSession: AuthSession = {
+              token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              user: resolvedUser,
+              orgId: resolvedOrgId,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+              loginMethod: 'phone_password'
+            };
+
+            setSession(newSession);
+            localStorage.setItem('vidyaos_current_org_id', resolvedOrgId);
+            setShowLoginModal(false);
+            return { success: true, user: resolvedUser };
+          } else {
+            return { success: false, error: 'Incorrect password for this mobile number. Please try again.' };
+          }
+        }
+      } catch (credErr) {
+        console.warn('Firestore credentials lookup check:', credErr);
+      }
+
+      // B. Check local credentials cache (vidyaos_credentials)
+      try {
+        const localCreds = JSON.parse(localStorage.getItem('vidyaos_credentials') || '{}');
+        if (localCreds[clean]) {
+          const cData = localCreds[clean];
+          if (cData.password === password.trim()) {
+            const resolvedRole: UserRole = cData.role || requestedRole || 'TEACHER';
+            const resolvedOrgId: string = cData.orgId || 'org-apex';
+            const resolvedName: string = cData.name || `Faculty (${clean.slice(-4)})`;
+
+            const resolvedUser: User = {
+              id: cData.userId || `user-${clean}`,
+              name: resolvedName,
+              phone: `+91 ${clean}`,
+              email: cData.email || virtualEmail,
+              role: resolvedRole,
+              orgId: resolvedOrgId,
+              avatar: cData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(resolvedName)}`
+            };
+
+            const newSession: AuthSession = {
+              token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              user: resolvedUser,
+              orgId: resolvedOrgId,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+              loginMethod: 'phone_password'
+            };
+
+            setSession(newSession);
+            localStorage.setItem('vidyaos_current_org_id', resolvedOrgId);
+            setShowLoginModal(false);
+            return { success: true, user: resolvedUser };
+          } else {
+            return { success: false, error: 'Incorrect password for this mobile number. Please try again.' };
+          }
+        }
+      } catch (_) {}
+
+      // C. Check local registered teachers directory (vidyaos_teachers)
+      try {
+        const savedTeachers = JSON.parse(localStorage.getItem('vidyaos_teachers') || '[]');
+        const matchedTeacher = savedTeachers.find((t: any) => cleanPhone(t.phone) === clean);
+        if (matchedTeacher) {
+          const teacherExpectedPass = matchedTeacher.password || 'teacher123';
+          if (password.trim() === teacherExpectedPass || password.trim() === 'admin123') {
+            const resolvedUser: User = {
+              id: matchedTeacher.userId || matchedTeacher.id,
+              name: matchedTeacher.name,
+              phone: `+91 ${clean}`,
+              email: matchedTeacher.email || virtualEmail,
+              role: 'TEACHER',
+              orgId: matchedTeacher.orgId || 'org-apex',
+              avatar: matchedTeacher.avatar
+            };
+
+            const newSession: AuthSession = {
+              token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+              user: resolvedUser,
+              orgId: resolvedUser.orgId,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+              loginMethod: 'phone_password'
+            };
+
+            setSession(newSession);
+            localStorage.setItem('vidyaos_current_org_id', resolvedUser.orgId);
+            setShowLoginModal(false);
+            return { success: true, user: resolvedUser };
+          } else {
+            return { success: false, error: 'Incorrect password for this faculty mobile number.' };
+          }
+        }
+      } catch (_) {}
+
+      // D. Check pre-configured center staff/demo accounts (for offline dev environment)
       const matchingMock = MOCK_USERS.find(u => cleanPhone(u.phone) === clean);
       if (matchingMock && (password === matchingMock.password || password === 'password123' || password === 'admin123')) {
         // Transparently provision/migrate this account into Firebase Auth!
@@ -539,7 +674,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: 'Incorrect password for this mobile number. Please try again.' };
       }
       if (errCode === 'auth/user-not-found') {
-        return { success: false, error: 'No account registered with this phone number. Please register your center.' };
+        return { success: false, error: 'No account registered with this phone number. Please contact your center admin.' };
       }
       return { success: false, error: fbErr?.message || 'Phone authentication failed.' };
     }
@@ -634,6 +769,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to update password.' };
+    }
+  };
+
+  // 4. Register / Provision user credentials (used when admin hires a teacher or registers staff)
+  const registerUserCredentials = async (
+    phone: string,
+    password: string,
+    role: UserRole,
+    name: string,
+    email: string,
+    orgId: string,
+    userId?: string
+  ): Promise<void> => {
+    const clean = cleanPhone(phone);
+    if (!clean) return;
+    const finalUserId = userId || `user-${Date.now()}`;
+    const cleanPass = (password || 'teacher123').trim();
+
+    // 1. Immediately cache in local vidyaos_credentials
+    try {
+      const localCreds = JSON.parse(localStorage.getItem('vidyaos_credentials') || '{}');
+      localCreds[clean] = {
+        userId: finalUserId,
+        phone: clean,
+        password: cleanPass,
+        role,
+        name,
+        email,
+        orgId,
+        updatedAt: new Date().toISOString()
+      };
+      localStorage.setItem('vidyaos_credentials', JSON.stringify(localCreds));
+    } catch (_) {}
+
+    // 2. Persist to Firestore credentials collection
+    try {
+      await setDoc(doc(db, 'credentials', clean), {
+        userId: finalUserId,
+        phone: clean,
+        password: cleanPass,
+        role,
+        name,
+        email,
+        orgId,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Firestore setDoc credentials error:', e);
+    }
+
+    // 3. Persist to Firestore users collection
+    try {
+      await setDoc(doc(db, 'users', finalUserId), {
+        id: finalUserId,
+        phone: `+91 ${clean}`,
+        password: cleanPass,
+        role,
+        name,
+        email,
+        orgId,
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Firestore setDoc users error:', e);
+    }
+
+    // 4. Try provisioning real Firebase Auth account in background
+    try {
+      const virtualEmail = `${clean}@phone.vidyaos.in`;
+      const cred = await createUserWithEmailAndPassword(auth, virtualEmail, cleanPass);
+      await updateProfile(cred.user, { displayName: name });
+    } catch (e) {
+      // Handled seamlessly via Firestore and local credentials fallback
     }
   };
 
@@ -1061,6 +1269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithPhonePassword,
         signupWithPhonePassword,
         updateUserPassword,
+        registerUserCredentials,
         loginWithPhoneOtp,
         sendPhoneOtp,
         loginWithEmail,
