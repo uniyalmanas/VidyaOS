@@ -108,13 +108,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#131314] text-[#202124] dark:text-[#E8EAED] font-['Inter',system-ui,sans-serif] selection:bg-[#FFA000]/25 selection:text-[#202124] transition-colors duration-200">
+    <div className="w-full min-h-screen overflow-x-hidden bg-[#F8F9FA] dark:bg-[#131314] text-[#202124] dark:text-[#E8EAED] font-['Inter',system-ui,sans-serif] selection:bg-[#FFA000]/25 selection:text-[#202124] transition-colors duration-200">
       
       {/* 1. Official Firebase Top App Bar */}
-      <nav className="sticky top-0 z-40 bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] px-3.5 sm:px-6 lg:px-8 py-2.5 transition-colors">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <nav className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] px-3 sm:px-6 lg:px-8 py-2.5 transition-colors">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
           {/* Brand Anchor (Full title & subtitle on Desktop, clean flame & title on Mobile) */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 min-w-0">
             <VidyaLogo size="sm" badgeText="CONSOLE v2.5" subtitle="Coaching & Education Center OS" />
           </div>
 
@@ -128,7 +128,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
             {/* Install App Link/Button in Header for iOS, Android, Laptop */}
             <button
               onClick={() => setIsPwaModalOpen(true)}
@@ -194,18 +194,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </nav>
 
       {/* 2. Hero Section (Ultra-Premium Google/Firebase Style) */}
-      <section className="relative overflow-hidden pt-14 pb-20 lg:pt-24 lg:pb-28 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,160,0,0.12),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,160,0,0.15),rgba(19,19,20,0))]">
+      <section className="relative w-full overflow-hidden pt-12 pb-16 sm:pt-14 sm:pb-20 lg:pt-24 lg:pb-28 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,160,0,0.12),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,160,0,0.15),rgba(19,19,20,0))]">
         {/* Subtle Background Pattern */}
         <div className="absolute inset-0 -z-10 pointer-events-none opacity-40 dark:opacity-20 bg-[radial-gradient(#FFA000_1px,transparent_1px)] [background-size:24px_24px]"></div>
 
-        <div className="max-w-5xl mx-auto px-4 lg:px-8 text-center space-y-7">
-          {/* Glowing Shimmer Badge */}
-          <div className="inline-flex items-center space-x-2.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 border border-amber-500/30 text-xs font-semibold text-[#B06000] dark:text-[#FFCA28] shadow-[0_0_20px_rgba(255,160,0,0.15)]">
-            <span className="relative flex h-2 w-2">
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 sm:space-y-7">
+          {/* Glowing Shimmer Badge (Responsive, mobile wraps cleanly without forcing min-width) */}
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 border border-amber-500/30 text-xs font-semibold text-[#B06000] dark:text-[#FFCA28] shadow-[0_0_20px_rgba(255,160,0,0.15)] max-w-full">
+            <span className="relative flex h-2 w-2 flex-shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFA000] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFA000]"></span>
             </span>
-            <span className="font-google-sans tracking-wide">VIDYAOS 2.5 • GOOGLE CLOUD ARCHITECTURE FOR COACHING & EDUCATION CENTERS</span>
+            <span className="font-google-sans tracking-wide leading-tight text-center break-words sm:whitespace-nowrap">
+              <span className="sm:hidden">VIDYAOS 2.5 • GOOGLE CLOUD FOR COACHING CENTERS</span>
+              <span className="hidden sm:inline">VIDYAOS 2.5 • GOOGLE CLOUD ARCHITECTURE FOR COACHING & EDUCATION CENTERS</span>
+            </span>
           </div>
 
           {/* Main Headline */}
@@ -225,7 +228,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </p>
 
           {/* Feature Highlight Pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-[11px] font-mono font-medium text-[#5F6368] dark:text-[#9AA0A6]">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 pt-1 text-[11px] font-mono font-medium text-[#5F6368] dark:text-[#9AA0A6] max-w-2xl mx-auto">
             <span className="px-2.5 py-1 rounded-md bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] shadow-2xs">
               ✓ ₹0 Gateway Cuts (Direct UPI)
             </span>
@@ -244,7 +247,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* CTA Action Buttons */}
-          <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto sm:max-w-none">
             {onOpenRegister && (
               <ConsoleButton
                 variant="primary"
@@ -252,7 +255,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 icon={<Sparkles className="w-4 h-4" />}
                 iconRight={<ArrowRight className="w-4 h-4" />}
                 onClick={() => onOpenRegister?.()}
-                className="shadow-[0_4px_14px_rgba(255,160,0,0.35)] hover:shadow-[0_6px_20px_rgba(255,160,0,0.45)] transform hover:-translate-y-0.5 transition"
+                className="w-full sm:w-auto shadow-[0_4px_14px_rgba(255,160,0,0.35)] hover:shadow-[0_6px_20px_rgba(255,160,0,0.45)] transform hover:-translate-y-0.5 transition"
               >
                 Register Your Center (Free Trial)
               </ConsoleButton>
@@ -263,6 +266,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               size="lg"
               icon={<Building2 className="w-4 h-4 text-[#FFA000]" />}
               onClick={() => onSelectRole('CENTER_ADMIN')}
+              className="w-full sm:w-auto"
             >
               Open Admin Console Demo
             </ConsoleButton>
