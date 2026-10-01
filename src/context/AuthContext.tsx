@@ -216,7 +216,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   ]
                 };
 
-                await setDoc(doc(db, 'organizations', autoOrgId), autoOrg);
+                try {
+                  await setDoc(doc(db, 'organizations', autoOrgId), autoOrg);
+                } catch (orgErr) {
+                  console.warn('Could not sync auto-org to Firestore (offline/adblocked):', orgErr);
+                }
                 try {
                   const stored = localStorage.getItem('vidyaos_orgs');
                   const currentList = stored ? JSON.parse(stored) : [];
