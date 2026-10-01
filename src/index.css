@@ -4,56 +4,56 @@
 
 @layer base {
   :root {
-    /* Firebase Primary Accent (Selective usage for active states & key CTAs) */
+    /* Apple Primary Accent & Vidya Emblem */
     --fb-primary: #FFA000;
     --fb-primary-hover: #F57C00;
     --fb-primary-active: #E65100;
     --fb-primary-subtle: #FFF8E1;
     --fb-primary-border: #FFE082;
-    --fb-primary-text: #202124;
+    --fb-primary-text: #1d1d1f;
 
-    /* Google Cloud & Supporting Accents */
-    --fb-blue: #1A73E8;
-    --fb-blue-hover: #1557B0;
-    --fb-blue-subtle: #E8F0FE;
-    --fb-navy: #051E34;
-    --fb-navy-surface: #0B2540;
+    /* Apple Key Blue (HIG Standard) */
+    --fb-blue: #0071E3;
+    --fb-blue-hover: #0077ED;
+    --fb-blue-subtle: rgba(0, 113, 227, 0.08);
+    --apple-blue: #0071E3;
+    --apple-blue-hover: #0077ED;
 
-    /* Surfaces & Backgrounds */
-    --fb-bg-app: #F8F9FA;
+    /* Apple Surfaces & Backgrounds */
+    --fb-bg-app: #F5F5F7;
     --fb-bg-surface: #FFFFFF;
-    --fb-bg-surface-hover: #F1F3F4;
-    --fb-bg-surface-active: #E8EAED;
+    --fb-bg-surface-hover: rgba(0, 0, 0, 0.04);
+    --fb-bg-surface-active: rgba(0, 0, 0, 0.08);
 
-    /* Borders & Dividers */
-    --fb-border: #DADCE0;
-    --fb-border-subtle: #ECEFF1;
-    --fb-border-strong: #BDC1C6;
+    /* Apple Translucent Hairline Borders */
+    --fb-border: rgba(0, 0, 0, 0.08);
+    --fb-border-subtle: rgba(0, 0, 0, 0.04);
+    --fb-border-strong: rgba(0, 0, 0, 0.16);
 
-    /* Typography */
-    --fb-text-primary: #202124;
-    --fb-text-secondary: #5F6368;
-    --fb-text-muted: #80868B;
+    /* Apple Typography (SF Pro Hierarchy) */
+    --fb-text-primary: #1D1D1F;
+    --fb-text-secondary: #86868B;
+    --fb-text-muted: #A1A1A6;
     --fb-text-inverse: #FFFFFF;
 
-    /* Semantic Status */
-    --fb-status-success: #188038;
-    --fb-status-success-bg: #E6F4EA;
-    --fb-status-success-border: #CEEAD6;
-    --fb-status-warning: #B06000;
-    --fb-status-warning-bg: #FEF7E0;
-    --fb-status-warning-border: #FEEFC3;
-    --fb-status-error: #D93025;
-    --fb-status-error-bg: #FCE8E6;
-    --fb-status-error-border: #FAD2CF;
-    --fb-status-info: #1A73E8;
-    --fb-status-info-bg: #E8F0FE;
-    --fb-status-info-border: #D2E3FC;
+    /* Apple iOS Semantic Status */
+    --fb-status-success: #34C759;
+    --fb-status-success-bg: rgba(52, 199, 89, 0.12);
+    --fb-status-success-border: rgba(52, 199, 89, 0.25);
+    --fb-status-warning: #FF9F0A;
+    --fb-status-warning-bg: rgba(255, 159, 10, 0.12);
+    --fb-status-warning-border: rgba(255, 159, 10, 0.25);
+    --fb-status-error: #FF3B30;
+    --fb-status-error-bg: rgba(255, 59, 48, 0.12);
+    --fb-status-error-border: rgba(255, 59, 48, 0.25);
+    --fb-status-info: #0071E3;
+    --fb-status-info-bg: rgba(0, 113, 227, 0.12);
+    --fb-status-info-border: rgba(0, 113, 227, 0.25);
 
-    /* Google Elevation Shadows */
-    --fb-shadow-xs: 0 1px 2px 0 rgba(60, 64, 67, 0.1);
-    --fb-shadow-sm: 0 1px 2px 0 rgba(60, 64, 67, 0.2), 0 1px 3px 1px rgba(60, 64, 67, 0.1);
-    --fb-shadow-md: 0 2px 6px 2px rgba(60, 64, 67, 0.15);
+    /* Apple Diffused Ambient Shadows */
+    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+    --fb-shadow-sm: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+    --fb-shadow-md: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
   }
 
   .dark {
@@ -61,55 +61,64 @@
     --fb-primary-hover: #FFB300;
     --fb-primary-active: #FFA000;
     --fb-primary-subtle: rgba(255, 160, 0, 0.12);
-    --fb-primary-border: rgba(255, 202, 40, 0.3);
-    --fb-primary-text: #121314;
+    --fb-primary-border: rgba(255, 202, 40, 0.25);
+    --fb-primary-text: #F5F5F7;
 
-    --fb-blue: #8AB4F8;
-    --fb-blue-hover: #AECBFA;
-    --fb-blue-subtle: rgba(138, 180, 248, 0.15);
-    --fb-navy: #051E34;
-    --fb-navy-surface: #0B2540;
+    --fb-blue: #2997FF;
+    --fb-blue-hover: #40A4FF;
+    --fb-blue-subtle: rgba(41, 151, 255, 0.15);
+    --apple-blue: #2997FF;
+    --apple-blue-hover: #40A4FF;
 
-    --fb-bg-app: #121314;
-    --fb-bg-surface: #1E1F20;
-    --fb-bg-surface-hover: #282A2C;
-    --fb-bg-surface-active: #35373B;
+    /* Apple Dark Surfaces (OLED Pure Black & Deep Space Gray) */
+    --fb-bg-app: #000000;
+    --fb-bg-surface: #1C1C1E;
+    --fb-bg-surface-hover: #2C2C2E;
+    --fb-bg-surface-active: #3A3A3C;
 
-    --fb-border: #3C4043;
-    --fb-border-subtle: #2D2E30;
-    --fb-border-strong: #5F6368;
+    --fb-border: rgba(255, 255, 255, 0.12);
+    --fb-border-subtle: rgba(255, 255, 255, 0.06);
+    --fb-border-strong: rgba(255, 255, 255, 0.24);
 
-    --fb-text-primary: #E8EAED;
-    --fb-text-secondary: #9AA0A6;
-    --fb-text-muted: #80868B;
-    --fb-text-inverse: #121314;
+    --fb-text-primary: #F5F5F7;
+    --fb-text-secondary: #86868B;
+    --fb-text-muted: #6E6E73;
+    --fb-text-inverse: #000000;
 
-    --fb-status-success: #81C995;
-    --fb-status-success-bg: rgba(129, 201, 149, 0.15);
-    --fb-status-success-border: rgba(129, 201, 149, 0.3);
-    --fb-status-warning: #FDD663;
-    --fb-status-warning-bg: rgba(253, 214, 99, 0.15);
-    --fb-status-warning-border: rgba(253, 214, 99, 0.3);
-    --fb-status-error: #F28B82;
-    --fb-status-error-bg: rgba(242, 139, 130, 0.15);
-    --fb-status-error-border: rgba(242, 139, 130, 0.3);
-    --fb-status-info: #8AB4F8;
-    --fb-status-info-bg: rgba(138, 180, 248, 0.15);
-    --fb-status-info-border: rgba(138, 180, 248, 0.3);
+    --fb-status-success: #30D158;
+    --fb-status-success-bg: rgba(48, 209, 88, 0.16);
+    --fb-status-success-border: rgba(48, 209, 88, 0.3);
+    --fb-status-warning: #FFD60A;
+    --fb-status-warning-bg: rgba(255, 214, 10, 0.16);
+    --fb-status-warning-border: rgba(255, 214, 10, 0.3);
+    --fb-status-error: #FF453A;
+    --fb-status-error-bg: rgba(255, 69, 58, 0.16);
+    --fb-status-error-border: rgba(255, 69, 58, 0.3);
+    --fb-status-info: #2997FF;
+    --fb-status-info-bg: rgba(41, 151, 255, 0.16);
+    --fb-status-info-border: rgba(41, 151, 255, 0.3);
 
-    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-    --fb-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
-    --fb-shadow-md: 0 4px 8px 3px rgba(0, 0, 0, 0.4);
+    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --fb-shadow-sm: 0 4px 12px 0 rgba(0, 0, 0, 0.6);
+    --fb-shadow-md: 0 8px 24px 0 rgba(0, 0, 0, 0.7);
   }
 }
 
 @layer utilities {
-  /* Google & Firebase Font Families */
+  /* Apple San Francisco & Human Interface Font Stacks */
+  .font-apple-display {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Inter", system-ui, sans-serif;
+    letter-spacing: -0.025em;
+  }
+  .font-apple-text {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Inter", system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
   .font-google-sans {
-    font-family: 'Google Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Google Sans", "Inter", system-ui, sans-serif;
   }
   .font-inter {
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Inter", system-ui, sans-serif;
   }
   .font-mono-code {
     font-family: 'JetBrains Mono', monospace;

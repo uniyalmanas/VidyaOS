@@ -21,26 +21,26 @@ export const ConsoleButton: React.FC<ConsoleButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    "inline-flex items-center justify-center font-medium font-google-sans transition-all duration-150 rounded-lg select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.99]";
+    "inline-flex items-center justify-center font-medium font-apple-text tracking-tight transition-all duration-150 rounded-full select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0071E3]/35 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97] ease-out";
 
   const variantClasses = {
     primary:
-      "bg-[#FFA000] hover:bg-[#F57C00] active:bg-[#E65100] text-[#202124] font-bold shadow-xs hover:shadow-sm border border-[#FF8F00]/40 dark:bg-[#FFCA28] dark:hover:bg-[#FFB300] dark:text-[#121314]",
+      "bg-gradient-to-b from-[#FFA726] to-[#F57C00] hover:from-[#FFB74D] hover:to-[#FFA000] text-slate-950 font-semibold shadow-[0_2px_8px_rgba(255,160,0,0.3)] border border-amber-400/40 dark:from-[#FFCA28] dark:to-[#FFA000] dark:text-[#121314]",
     secondary:
-      "bg-white hover:bg-[#F1F3F4] text-[#3C4043] border border-[#DADCE0] shadow-2xs hover:border-[#BDC1C6] dark:bg-[#1E1F20] dark:hover:bg-[#282A2C] dark:text-[#E8EAED] dark:border-[#3C4043] dark:hover:border-[#5F6368]",
+      "bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] text-[#1D1D1F] dark:text-[#F5F5F7] border border-black/[0.06] dark:border-white/[0.1] shadow-2xs backdrop-blur-md",
     blue:
-      "bg-[#1A73E8] hover:bg-[#1557B0] text-white font-semibold shadow-xs border border-transparent dark:bg-[#8AB4F8] dark:hover:bg-[#AECBFA] dark:text-[#121314]",
+      "bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium shadow-[0_2px_8px_rgba(0,113,227,0.3)] border border-blue-400/30",
     ghost:
-      "bg-transparent hover:bg-[#F1F3F4] text-[#5F6368] hover:text-[#202124] dark:hover:bg-[#282A2C] dark:text-[#9AA0A6] dark:hover:text-white border border-transparent",
+      "bg-transparent hover:bg-black/[0.04] dark:hover:bg-white/[0.08] text-[#86868B] hover:text-[#1D1D1F] dark:text-[#86868B] dark:hover:text-[#F5F5F7] border border-transparent",
     danger:
-      "bg-white hover:bg-rose-50 text-[#D93025] border border-rose-200 dark:bg-[#1E1F20] dark:hover:bg-rose-950/30 dark:text-[#F28B82] dark:border-rose-900/50"
+      "bg-rose-500/10 hover:bg-rose-500/20 text-[#FF3B30] dark:text-[#FF453A] border border-rose-500/20"
   };
 
   const sizeClasses = {
-    xs: "text-xs px-2.5 py-1 gap-1.5 h-7",
-    sm: "text-xs px-3 py-1.5 gap-1.5 h-8",
-    md: "text-sm px-4 py-2 gap-2 h-9",
-    lg: "text-base px-5 py-2.5 gap-2.5 h-10"
+    xs: "text-xs px-3 py-1 gap-1.5 h-7",
+    sm: "text-xs px-3.5 py-1.5 gap-1.5 h-8",
+    md: "text-sm px-4.5 py-2 gap-2 h-9",
+    lg: "text-sm sm:text-base px-6 py-2.5 gap-2.5 h-10 font-semibold"
   };
 
   return (

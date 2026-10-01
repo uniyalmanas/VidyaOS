@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2, Users, BookOpen, GraduationCap, ShieldCheck, ArrowRight, Sparkles,
   Smartphone, QrCode, Shield, Clock, ChevronDown, ChevronUp, TrendingUp, Check,
-  ExternalLink, Sun, Moon, DownloadCloud
+  ExternalLink, Sun, Moon, DownloadCloud, Menu, X
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -18,17 +18,17 @@ interface LandingPageProps {
   onOpenRegister?: (planId?: 'starter' | 'growth' | 'pro') => void;
 }
 
-const border = 'border border-[#DADCE0] dark:border-[#3C4043]';
-const card = `bg-white dark:bg-[#1E1F20] ${border}`;
-const muted = 'text-[#5F6368] dark:text-[#9AA0A6]';
-const sectionTitle = 'text-xs uppercase tracking-wider font-bold text-[#FFA000] dark:text-[#FFCA28] font-google-sans';
-const heading = 'text-2xl sm:text-3xl font-bold font-google-sans text-[#202124] dark:text-white';
+const border = 'border border-black/[0.08] dark:border-white/[0.08]';
+const card = `bg-white dark:bg-[#1C1C1E] ${border} shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)]`;
+const muted = 'text-[#86868B] dark:text-[#86868B]';
+const sectionTitle = 'text-xs uppercase tracking-wider font-semibold text-[#0071E3] dark:text-[#2997FF] font-apple-text';
+const heading = 'text-3xl sm:text-4xl lg:text-5xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]';
 
 const navLinks = [
-  { href: '#features', label: 'Platform Features' },
-  { href: '#interactive-demo', label: 'Console Demo' },
-  { href: '#roi-calculator', label: 'Fee Calculator' },
-  { href: '#pricing', label: 'Pricing Tiers' },
+  { href: '#features', label: 'Features' },
+  { href: '#console-demo', label: 'Console Demo' },
+  { href: '#fee-calculator', label: 'Fee Calculator' },
+  { href: '#pricing-tiers', label: 'Pricing Tiers' },
   { href: '#faqs', label: 'FAQs' },
 ];
 
@@ -41,22 +41,22 @@ const roleTabs: { id: UserRole; label: string; icon: React.ElementType }[] = [
 ];
 
 const features = [
-  { icon: QrCode, tint: 'bg-[#FFA000]/15 text-[#FFA000] dark:text-[#FFCA28]', title: 'Zero-Leakage UPI Fee Engine',
+  { icon: QrCode, tint: 'bg-[#FF9500]/12 text-[#FF9500] dark:text-[#FF9F0A]', title: 'Zero-Leakage UPI Fee Engine',
     text: 'Auto-generate fee invoices with student roll numbers, batch tags, and instant UPI QR codes. Parents pay via PhonePe, GPay, or Paytm, and get instant downloadable receipts.',
     points: ['Automated WhatsApp Due Reminders', 'GST / PAN Ready Digital Receipts'] },
-  { icon: Smartphone, tint: 'bg-[#188038]/15 text-[#188038] dark:text-[#81C995]', title: '20-Second Mobile Attendance',
+  { icon: Smartphone, tint: 'bg-[#34C759]/12 text-[#248A3D] dark:text-[#30D158]', title: '20-Second Mobile Attendance',
     text: 'Faculty marks entire batch attendance in seconds with 1-tap presets. Absent students automatically trigger real-time WhatsApp alerts to parents.',
     points: ['Real-time Absent Alerts to Parents', 'Monthly % Attendance Log'] },
-  { icon: Building2, tint: 'bg-[#1A73E8]/15 text-[#1A73E8] dark:text-[#8AB4F8]', title: 'Multi-Branch & Batch Topology',
+  { icon: Building2, tint: 'bg-[#0071E3]/12 text-[#0071E3] dark:text-[#2997FF]', title: 'Multi-Branch & Batch Topology',
     text: 'Organize morning, evening, and weekend batches across multiple branches. Supports CBSE, ICSE, State Boards, IIT-JEE, and NEET curriculums.',
     points: ['Branch-Level Revenue Ledgers', 'Shared Faculty Timetable Slots'] },
-  { icon: Sparkles, tint: 'bg-[#FFA000]/15 text-[#FFA000] dark:text-[#FFCA28]', title: 'AI Study Assistant (Gemini)',
+  { icon: Sparkles, tint: 'bg-[#AF52DE]/12 text-[#AF52DE] dark:text-[#BF5AF2]', title: 'AI Study Assistant (Gemini)',
     text: 'Integrated Google Gemini intelligence grounds syllabus questions, creates instant test diagnostic summaries, and helps students review tricky concepts.',
     points: ['Smart Syllabus & Exam Tracker', 'Diagnostic Test Report Generation'] },
-  { icon: Shield, tint: 'bg-[#188038]/15 text-[#188038] dark:text-[#81C995]', title: 'Multi-Tenant Data Privacy',
+  { icon: Shield, tint: 'bg-[#34C759]/12 text-[#248A3D] dark:text-[#30D158]', title: 'Multi-Tenant Data Privacy',
     text: 'Every coaching center gets a dedicated tenant workspace. Student phone numbers, fee data, and exam results are never mixed or shared with competitors.',
     points: ['Strict Role-Based Isolation', 'Hardened Firestore Security Rules'] },
-  { icon: Clock, tint: 'bg-[#1A73E8]/15 text-[#1A73E8] dark:text-[#8AB4F8]', title: 'Offline-Resilient Cloud Sync',
+  { icon: Clock, tint: 'bg-[#0071E3]/12 text-[#0071E3] dark:text-[#2997FF]', title: 'Offline-Resilient Cloud Sync',
     text: 'Never halt attendance or receipt printing because of a broadband drop. Data is cached locally and automatically syncs when the connection resumes.',
     points: ['Instant Local-First Performance', 'Background Firestore Sync'] },
 ];
@@ -89,6 +89,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const { resolvedTheme, toggleTheme, theme } = useTheme();
   const pwaState = usePwaInstall();
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Dynamic scroll state to elevate header on scroll
   const [isScrolled, setIsScrolled] = useState(false);
@@ -116,144 +117,178 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const choosePlan = (id: 'starter' | 'growth' | 'pro') =>
     onOpenRegister ? onOpenRegister(id) : onSelectRole('CENTER_ADMIN');
 
-  const stat = 'text-2xl sm:text-3xl font-extrabold font-google-sans';
-  const statLabel = `text-xs font-medium ${muted} mt-0.5`;
+  const stat = 'text-2xl sm:text-3xl font-bold font-apple-display tracking-tight';
+  const statLabel = `text-xs font-normal ${muted} mt-0.5 font-apple-text`;
 
   return (
-    <div className="w-full min-h-dvh overflow-x-hidden scroll-smooth bg-[#F8F9FA] dark:bg-[#131314] text-[#202124] dark:text-[#E8EAED] font-['Inter',system-ui,sans-serif] selection:bg-[#FFA000]/25 selection:text-[#202124] transition-colors duration-200">
+    <div className="w-full min-h-dvh overflow-x-hidden scroll-smooth bg-[#F5F5F7] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text selection:bg-[#0071E3]/20 selection:text-[#0071E3] transition-colors duration-200">
 
-      {/* Dynamic Top App Bar: fluid flexbox architecture adapting smoothly from 320px to 4K displays */}
+      {/* Dynamic Top App Bar: Apple Frosted Glass with Liquid Blur */}
       <nav
-        className={`sticky top-0 z-40 w-full transition-all duration-200 px-3 sm:px-5 lg:px-8 ${
+        className={`sticky top-0 z-50 w-full transition-all duration-200 px-3.5 sm:px-6 lg:px-8 ${
           isScrolled
-            ? 'bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] shadow-xs py-2 sm:py-2.5'
-            : 'bg-white/85 dark:bg-[#1E1F20]/85 backdrop-blur-sm border-b border-[#DADCE0]/50 dark:border-[#3C4043]/50 py-2 sm:py-2.5'
+            ? 'bg-white/85 dark:bg-[#000000]/85 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] shadow-xs py-2'
+            : 'bg-white/75 dark:bg-[#000000]/75 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.06] py-2.5'
         }`}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4 w-full">
-          {/* Brand Anchor: dynamically adapts from flame+VidyaOS on mobile to full title+badge+subtitle on desktop */}
-          <div className="flex items-center min-w-0 flex-shrink">
-            <VidyaLogo size="sm" showBadge={true} badgeText="CONSOLE v2.5" subtitle="Coaching & Education Center OS" />
-          </div>
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4 w-full">
+          {/* Brand Anchor: VidyaOS Emblem */}
+          <a href="#" className="flex items-center flex-shrink-0 cursor-pointer group">
+            <VidyaLogo size="sm" showBadge={true} badgeText="v2.5" />
+          </a>
 
-          {/* Desktop Navigation Links (Centered in flex container) */}
-          <div className={`hidden lg:flex items-center justify-center space-x-1 xl:space-x-2 text-xs font-semibold ${muted} flex-1 px-4`}>
+          {/* Desktop Navigation Links: Clean Pill Cluster, placed close together */}
+          <div className="hidden lg:flex items-center gap-0.5 bg-black/[0.04] dark:bg-white/[0.06] p-1 rounded-full border border-black/[0.06] dark:border-white/[0.08] shadow-2xs">
             {navLinks.map(l => (
               <a
                 key={l.href}
                 href={l.href}
-                className="px-2.5 py-1.5 rounded-lg hover:text-[#FFA000] dark:hover:text-[#FFCA28] hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-150"
+                className="px-3 py-1.5 rounded-full text-xs font-medium text-[#1D1D1F]/80 dark:text-[#F5F5F7]/80 hover:text-[#0071E3] dark:hover:text-[#2997FF] hover:bg-white dark:hover:bg-white/10 hover:shadow-2xs transition-all duration-150 whitespace-nowrap"
               >
                 {l.label}
               </a>
             ))}
           </div>
 
-          {/* Right Action Cluster: pure flexbox with no rigid widths */}
-          <div className="flex items-center space-x-1 sm:space-x-1.5 md:space-x-2 flex-shrink-0 ml-auto">
-            {/* Install App - Visible on Tablet & Desktop */}
-            <button
-              onClick={() => setIsPwaModalOpen(true)}
-              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold transition cursor-pointer flex-shrink-0 active:scale-95"
-              title="Install VidyaOS PWA on iOS, Android or Laptop"
-              aria-label="Install App"
-            >
-              <DownloadCloud className="w-3.5 h-3.5 text-[#FFA000] dark:text-[#FFCA28]" />
-              <span className="hidden md:inline">Install App</span>
-              <span className="md:hidden">App</span>
-            </button>
+          {/* Right Action Cluster: Space-Optimized Minimalist Controls */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* Install App - Compact circular icon pill */}
+            {!pwaState.isInstalled && (
+              <button
+                onClick={() => setIsPwaModalOpen(true)}
+                className="p-1.5 sm:p-2 rounded-full border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20 text-[#C96B00] dark:text-[#FFCA28] transition cursor-pointer flex-shrink-0 active:scale-95"
+                title="Install VidyaOS App"
+                aria-label="Install App"
+              >
+                <DownloadCloud className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFA000] dark:text-[#FFCA28]" />
+              </button>
+            )}
 
-            {/* Theme Toggle */}
+            {/* Theme Toggle: Apple Minimalist Glass Pill */}
             <button
               onClick={toggleTheme}
-              className={`p-1.5 sm:p-2 rounded-lg ${border} ${muted} hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition-colors cursor-pointer flex-shrink-0 active:scale-95`}
-              title={`Toggle Theme (Current: ${theme})`}
+              className="p-1.5 sm:p-2 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition-all cursor-pointer flex-shrink-0 active:scale-95"
+              title={`Toggle Theme (${resolvedTheme === 'dark' ? 'Dark' : 'Light'})`}
               aria-label="Toggle Theme"
             >
               {resolvedTheme === 'dark'
                 ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFCA28]" />
-                : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#FFA000]" />}
+                : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#0071E3]" />}
             </button>
 
-            {/* Register Center - Large screens only */}
+            {/* Register Center - Sleek subtle link on ultra-wide screens */}
             {onOpenRegister && (
-              <ConsoleButton variant="primary" size="xs" icon={<Sparkles className="w-3.5 h-3.5" />}
-                onClick={() => onOpenRegister()} className="hidden xl:inline-flex">
-                Register Center
-              </ConsoleButton>
+              <button
+                onClick={() => onOpenRegister()}
+                className="hidden xl:inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-full text-amber-700 dark:text-[#FFCA28] hover:bg-amber-500/10 transition cursor-pointer whitespace-nowrap active:scale-95"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#FFA000] dark:text-[#FFCA28]" />
+                <span>Register</span>
+              </button>
             )}
 
-            {/* Sign In */}
-            <ConsoleButton variant="secondary" size="xs" onClick={onOpenLogin} className="inline-flex">
+            {/* Sign In - Sleek text ghost button */}
+            <button
+              onClick={onOpenLogin}
+              className="text-xs font-semibold px-2.5 sm:px-3 py-1.5 rounded-full text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition cursor-pointer active:scale-95 whitespace-nowrap"
+            >
               Sign In
-            </ConsoleButton>
+            </button>
 
-            {/* Console Button - Fluid label scaling */}
-            <ConsoleButton variant="primary" size="xs"
+            {/* Console Button - Apple Key Blue Pill */}
+            <ConsoleButton
+              variant="blue"
+              size="xs"
               iconRight={<ArrowRight className="w-3 h-3 hidden sm:inline" />}
-              onClick={onEnterApp} className="px-2.5 sm:px-3 text-xs shadow-2xs hover:shadow-xs transition">
+              onClick={onEnterApp}
+              className="px-3 sm:px-3.5 text-xs whitespace-nowrap font-medium shadow-xs"
+            >
               <span className="hidden sm:inline">Go to Console</span>
               <span className="sm:hidden">Console</span>
             </ConsoleButton>
+
+            {/* Mobile/Tablet Menu Hamburger Button */}
+            <button
+              onClick={() => setMobileMenuOpen(prev => !prev)}
+              className="lg:hidden p-1.5 sm:p-2 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] transition cursor-pointer active:scale-95"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
-        {/* Mobile & Tablet Flexible Navigation Strip: all tabs and actions accessible with smooth horizontal flex scroll */}
-        <div className="lg:hidden flex items-center gap-1.5 pt-2 pb-0.5 overflow-x-auto no-scrollbar border-t border-[#DADCE0]/40 dark:border-[#3C4043]/40 text-xs font-semibold text-[#5F6368] dark:text-[#9AA0A6] scroll-smooth">
-          {navLinks.map(l => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 bg-[#F1F3F4] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] hover:text-[#FFA000] dark:hover:text-[#FFCA28] hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[11px]"
-            >
-              {l.label}
-            </a>
-          ))}
-          {!pwaState.isInstalled && (
-            <button
-              onClick={() => setIsPwaModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 text-[#B06000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer text-[11px]"
-            >
-              <DownloadCloud className="w-3 h-3 text-[#FFA000] dark:text-[#FFCA28]" />
-              <span>Install App</span>
-            </button>
-          )}
-        </div>
+        {/* Mobile & Tablet Dropdown Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden mt-2 p-2.5 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] rounded-2xl shadow-xl space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="flex flex-col gap-0.5">
+              {navLinks.map(l => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-3 py-2 rounded-xl text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] active:bg-black/[0.06] transition flex items-center justify-between"
+                >
+                  <span>{l.label}</span>
+                  <ArrowRight className="w-3 h-3 text-[#86868B]" />
+                </a>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center gap-2">
+              {onOpenRegister && (
+                <button
+                  onClick={() => { setMobileMenuOpen(false); onOpenRegister(); }}
+                  className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/10 text-amber-700 dark:text-[#FFCA28] border border-amber-500/25 text-center transition cursor-pointer"
+                >
+                  Register Center
+                </button>
+              )}
+              {!pwaState.isInstalled && (
+                <button
+                  onClick={() => { setMobileMenuOpen(false); setIsPwaModalOpen(true); }}
+                  className="flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium rounded-lg border border-black/[0.08] dark:border-white/[0.12] text-center cursor-pointer"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5 text-[#FFA000]" />
+                  <span>Install App</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero */}
-      <section className="relative w-full overflow-hidden pt-10 pb-14 sm:pt-14 sm:pb-20 lg:pt-24 lg:pb-28 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,160,0,0.12),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,160,0,0.15),rgba(19,19,20,0))]">
-        <div className="absolute inset-0 -z-10 pointer-events-none opacity-40 dark:opacity-20 bg-[radial-gradient(#FFA000_1px,transparent_1px)] [background-size:24px_24px]"></div>
-
-        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 sm:space-y-7">
-          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 border border-amber-500/30 text-xs font-semibold text-[#B06000] dark:text-[#FFCA28] shadow-[0_0_20px_rgba(255,160,0,0.15)] max-w-full">
+      <section className="relative w-full overflow-hidden pt-12 pb-16 sm:pt-20 sm:pb-24 lg:pt-28 lg:pb-32 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(0,113,227,0.08),rgba(245,245,247,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(41,151,255,0.12),rgba(0,0,0,0))]">
+        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 sm:space-y-8">
+          <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.12] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] shadow-2xs max-w-full backdrop-blur-md">
             <span className="relative flex h-2 w-2 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFA000] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFA000]"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0071E3] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0071E3]"></span>
             </span>
-            <span className="font-google-sans tracking-wide leading-tight text-center break-words sm:whitespace-nowrap">
-              <span className="sm:hidden">VIDYAOS 2.5 • GOOGLE CLOUD FOR COACHING CENTERS</span>
-              <span className="hidden sm:inline">VIDYAOS 2.5 • GOOGLE CLOUD ARCHITECTURE FOR COACHING & EDUCATION CENTERS</span>
+            <span className="font-apple-text tracking-wide leading-tight text-center break-words sm:whitespace-nowrap">
+              <span className="sm:hidden">VIDYAOS 2.5 • APPLE-GRADE SIMPLICITY</span>
+              <span className="hidden sm:inline">VIDYAOS 2.5 • HIGH-PERFORMANCE OPERATING SYSTEM FOR TUITION CENTERS</span>
             </span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold font-google-sans tracking-tight text-[#202124] dark:text-[#F8F9FA] max-w-4xl mx-auto leading-[1.14]">
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] max-w-4xl mx-auto leading-[1.06]">
             The Modern Operating System for{' '}
-            <span className="bg-gradient-to-r from-[#E65100] via-[#FFA000] to-[#FFCA28] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[#FF9500] via-[#FF2D55] to-[#AF52DE] bg-clip-text text-transparent">
               Coaching & Education Centers
             </span>
           </h1>
 
-          <p className={`text-sm sm:text-lg ${muted} max-w-2xl mx-auto leading-relaxed font-normal`}>
+          <p className={`text-base sm:text-xl ${muted} max-w-2xl mx-auto leading-relaxed font-normal font-apple-text`}>
             Eliminate chaotic WhatsApp groups, lost paper attendance registers, and overdue cash fees. VidyaOS unites{' '}
-            <strong className="text-[#202124] dark:text-white font-semibold">zero-surcharge UPI payments</strong>,{' '}
-            <strong className="text-[#202124] dark:text-white font-semibold">20-second batch attendance</strong>, and{' '}
-            <strong className="text-[#202124] dark:text-white font-semibold">automated WhatsApp parent alerts</strong> in one reliable cloud console.
+            <strong className="text-[#1D1D1F] dark:text-white font-medium">zero-surcharge UPI payments</strong>,{' '}
+            <strong className="text-[#1D1D1F] dark:text-white font-medium">20-second batch attendance</strong>, and{' '}
+            <strong className="text-[#1D1D1F] dark:text-white font-medium">automated WhatsApp parent alerts</strong> in one fluid, beautiful console.
           </p>
 
-          <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 pt-1 text-[11px] font-mono font-medium ${muted} max-w-2xl mx-auto`}>
-            {['✓ ₹0 Gateway Cuts (Direct UPI)', '✓ 1-Tap Attendance (<20s)', '✓ Automated WhatsApp Alerts', '✓ Multi-Child Single Login', '✓ Offline-First Sync'].map(p => (
-              <span key={p} className={`px-2.5 py-1 rounded-md ${card}`}>{p}</span>
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-medium text-[#86868B] max-w-2xl mx-auto">
+            {['₹0 Gateway Cuts', '1-Tap Attendance (<20s)', 'Automated WhatsApp Alerts', 'Multi-Child Single Login', 'Offline-First Sync'].map(p => (
+              <span key={p} className="px-3 py-1 rounded-full bg-white dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] shadow-2xs">{p}</span>
             ))}
           </div>
 
@@ -262,31 +297,62 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <ConsoleButton variant="primary" size="lg"
                 icon={<Sparkles className="w-4 h-4" />} iconRight={<ArrowRight className="w-4 h-4" />}
                 onClick={() => onOpenRegister()}
-                className="w-full sm:w-auto justify-center shadow-[0_4px_14px_rgba(255,160,0,0.35)] hover:shadow-[0_6px_20px_rgba(255,160,0,0.45)] transform hover:-translate-y-0.5 transition">
+                className="w-full sm:w-auto justify-center shadow-[0_4px_16px_rgba(255,160,0,0.3)] hover:shadow-[0_6px_24px_rgba(255,160,0,0.4)]">
                 Register Your Center (Free Trial)
               </ConsoleButton>
             )}
             <ConsoleButton variant="secondary" size="lg"
-              icon={<Building2 className="w-4 h-4 text-[#FFA000]" />}
+              icon={<Building2 className="w-4 h-4 text-[#0071E3] dark:text-[#2997FF]" />}
               onClick={() => onSelectRole('CENTER_ADMIN')} className="w-full sm:w-auto justify-center">
               Open Admin Console Demo
             </ConsoleButton>
           </div>
 
-          <div className="pt-8 sm:pt-10">
-            <div className={`bg-white/80 dark:bg-[#1E1F20]/80 backdrop-blur-md ${border} rounded-2xl p-4 sm:p-6 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 text-center`}>
-              <div><div className={`${stat} text-[#202124] dark:text-white`}>450+</div><div className={statLabel}>Coaching Centers Active</div></div>
-              <div><div className={`${stat} text-[#188038] dark:text-[#81C995]`}>₹4.8 Cr+</div><div className={statLabel}>UPI Fees Reconciled</div></div>
-              <div><div className={`${stat} text-[#FFA000] dark:text-[#FFCA28]`}>&lt; 20 sec</div><div className={statLabel}>1-Tap Batch Attendance</div></div>
-              <div><div className={`${stat} text-[#1A73E8] dark:text-[#8AB4F8]`}>99.8%</div><div className={statLabel}>Parent Transparency Rate</div></div>
+          <div className="pt-10 sm:pt-14">
+            <div className="bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-2xl border border-black/[0.06] dark:border-white/[0.08] rounded-3xl p-6 sm:p-8 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+              <div><div className={`${stat} text-[#1D1D1F] dark:text-white`}>450+</div><div className={statLabel}>Coaching Centers Active</div></div>
+              <div><div className={`${stat} text-[#34C759] dark:text-[#30D158]`}>₹4.8 Cr+</div><div className={statLabel}>UPI Fees Reconciled</div></div>
+              <div><div className={`${stat} text-[#FF9500] dark:text-[#FF9F0A]`}>&lt; 20 sec</div><div className={statLabel}>1-Tap Batch Attendance</div></div>
+              <div><div className={`${stat} text-[#0071E3] dark:text-[#2997FF]`}>99.8%</div><div className={statLabel}>Parent Transparency Rate</div></div>
             </div>
           </div>
         </div>
       </section>
 
+      {/* Features */}
+      <section id="features" className="scroll-mt-24 py-12 sm:py-20 max-w-7xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
+        <div className="text-center max-w-2xl mx-auto space-y-2">
+          <h2 className={sectionTitle}>Engineered for Indian Realities</h2>
+          <p className={heading}>Everything You Need to Run Your Institute</p>
+          <p className={`text-[13px] sm:text-sm ${muted}`}>
+            Tailored specifically for Indian coaching operations: cash/UPI reconciliations, multi-branch batches, and instant parent communication.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {features.map(f => {
+            const Icon = f.icon;
+            return (
+              <div key={f.title} className={`${card} p-5 sm:p-6 rounded-2xl shadow-xs space-y-3`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${f.tint}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold font-google-sans">{f.title}</h3>
+                <p className={`text-[13px] sm:text-xs ${muted} leading-relaxed`}>{f.text}</p>
+                <ul className={`pt-2 border-t border-black/[0.06] dark:border-white/[0.08] space-y-1.5 text-[13px] sm:text-xs ${muted}`}>
+                  {f.points.map(p => (
+                    <li key={p} className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#188038] shrink-0" /> {p}</li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       {/* Role demo */}
-      <section id="interactive-demo" className={`scroll-mt-20 py-12 sm:py-16 bg-white dark:bg-[#1E1F20] border-y border-[#DADCE0] dark:border-[#3C4043] transition-colors`}>
-        <div className="max-w-6xl mx-auto px-4 lg:px-8 space-y-6 sm:space-y-8">
+      <section id="console-demo" className={`scroll-mt-24 py-12 sm:py-16 bg-white dark:bg-[#1C1C1E] border-y border-black/[0.08] dark:border-white/[0.08] transition-colors`}>
+        <div id="interactive-demo" className="scroll-mt-24 max-w-6xl mx-auto px-4 lg:px-8 space-y-6 sm:space-y-8">
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>Role-Based Console Experience</h2>
             <p className={heading}>One Unified OS, Five Dedicated Workspaces</p>
@@ -295,7 +361,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </p>
           </div>
 
-          <div className={`flex flex-nowrap sm:flex-wrap items-center sm:justify-center gap-1.5 p-1 bg-[#F1F3F4] dark:bg-[#282A2C] rounded-xl ${border} w-full sm:w-fit mx-auto overflow-x-auto`}>
+          <div className={`flex flex-nowrap sm:flex-wrap items-center sm:justify-center gap-1.5 p-1 bg-black/[0.04] dark:bg-white/[0.06] rounded-xl ${border} w-full sm:w-fit mx-auto overflow-x-auto`}>
             {roleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activePreviewTab === tab.id;
@@ -305,8 +371,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   onClick={() => setActivePreviewTab(tab.id)}
                   className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
                     isActive
-                      ? 'bg-white dark:bg-[#1E1F20] text-[#202124] dark:text-white font-bold shadow-xs border border-[#FFA000]/40'
-                      : `${muted} hover:text-[#202124] dark:hover:text-white`
+                      ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-bold shadow-xs border border-amber-500/40'
+                      : `${muted} hover:text-[#1D1D1F] dark:hover:text-white`
                   }`}
                 >
                   <Icon className="w-3.5 h-3.5 text-[#FFA000]" />
@@ -316,17 +382,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             })}
           </div>
 
-          <div className={`bg-[#F8F9FA] dark:bg-[#131314] rounded-2xl ${border} overflow-hidden shadow-lg ring-1 ring-black/5 dark:ring-white/5`}>
-            <div className={`bg-white dark:bg-[#1E1F20] px-3 sm:px-4 py-3 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between gap-3 text-xs`}>
+          <div className={`bg-[#F5F5F7] dark:bg-[#000000] rounded-2xl ${border} overflow-hidden shadow-lg ring-1 ring-black/5 dark:ring-white/5`}>
+            <div className={`bg-white dark:bg-[#1C1C1E] px-3 sm:px-4 py-3 border-b border-black/[0.08] dark:border-white/[0.08] flex items-center justify-between gap-3 text-xs`}>
               <div className="flex items-center space-x-2 flex-shrink-0">
                 <div className="w-3 h-3 rounded-full bg-[#FF5F56]"></div>
                 <div className="w-3 h-3 rounded-full bg-[#FFBD2E]"></div>
                 <div className="w-3 h-3 rounded-full bg-[#27C93F]"></div>
-                <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] mx-1"></div>
+                <div className="h-4 w-px bg-black/[0.08] dark:border-white/[0.08] mx-1"></div>
                 <span className="font-google-sans font-bold hidden sm:inline">VidyaOS Console</span>
               </div>
 
-              <div className={`flex-1 max-w-md mx-2 hidden sm:flex items-center space-x-2 px-3 py-1 rounded-md bg-[#F1F3F4] dark:bg-[#131314] ${muted} text-[11px] font-mono ${border}`}>
+              <div className={`flex-1 max-w-md mx-2 hidden sm:flex items-center space-x-2 px-3 py-1 rounded-md bg-black/[0.03] dark:bg-white/[0.06] ${muted} text-[11px] font-mono ${border}`}>
                 <ShieldCheck className="w-3 h-3 text-[#188038] flex-shrink-0" />
                 <span className="truncate">https://console.vidyaos.in/apex-academy/{activePreviewTab.toLowerCase().replace('_', '-')}</span>
                 <span className="ml-auto text-[9px] px-1 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-sans font-bold flex-shrink-0">12ms</span>
@@ -334,7 +400,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <button
                 onClick={() => onSelectRole(activePreviewTab)}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#E65100] dark:text-[#FFCA28] bg-[#FFA000]/10 hover:bg-[#FFA000]/20 border border-[#FFA000]/30 transition cursor-pointer flex-shrink-0 ml-auto sm:ml-0"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#E65100] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer flex-shrink-0 ml-auto sm:ml-0"
               >
                 <span className="hidden sm:inline">Launch Live Session</span>
                 <span className="sm:hidden">Launch</span>
@@ -361,12 +427,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <div className={`${card} p-4 rounded-xl`}>
                       <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Enrolled Students</span>
                       <div className="text-2xl font-bold font-google-sans mt-1">214</div>
-                      <span className="text-[11px] text-[#1A73E8]">Across 8 active batches</span>
+                      <span className="text-[11px] text-[#0071E3] dark:text-[#2997FF]">Across 8 active batches</span>
                     </div>
                     <div className={`${card} p-4 rounded-xl`}>
                       <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Today's Attendance</span>
-                      <div className="text-2xl font-bold font-google-sans text-[#188038] mt-1">94.8%</div>
-                      <span className="text-[11px] text-[#188038]">↑ 3.2% this month</span>
+                      <div className="text-2xl font-bold font-google-sans text-[#188038] dark:text-[#30D158] mt-1">94.8%</div>
+                      <span className="text-[11px] text-[#188038] dark:text-[#30D158]">↑ 3.2% this month</span>
                     </div>
                     <div className={`${card} p-4 rounded-xl`}>
                       <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Pending Fees Due</span>
@@ -396,9 +462,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { l: 'Attendance', v: '92%', c: 'text-[#188038]', s: 'Present Today' },
-                      { l: 'Fees Due', v: '₹2,500', c: 'text-[#FFA000]', s: 'Due 10 Oct' },
-                      { l: 'Latest Score', v: '44 / 50', c: 'text-[#1A73E8]', s: 'Rank #2' },
+                      { l: 'Attendance', v: '92%', c: 'text-[#188038] dark:text-[#30D158]', s: 'Present Today' },
+                      { l: 'Fees Due', v: '₹2,500', c: 'text-[#FFA000] dark:text-[#FFCA28]', s: 'Due 10 Oct' },
+                      { l: 'Latest Score', v: '44 / 50', c: 'text-[#0071E3] dark:text-[#2997FF]', s: 'Rank #2' },
                       { l: 'Homework', v: 'Checked', c: '', s: '0 Overdue' },
                     ].map(m => (
                       <div key={m.l} className={`${card} p-3 rounded-xl text-center`}>
@@ -420,12 +486,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <ConsoleButton variant="blue" size="xs" className="justify-center">Mark All 32 Present</ConsoleButton>
                   </div>
-                  <div className={`p-3 bg-[#F8F9FA] dark:bg-[#282A2C] rounded-lg text-xs ${muted} flex items-center justify-between gap-2`}>
+                  <div className={`p-3 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-xs ${muted} flex items-center justify-between gap-2 border border-black/[0.04] dark:border-white/[0.06]`}>
                     <span>Rahul Sharma · Roll 10-01</span>
                     <div className="flex gap-1">
                       <span className="px-2 py-0.5 rounded bg-[#188038] text-white font-bold text-[10px]">P</span>
-                      <span className="px-2 py-0.5 rounded bg-white dark:bg-[#1E1F20] border font-bold text-[10px]">A</span>
-                      <span className="px-2 py-0.5 rounded bg-white dark:bg-[#1E1F20] border font-bold text-[10px]">L</span>
+                      <span className="px-2 py-0.5 rounded bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] font-bold text-[10px]">A</span>
+                      <span className="px-2 py-0.5 rounded bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] font-bold text-[10px]">L</span>
                     </div>
                   </div>
                 </div>
@@ -440,7 +506,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <div><StatusChip label="RANK #2" variant="success" size="xs" /></div>
                   </div>
-                  <div className="p-3 bg-[#F8F9FA] dark:bg-[#282A2C] rounded-lg text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="p-3 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-black/[0.04] dark:border-white/[0.06]">
                     <div>
                       <span className="font-semibold">Diagnostic Test 3: Trigonometry</span>
                       <p className={`text-[10px] ${muted}`}>Scored 44/50 (88%) · Percentile: 94th</p>
@@ -461,11 +527,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                     {[
-                      { l: 'Monthly MRR', v: '₹18,40,000', c: 'text-[#188038]' },
+                      { l: 'Monthly MRR', v: '₹18,40,000', c: 'text-[#188038] dark:text-[#30D158]' },
                       { l: 'Active Quotas', v: '28,400 Students', c: '' },
-                      { l: 'Database Leaks', v: '0 Incidents', c: 'text-[#188038]' },
+                      { l: 'Database Leaks', v: '0 Incidents', c: 'text-[#188038] dark:text-[#30D158]' },
                     ].map(m => (
-                      <div key={m.l} className="p-2.5 bg-[#F8F9FA] dark:bg-[#282A2C] rounded-lg text-center">
+                      <div key={m.l} className="p-2.5 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-center border border-black/[0.04] dark:border-white/[0.06]">
                         <span className={`text-[10px] ${muted}`}>{m.l}</span>
                         <div className={`text-lg font-bold ${m.c}`}>{m.v}</div>
                       </div>
@@ -478,40 +544,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="scroll-mt-20 py-12 sm:py-20 max-w-7xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
-        <div className="text-center max-w-2xl mx-auto space-y-2">
-          <h2 className={sectionTitle}>Engineered for Indian Realities</h2>
-          <p className={heading}>Everything You Need to Run Your Institute</p>
-          <p className={`text-[13px] sm:text-sm ${muted}`}>
-            Tailored specifically for Indian coaching operations: cash/UPI reconciliations, multi-branch batches, and instant parent communication.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-          {features.map(f => {
-            const Icon = f.icon;
-            return (
-              <div key={f.title} className={`${card} p-5 sm:p-6 rounded-xl shadow-xs space-y-3`}>
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${f.tint}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold font-google-sans">{f.title}</h3>
-                <p className={`text-[13px] sm:text-xs ${muted} leading-relaxed`}>{f.text}</p>
-                <ul className={`pt-2 border-t border-[#DADCE0]/60 dark:border-[#3C4043] space-y-1.5 text-[13px] sm:text-xs ${muted}`}>
-                  {f.points.map(p => (
-                    <li key={p} className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#188038] shrink-0" /> {p}</li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
       {/* Calculator */}
-      <section id="roi-calculator" className="scroll-mt-20 py-12 sm:py-20 bg-white dark:bg-[#1E1F20] border-y border-[#DADCE0] dark:border-[#3C4043] transition-colors">
-        <div className="max-w-5xl mx-auto px-4 lg:px-8 space-y-8 sm:space-y-10">
+      <section id="fee-calculator" className="scroll-mt-24 py-12 sm:py-20 bg-white dark:bg-[#1C1C1E] border-y border-black/[0.08] dark:border-white/[0.08] transition-colors">
+        <div id="roi-calculator" className="scroll-mt-24 max-w-5xl mx-auto px-4 lg:px-8 space-y-8 sm:space-y-10">
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>Course Fee Recovery Estimator</h2>
             <p className={heading}>Calculate Your Recovered Fee Leakage</p>
@@ -520,7 +555,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </p>
           </div>
 
-          <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-[#F8F9FA] dark:bg-[#131314] p-4 sm:p-8 rounded-2xl ${border}`}>
+          <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-[#F5F5F7] dark:bg-[#000000] p-4 sm:p-8 rounded-2xl ${border}`}>
             <div className="lg:col-span-7 space-y-6">
               <div>
                 <div className="flex justify-between items-center text-xs font-semibold mb-2">
@@ -531,9 +566,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <input id="students" type="range" min="20" max="1000" step="10" value={studentCount}
                     onChange={e => setStudentCount(Number(e.target.value))}
                     aria-label="Enrolled students"
-                    className="w-full h-2 bg-[#DADCE0] dark:bg-[#3C4043] rounded-lg appearance-none cursor-pointer accent-[#FFA000] touch-pan-y" />
+                    className="w-full h-2 bg-black/[0.1] dark:bg-white/[0.15] rounded-lg appearance-none cursor-pointer accent-[#FFA000] touch-pan-y" />
                 </div>
-                <div className="flex justify-between text-[10px] text-[#5F6368] mt-1 font-mono">
+                <div className="flex justify-between text-[10px] text-[#86868B] mt-1 font-mono">
                   <span>20</span><span>500</span><span>1,000</span>
                 </div>
               </div>
@@ -541,15 +576,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div>
                 <div className="flex justify-between items-center text-xs font-semibold mb-2">
                   <label htmlFor="fee">Average Monthly Fee per Student:</label>
-                  <span className="text-[#188038] font-bold text-sm font-mono">₹{monthlyFee.toLocaleString('en-IN')}</span>
+                  <span className="text-[#188038] dark:text-[#30D158] font-bold text-sm font-mono">₹{monthlyFee.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="py-2">
                   <input id="fee" type="range" min="500" max="10000" step="250" value={monthlyFee}
                     onChange={e => setMonthlyFee(Number(e.target.value))}
                     aria-label="Average monthly fee per student"
-                    className="w-full h-2 bg-[#DADCE0] dark:bg-[#3C4043] rounded-lg appearance-none cursor-pointer accent-[#188038] touch-pan-y" />
+                    className="w-full h-2 bg-black/[0.1] dark:bg-white/[0.15] rounded-lg appearance-none cursor-pointer accent-[#188038] dark:accent-[#30D158] touch-pan-y" />
                 </div>
-                <div className="flex justify-between text-[10px] text-[#5F6368] mt-1 font-mono">
+                <div className="flex justify-between text-[10px] text-[#86868B] mt-1 font-mono">
                   <span>₹500</span><span>₹5,000</span><span>₹10,000</span>
                 </div>
               </div>
@@ -587,7 +622,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </button>
               </div>
 
-              <div className="text-xs text-[#1A73E8] font-semibold">⚡ ~{staffHoursSaved} Staff Hours Saved Every Month</div>
+              <div className="text-xs text-[#0071E3] dark:text-[#2997FF] font-semibold">⚡ ~{staffHoursSaved} Staff Hours Saved Every Month</div>
 
               <ConsoleButton variant="primary" size="md" onClick={() => choosePlan(recommendedPlan.id)} className="w-full justify-center">
                 Start with {recommendedPlan.name}
@@ -598,8 +633,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="scroll-mt-20 py-12 sm:py-20 max-w-6xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
-        <div className="text-center max-w-2xl mx-auto space-y-2">
+      <section id="pricing-tiers" className="scroll-mt-24 py-12 sm:py-20 max-w-6xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
+        <div id="pricing" className="scroll-mt-24 text-center max-w-2xl mx-auto space-y-2">
           <h2 className={sectionTitle}>Simple, Transparent Pricing</h2>
           <p className={heading}>Plans Built for Every Coaching Scale</p>
           <p className={`text-[13px] sm:text-sm ${muted}`}>
@@ -611,7 +646,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {plans.map(p => (
             <div
               key={p.id}
-              className={`bg-white dark:bg-[#1E1F20] p-5 sm:p-6 rounded-2xl flex flex-col justify-between space-y-6 relative ${
+              className={`bg-white dark:bg-[#1C1C1E] p-5 sm:p-6 rounded-2xl flex flex-col justify-between space-y-6 relative ${
                 p.featured
                   ? 'border-2 border-[#FFA000] shadow-lg lg:-translate-y-2 order-first lg:order-none'
                   : border
@@ -624,15 +659,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               )}
               <div className="space-y-4">
                 <div>
-                  <span className={`text-xs font-bold uppercase tracking-wider ${p.featured ? 'text-[#E65100] dark:text-[#FFCA28]' : 'text-[#5F6368]'}`}>{p.name}</span>
+                  <span className={`text-xs font-bold uppercase tracking-wider ${p.featured ? 'text-[#E65100] dark:text-[#FFCA28]' : 'text-[#86868B]'}`}>{p.name}</span>
                   <div className="text-3xl font-bold font-google-sans mt-1">
-                    {p.price}<span className="text-xs font-normal text-[#5F6368]">/mo</span>
+                    {p.price}<span className="text-xs font-normal text-[#86868B]">/mo</span>
                   </div>
-                  <p className="text-[13px] sm:text-xs text-[#5F6368] mt-1">{p.blurb}</p>
+                  <p className="text-[13px] sm:text-xs text-[#86868B] mt-1">{p.blurb}</p>
                 </div>
-                <ul className={`space-y-2 text-[13px] sm:text-xs border-t border-[#DADCE0]/60 dark:border-[#3C4043] pt-4 ${p.featured ? 'font-medium' : muted}`}>
+                <ul className={`space-y-2 text-[13px] sm:text-xs border-t border-black/[0.08] dark:border-white/[0.08] pt-4 ${p.featured ? 'font-medium' : muted}`}>
                   {p.items.map(i => (
-                    <li key={i} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-[#188038] shrink-0" /> {i}</li>
+                    <li key={i} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-[#188038] dark:text-[#30D158] shrink-0" /> {i}</li>
                   ))}
                 </ul>
               </div>
@@ -645,7 +680,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* FAQ */}
-      <section id="faqs" className="scroll-mt-20 py-12 sm:py-16 max-w-4xl mx-auto px-4 lg:px-8 space-y-8">
+      <section id="faqs" className="scroll-mt-24 py-12 sm:py-16 max-w-4xl mx-auto px-4 lg:px-8 space-y-8">
         <div className="text-center space-y-2">
           <h2 className={sectionTitle}>Frequently Asked Questions</h2>
           <p className="text-xl sm:text-2xl font-bold font-google-sans">Answers for Coaching Center Owners</p>
@@ -662,10 +697,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <span>{faq.q}</span>
                 {openFaq === idx
                   ? <ChevronUp className="w-4 h-4 text-[#FFA000] shrink-0" />
-                  : <ChevronDown className="w-4 h-4 text-[#5F6368] shrink-0" />}
+                  : <ChevronDown className="w-4 h-4 text-[#86868B] shrink-0" />}
               </button>
               {openFaq === idx && (
-                <div className={`px-4 pb-4 pt-3 text-[13px] sm:text-xs ${muted} leading-relaxed border-t border-[#DADCE0]/60 dark:border-[#3C4043]`}>
+                <div className={`px-4 pb-4 pt-3 text-[13px] sm:text-xs ${muted} leading-relaxed border-t border-black/[0.08] dark:border-white/[0.08]`}>
                   {faq.a}
                 </div>
               )}
@@ -701,7 +736,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* Footer */}
-      <footer className={`bg-white dark:bg-[#1E1F20] border-t border-[#DADCE0] dark:border-[#3C4043] py-8 px-4 lg:px-8 text-xs ${muted}`}>
+      <footer className={`bg-white dark:bg-[#1C1C1E] border-t border-black/[0.08] dark:border-white/[0.08] py-8 px-4 lg:px-8 text-xs ${muted}`}>
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center text-center md:text-left justify-between gap-4">
           <VidyaLogo size="sm" badgeText="ENTERPRISE" subtitle="Operating System for Coaching & Education Centers" />
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">

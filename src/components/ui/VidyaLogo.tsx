@@ -145,14 +145,14 @@ export const VidyaLogo: React.FC<VidyaLogoProps> = ({
       {showText && (
         <div className="flex flex-col min-w-0">
           <div className="flex items-center space-x-1.5 sm:space-x-2">
-            <span className={`font-google-sans font-bold tracking-tight text-sm sm:text-base ${current.textClass}`}>
+            <span className={`font-apple-display font-bold tracking-tight text-sm sm:text-base ${current.textClass}`}>
               <span className="text-[#FF1744]">Vidya</span>
               <span className="text-[#FF6D00]">OS</span>
             </span>
 
             {showBadge && (
               <span
-                className={`font-mono font-bold tracking-wider uppercase rounded-md bg-orange-500/10 text-[#FF5722] dark:text-[#FF9100] border border-orange-500/30 hidden sm:inline-block ${current.badgeClass}`}
+                className={`font-apple-text font-semibold tracking-wide uppercase rounded-full bg-amber-500/10 text-[#C96B00] dark:text-[#FFCA28] border border-amber-500/25 hidden sm:inline-block ${current.badgeClass}`}
               >
                 {badgeText}
               </span>
@@ -160,7 +160,7 @@ export const VidyaLogo: React.FC<VidyaLogoProps> = ({
           </div>
 
           {subtitle && (
-            <span className={`text-[#5F6368] dark:text-[#9AA0A6] font-medium tracking-tight -mt-0.5 hidden lg:block ${current.subClass}`}>
+            <span className={`text-[#86868B] dark:text-[#86868B] font-normal font-apple-text tracking-tight -mt-0.5 hidden lg:block ${current.subClass}`}>
               {subtitle}
             </span>
           )}
