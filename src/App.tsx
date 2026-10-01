@@ -24,6 +24,7 @@ import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LandingPage } from './components/landing/LandingPage';
+import { useNavigationDrawerSwipe } from './hooks/useNavigationDrawerSwipe';
 import {
   Building2,
   Users,
@@ -363,6 +364,16 @@ const MainView: React.FC = () => {
 
   const isLanding = normalizedPath === '/' || normalizedPath === '/landing' || normalizedPath === '/pricing' || normalizedPath === '/features' || normalizedPath === '/home';
 
+  // Enable mobile touch gesture: Left-to-Right swipe to open navigation drawer, Right-to-Left to close
+  useNavigationDrawerSwipe({
+    isOpen: sidebarOpen,
+    setIsOpen: setSidebarOpen,
+    enabled: isAuthenticated && !isLanding,
+    edgeThreshold: 85,
+    minSwipeDistance: 50,
+    maxSwipeTime: 650,
+  });
+
   if (isLanding) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#131314]">
@@ -393,6 +404,14 @@ const MainView: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#202124] text-[#202124] dark:text-[#E8EAED] transition-colors duration-200 overflow-hidden font-['Inter',system-ui,sans-serif]">
+      {/* Mobile edge touch assist target (makes left-to-right drawer opening effortless on touch screens & PWAs) */}
+      {isAuthenticated && !isLanding && !sidebarOpen && (
+        <div
+          className="md:hidden fixed top-0 bottom-0 left-0 w-6 z-40 touch-none pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
+
       <Header
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
@@ -402,16 +421,30 @@ const MainView: React.FC = () => {
 
       {/* Main role-based protected view */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Responsive Dashboard Sidebar (Rendered on all /admin routes for Center Admin, Staff, and Platform Owners) */}
-        {(currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF' || (currentUser.role === 'PLATFORM_OWNER' && normalizedPath.startsWith('/admin'))) && (
+        {/* Responsive Dashboard Sidebar & Mobile Navigation Drawer (Available for all roles with role-adapted items) */}
+        {isAuthenticated && (
           <Sidebar
             currentTab={activeTab || 'overview'}
             onSelectTab={(tabId) => {
               setActiveTab(tabId);
-              if (tabId === 'overview') {
-                navigate(`/admin/${currentOrg.id}`);
-              } else {
-                navigate(`/admin/${currentOrg.id}/${tabId}`);
+              if (currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF') {
+                if (tabId === 'overview') {
+                  navigate(`/admin/${currentOrg.id}`);
+                } else {
+                  navigate(`/admin/${currentOrg.id}/${tabId}`);
+                }
+              } else if (currentUser.role === 'TEACHER') {
+                navigate(`/teacher/${tabId}`);
+              } else if (currentUser.role === 'PARENT') {
+                navigate(`/parent/${tabId}`);
+              } else if (currentUser.role === 'STUDENT') {
+                navigate(`/student/${tabId}`);
+              } else if (currentUser.role === 'PLATFORM_OWNER') {
+                if (['tenants', 'plans', 'users', 'overview'].includes(tabId)) {
+                  navigate('/owner');
+                } else {
+                  navigate(`/admin/${currentOrg.id}/${tabId}`);
+                }
               }
             }}
             isOpen={sidebarOpen}
