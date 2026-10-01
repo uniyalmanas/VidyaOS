@@ -173,19 +173,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="bg-white dark:bg-[#1E1F20] border-b border-[#DADCE0] dark:border-[#3C4043] sticky top-0 z-40 h-14 transition-colors duration-150 select-none">
-      <div className="h-full px-3 sm:px-5 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left Section: Sidebar Toggle & Brand */}
-        <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
+      <div className="h-full px-2 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
+        {/* Left Section: Sidebar Toggle & Brand (Flex-shrinkable so right profile never gets pushed out) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink">
           {/* Sidebar Open Button (shown only when sidebar is closed, allowing user to reopen it) */}
           {setSidebarOpen && !sidebarOpen && (currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF' || currentUser.role === 'PLATFORM_OWNER') && (
-            <div className="relative group">
+            <div className="relative group flex-shrink-0">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 rounded-xl text-[#202124] dark:text-[#E8EAED] bg-[#F1F3F4] dark:bg-[#282A2C] hover:bg-[#E8EAED] dark:hover:bg-[#3C4043] shadow-2xs transition-all duration-200 cursor-pointer flex items-center justify-center"
+                className="p-1.5 sm:p-2 rounded-xl text-[#202124] dark:text-[#E8EAED] bg-[#F1F3F4] dark:bg-[#282A2C] hover:bg-[#E8EAED] dark:hover:bg-[#3C4043] shadow-2xs transition-all duration-200 cursor-pointer flex items-center justify-center"
                 aria-label="Open sidebar"
                 title="Open sidebar"
               >
-                <PanelLeft className="w-5 h-5 transition-transform duration-200 group-hover:scale-105" />
+                <PanelLeft className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:scale-105" />
               </button>
               {/* Tooltip */}
               <div className="hidden sm:block absolute left-0 top-full mt-1 px-2.5 py-1 bg-slate-900 text-white text-[11px] font-medium rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50">
@@ -198,18 +198,18 @@ export const Header: React.FC<HeaderProps> = ({
           {setSidebarOpen && currentUser.role !== 'CENTER_ADMIN' && currentUser.role !== 'STAFF' && currentUser.role !== 'PLATFORM_OWNER' && (
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden p-2 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer"
+              className="md:hidden p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer flex-shrink-0"
               title="Toggle navigation"
               aria-label="Toggle navigation"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4" />
             </button>
           )}
 
           {/* Official VidyaOS Brand Anchor (Disabled when logged in with a role) */}
           <div
             onClick={isAuthenticated ? undefined : () => navigate('/')}
-            className={`flex items-center select-none ${
+            className={`flex items-center select-none flex-shrink-0 ${
               isAuthenticated ? 'cursor-default' : 'cursor-pointer group'
             }`}
             title={isAuthenticated ? 'VidyaOS' : 'VidyaOS Home'}
@@ -217,18 +217,18 @@ export const Header: React.FC<HeaderProps> = ({
             <VidyaLogo size="sm" showBadge={false} />
           </div>
 
-          <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] hidden sm:block mx-0.5" />
+          <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] hidden sm:block mx-0.5 flex-shrink-0" />
 
-          {/* Coaching Center Display: Responsive so it never overflows mobile viewport */}
+          {/* Coaching Center Display: Responsive flexbox shrinking */}
           {isAuthenticated && currentUser.role !== 'PLATFORM_OWNER' ? (
             <div
-              className="flex items-center space-x-1.5 sm:space-x-2 px-1.5 sm:px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-left shadow-2xs select-none min-w-0"
+              className="flex items-center gap-1.5 px-1.5 sm:px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-left shadow-2xs select-none min-w-0 flex-shrink"
               title={`Active Coaching Center: ${currentOrg.name}`}
             >
               <div className="w-5 h-5 rounded bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
                 {currentOrg.logoText.slice(0, 2)}
               </div>
-              <div className="max-w-[70px] xs:max-w-[110px] sm:max-w-[180px] md:max-w-[220px] truncate hidden xxs:block">
+              <div className="max-w-[70px] sm:max-w-[160px] md:max-w-[200px] truncate min-w-0 hidden min-[480px]:block">
                 <span className="text-xs font-semibold font-google-sans text-[#202124] dark:text-[#E8EAED] truncate block leading-tight">
                   {currentOrg.name}
                 </span>

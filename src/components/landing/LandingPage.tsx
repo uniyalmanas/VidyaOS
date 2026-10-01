@@ -122,22 +122,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div className="w-full min-h-dvh overflow-x-hidden scroll-smooth bg-[#F8F9FA] dark:bg-[#131314] text-[#202124] dark:text-[#E8EAED] font-['Inter',system-ui,sans-serif] selection:bg-[#FFA000]/25 selection:text-[#202124] transition-colors duration-200">
 
-      {/* Dynamic Top App Bar: fluidly adapts to screen width and scroll elevation */}
+      {/* Dynamic Top App Bar: fluid flexbox architecture adapting smoothly from 320px to 4K displays */}
       <nav
         className={`sticky top-0 z-40 w-full transition-all duration-200 px-3 sm:px-5 lg:px-8 ${
           isScrolled
             ? 'bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] shadow-xs py-2 sm:py-2.5'
-            : 'bg-white/80 dark:bg-[#1E1F20]/80 backdrop-blur-sm border-b border-[#DADCE0]/50 dark:border-[#3C4043]/50 py-2.5 sm:py-3'
+            : 'bg-white/85 dark:bg-[#1E1F20]/85 backdrop-blur-sm border-b border-[#DADCE0]/50 dark:border-[#3C4043]/50 py-2 sm:py-2.5'
         }`}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4 w-full">
           {/* Brand Anchor: dynamically adapts from flame+VidyaOS on mobile to full title+badge+subtitle on desktop */}
-          <div className="flex-shrink-0 min-w-0">
+          <div className="flex items-center min-w-0 flex-shrink">
             <VidyaLogo size="sm" showBadge={true} badgeText="CONSOLE v2.5" subtitle="Coaching & Education Center OS" />
           </div>
 
-          {/* Desktop Navigation Links */}
-          <div className={`hidden lg:flex items-center space-x-1 xl:space-x-2 text-xs font-semibold ${muted}`}>
+          {/* Desktop Navigation Links (Centered in flex container) */}
+          <div className={`hidden lg:flex items-center justify-center space-x-1 xl:space-x-2 text-xs font-semibold ${muted} flex-1 px-4`}>
             {navLinks.map(l => (
               <a
                 key={l.href}
@@ -149,9 +149,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             ))}
           </div>
 
-          {/* Right Action Cluster: progressively expands across screen sizes */}
-          <div className="flex items-center space-x-1 sm:space-x-1.5 md:space-x-2 flex-shrink-0">
-            {/* Install App - Visible on Tablet & Desktop (Hidden on narrow mobile top bar, available inside drawer) */}
+          {/* Right Action Cluster: pure flexbox with no rigid widths */}
+          <div className="flex items-center space-x-1 sm:space-x-1.5 md:space-x-2 flex-shrink-0 ml-auto">
+            {/* Install App - Visible on Tablet & Desktop */}
             <button
               onClick={() => setIsPwaModalOpen(true)}
               className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold transition cursor-pointer flex-shrink-0 active:scale-95"
@@ -163,7 +163,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="md:hidden">App</span>
             </button>
 
-            {/* Theme Toggle - Always accessible with subtle micro-interaction */}
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className={`p-1.5 sm:p-2 rounded-lg ${border} ${muted} hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition-colors cursor-pointer flex-shrink-0 active:scale-95`}
@@ -188,7 +188,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Sign In
             </ConsoleButton>
 
-            {/* Console Button - Fluid label scaling (Console on mobile, Go to Console on tablet & desktop) */}
+            {/* Console Button - Fluid label scaling */}
             <ConsoleButton variant="primary" size="xs"
               iconRight={<ArrowRight className="w-3 h-3 hidden sm:inline" />}
               onClick={onEnterApp} className="px-2.5 sm:px-3 text-xs shadow-2xs hover:shadow-xs transition">
@@ -196,6 +196,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="sm:hidden">Console</span>
             </ConsoleButton>
           </div>
+        </div>
+
+        {/* Mobile & Tablet Flexible Navigation Strip: all tabs and actions accessible with smooth horizontal flex scroll */}
+        <div className="lg:hidden flex items-center gap-1.5 pt-2 pb-0.5 overflow-x-auto no-scrollbar border-t border-[#DADCE0]/40 dark:border-[#3C4043]/40 text-xs font-semibold text-[#5F6368] dark:text-[#9AA0A6] scroll-smooth">
+          {navLinks.map(l => (
+            <a
+              key={l.href}
+              href={l.href}
+              className="px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 bg-[#F1F3F4] dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] hover:text-[#FFA000] dark:hover:text-[#FFCA28] hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[11px]"
+            >
+              {l.label}
+            </a>
+          ))}
+          {!pwaState.isInstalled && (
+            <button
+              onClick={() => setIsPwaModalOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 text-[#B06000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer text-[11px]"
+            >
+              <DownloadCloud className="w-3 h-3 text-[#FFA000] dark:text-[#FFCA28]" />
+              <span>Install App</span>
+            </button>
+          )}
         </div>
       </nav>
 
