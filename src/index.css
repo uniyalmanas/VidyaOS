@@ -1,0 +1,270 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+@layer base {
+  :root {
+    /* Firebase Primary Accent (Selective usage for active states & key CTAs) */
+    --fb-primary: #FFA000;
+    --fb-primary-hover: #F57C00;
+    --fb-primary-active: #E65100;
+    --fb-primary-subtle: #FFF8E1;
+    --fb-primary-border: #FFE082;
+    --fb-primary-text: #202124;
+
+    /* Google Cloud & Supporting Accents */
+    --fb-blue: #1A73E8;
+    --fb-blue-hover: #1557B0;
+    --fb-blue-subtle: #E8F0FE;
+    --fb-navy: #051E34;
+    --fb-navy-surface: #0B2540;
+
+    /* Surfaces & Backgrounds */
+    --fb-bg-app: #F8F9FA;
+    --fb-bg-surface: #FFFFFF;
+    --fb-bg-surface-hover: #F1F3F4;
+    --fb-bg-surface-active: #E8EAED;
+
+    /* Borders & Dividers */
+    --fb-border: #DADCE0;
+    --fb-border-subtle: #ECEFF1;
+    --fb-border-strong: #BDC1C6;
+
+    /* Typography */
+    --fb-text-primary: #202124;
+    --fb-text-secondary: #5F6368;
+    --fb-text-muted: #80868B;
+    --fb-text-inverse: #FFFFFF;
+
+    /* Semantic Status */
+    --fb-status-success: #188038;
+    --fb-status-success-bg: #E6F4EA;
+    --fb-status-success-border: #CEEAD6;
+    --fb-status-warning: #B06000;
+    --fb-status-warning-bg: #FEF7E0;
+    --fb-status-warning-border: #FEEFC3;
+    --fb-status-error: #D93025;
+    --fb-status-error-bg: #FCE8E6;
+    --fb-status-error-border: #FAD2CF;
+    --fb-status-info: #1A73E8;
+    --fb-status-info-bg: #E8F0FE;
+    --fb-status-info-border: #D2E3FC;
+
+    /* Google Elevation Shadows */
+    --fb-shadow-xs: 0 1px 2px 0 rgba(60, 64, 67, 0.1);
+    --fb-shadow-sm: 0 1px 2px 0 rgba(60, 64, 67, 0.2), 0 1px 3px 1px rgba(60, 64, 67, 0.1);
+    --fb-shadow-md: 0 2px 6px 2px rgba(60, 64, 67, 0.15);
+  }
+
+  .dark {
+    --fb-primary: #FFCA28;
+    --fb-primary-hover: #FFB300;
+    --fb-primary-active: #FFA000;
+    --fb-primary-subtle: rgba(255, 160, 0, 0.12);
+    --fb-primary-border: rgba(255, 202, 40, 0.3);
+    --fb-primary-text: #121314;
+
+    --fb-blue: #8AB4F8;
+    --fb-blue-hover: #AECBFA;
+    --fb-blue-subtle: rgba(138, 180, 248, 0.15);
+    --fb-navy: #051E34;
+    --fb-navy-surface: #0B2540;
+
+    --fb-bg-app: #121314;
+    --fb-bg-surface: #1E1F20;
+    --fb-bg-surface-hover: #282A2C;
+    --fb-bg-surface-active: #35373B;
+
+    --fb-border: #3C4043;
+    --fb-border-subtle: #2D2E30;
+    --fb-border-strong: #5F6368;
+
+    --fb-text-primary: #E8EAED;
+    --fb-text-secondary: #9AA0A6;
+    --fb-text-muted: #80868B;
+    --fb-text-inverse: #121314;
+
+    --fb-status-success: #81C995;
+    --fb-status-success-bg: rgba(129, 201, 149, 0.15);
+    --fb-status-success-border: rgba(129, 201, 149, 0.3);
+    --fb-status-warning: #FDD663;
+    --fb-status-warning-bg: rgba(253, 214, 99, 0.15);
+    --fb-status-warning-border: rgba(253, 214, 99, 0.3);
+    --fb-status-error: #F28B82;
+    --fb-status-error-bg: rgba(242, 139, 130, 0.15);
+    --fb-status-error-border: rgba(242, 139, 130, 0.3);
+    --fb-status-info: #8AB4F8;
+    --fb-status-info-bg: rgba(138, 180, 248, 0.15);
+    --fb-status-info-border: rgba(138, 180, 248, 0.3);
+
+    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --fb-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
+    --fb-shadow-md: 0 4px 8px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@layer utilities {
+  /* Google & Firebase Font Families */
+  .font-google-sans {
+    font-family: 'Google Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .font-inter {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .font-mono-code {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Firebase Vibrant Flame Gradients */
+  .bg-firebase-flame {
+    background: linear-gradient(135deg, #FFCA28 0%, #FFA000 45%, #F57C00 100%);
+  }
+  .bg-firebase-flame-subtle {
+    background: linear-gradient(135deg, rgba(255, 202, 40, 0.15) 0%, rgba(255, 160, 0, 0.12) 50%, rgba(245, 124, 0, 0.15) 100%);
+  }
+  .text-firebase-flame {
+    background: linear-gradient(135deg, #FFCA28 0%, #FFA000 50%, #F57C00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Google-style subtle scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #DADCE0;
+    border-radius: 9999px;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #3C4043;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #BDC1C6;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #5F6368;
+  }
+
+  /* Ultra-Fast Instant Tooltips (50ms response instead of 1000ms browser delay) */
+  .tooltip-right {
+    position: relative;
+  }
+  .tooltip-right::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%) scale(0.95);
+    background-color: #202124;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Google Sans', 'Inter', system-ui, sans-serif;
+    padding: 4px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 50ms cubic-bezier(0, 0, 0.2, 1), transform 50ms cubic-bezier(0, 0, 0.2, 1), visibility 50ms;
+    z-index: 9999;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .tooltip-right:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(-50%) scale(1);
+  }
+
+  .tooltip-bottom {
+    position: relative;
+  }
+  .tooltip-bottom::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.95);
+    background-color: #202124;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Google Sans', 'Inter', system-ui, sans-serif;
+    padding: 4px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 50ms cubic-bezier(0, 0, 0.2, 1), transform 50ms cubic-bezier(0, 0, 0.2, 1), visibility 50ms;
+    z-index: 9999;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .tooltip-bottom:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) scale(1);
+  }
+
+  .tooltip-top {
+    position: relative;
+  }
+  .tooltip-top::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.95);
+    background-color: #202124;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Google Sans', 'Inter', system-ui, sans-serif;
+    padding: 4px 9px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 50ms cubic-bezier(0, 0, 0.2, 1), transform 50ms cubic-bezier(0, 0, 0.2, 1), visibility 50ms;
+    z-index: 9999;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .tooltip-top:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) scale(1);
+  }
+
+  .dark .tooltip-right::after,
+  .dark .tooltip-bottom::after,
+  .dark .tooltip-top::after {
+    background-color: #303134;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-area, .printable-area * {
+    visibility: visible;
+  }
+  .printable-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background-color: white !important;
+    color: black !important;
+  }
+}
