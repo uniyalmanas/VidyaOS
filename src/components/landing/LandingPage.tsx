@@ -114,30 +114,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     <div className="w-full min-h-dvh overflow-x-hidden scroll-smooth bg-[#F8F9FA] dark:bg-[#131314] text-[#202124] dark:text-[#E8EAED] font-['Inter',system-ui,sans-serif] selection:bg-[#FFA000]/25 selection:text-[#202124] transition-colors duration-200">
 
       {/* Top app bar */}
-      <nav className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] px-3 sm:px-6 lg:px-8 py-2.5 transition-colors">
+      <nav className="sticky top-0 z-40 w-full bg-white/95 dark:bg-[#1E1F20]/95 backdrop-blur-md border-b border-[#DADCE0] dark:border-[#3C4043] px-3 sm:px-5 lg:px-8 py-2 sm:py-2.5 transition-all">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          {/* Brand Anchor: dynamically adapts from flame+VidyaOS on mobile to full title+badge+subtitle on desktop */}
           <div className="flex-shrink-0 min-w-0">
             <VidyaLogo size="sm" badgeText="CONSOLE v2.5" subtitle="Coaching & Education Center OS" />
           </div>
 
+          {/* Desktop Navigation Links */}
           <div className={`hidden lg:flex items-center space-x-6 text-xs font-semibold ${muted}`}>
             {navLinks.map(l => (
               <a key={l.href} href={l.href} className="hover:text-[#FFA000] dark:hover:text-[#FFCA28] transition">{l.label}</a>
             ))}
           </div>
 
-          <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
+          {/* Right Action Cluster: dynamically responsive */}
+          <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
+            {/* Install App - Visible on Tablet & Desktop (Hidden on mobile top bar to save space, accessible via mobile menu) */}
             <button
               onClick={() => setIsPwaModalOpen(true)}
-              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold transition cursor-pointer flex-shrink-0"
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-[#B06000] dark:text-[#FFCA28] text-xs font-semibold transition cursor-pointer flex-shrink-0"
               title="Install VidyaOS PWA on iOS, Android or Laptop"
               aria-label="Install App"
             >
               <DownloadCloud className="w-3.5 h-3.5 text-[#FFA000] dark:text-[#FFCA28]" />
-              <span className="hidden sm:inline">Install App</span>
-              <span className="sm:hidden text-[11px]">App</span>
+              <span>Install App</span>
             </button>
 
+            {/* Theme Toggle - Always available */}
             <button
               onClick={toggleTheme}
               className={`p-1.5 rounded-lg ${border} ${muted} hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer flex-shrink-0`}
@@ -149,17 +153,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 : <Moon className="w-3.5 h-3.5 text-[#FFA000]" />}
             </button>
 
+            {/* Register Center - Large screens only */}
             {onOpenRegister && (
               <ConsoleButton variant="primary" size="xs" icon={<Sparkles className="w-3.5 h-3.5" />}
-                onClick={() => onOpenRegister()} className="hidden lg:inline-flex">
+                onClick={() => onOpenRegister()} className="hidden xl:inline-flex">
                 Register Center
               </ConsoleButton>
             )}
 
+            {/* Sign In - Tablet & Desktop */}
             <ConsoleButton variant="secondary" size="xs" onClick={onOpenLogin} className="hidden sm:inline-flex">
               Sign In
             </ConsoleButton>
 
+            {/* Console Button - Compact on mobile, full label on tablet & desktop */}
             <ConsoleButton variant="primary" size="xs"
               iconRight={<ArrowRight className="w-3 h-3 hidden sm:inline" />}
               onClick={onEnterApp} className="px-2.5 sm:px-3 text-xs">
@@ -167,31 +174,48 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="sm:hidden">Console</span>
             </ConsoleButton>
 
+            {/* Mobile Hamburger / Close toggle */}
             <button
               onClick={() => setMenuOpen(o => !o)}
-              className={`lg:hidden p-1.5 rounded-lg ${border} ${muted} cursor-pointer`}
+              className={`lg:hidden p-1.5 rounded-lg ${border} ${muted} hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer flex-shrink-0`}
               aria-label="Toggle menu"
               aria-expanded={menuOpen}
             >
-              {menuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              {menuOpen ? <X className="w-4 h-4 text-[#FFA000]" /> : <Menu className="w-4 h-4" />}
             </button>
           </div>
         </div>
 
+        {/* Mobile Expandable Drawer Menu */}
         {menuOpen && (
-          <div className="lg:hidden max-w-7xl mx-auto mt-2 pt-2 border-t border-[#DADCE0] dark:border-[#3C4043] flex flex-col">
+          <div className="lg:hidden max-w-7xl mx-auto mt-2 pt-2 border-t border-[#DADCE0] dark:border-[#3C4043] flex flex-col space-y-1">
             {navLinks.map(l => (
               <a key={l.href} href={l.href} onClick={closeMenu}
-                className="py-3 px-2 text-sm font-semibold text-[#202124] dark:text-[#E8EAED] rounded-lg hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C]">
+                className="py-2.5 px-3 text-xs font-semibold text-[#202124] dark:text-[#E8EAED] rounded-lg hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition">
                 {l.label}
               </a>
             ))}
-            <div className="flex gap-2 pt-2 pb-1">
-              <ConsoleButton variant="secondary" size="sm" className="flex-1 justify-center"
-                onClick={() => { closeMenu(); onOpenLogin(); }}>Sign In</ConsoleButton>
+
+            {/* PWA Install in Mobile Drawer */}
+            <button
+              onClick={() => { closeMenu(); setIsPwaModalOpen(true); }}
+              className="flex items-center gap-2 py-2.5 px-3 text-xs font-semibold text-[#FFA000] dark:text-[#FFCA28] rounded-lg hover:bg-amber-500/10 transition text-left cursor-pointer"
+            >
+              <DownloadCloud className="w-4 h-4" />
+              <span>Install VidyaOS App (iOS, Android, Laptop)</span>
+            </button>
+
+            {/* Action buttons inside mobile drawer */}
+            <div className="flex gap-2 pt-2 pb-1 border-t border-[#DADCE0]/50 dark:border-[#3C4043]/50 mt-1">
+              <ConsoleButton variant="secondary" size="sm" className="flex-1 justify-center text-xs"
+                onClick={() => { closeMenu(); onOpenLogin(); }}>
+                Sign In
+              </ConsoleButton>
               {onOpenRegister && (
-                <ConsoleButton variant="primary" size="sm" className="flex-1 justify-center"
-                  onClick={() => { closeMenu(); onOpenRegister(); }}>Register</ConsoleButton>
+                <ConsoleButton variant="primary" size="sm" className="flex-1 justify-center text-xs"
+                  onClick={() => { closeMenu(); onOpenRegister(); }}>
+                  Register Center
+                </ConsoleButton>
               )}
             </div>
           </div>
