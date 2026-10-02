@@ -42,7 +42,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   targetUser,
   onSaved
 }) => {
-  const { currentUser: authUser, updateUserProfile } = useAuth();
+  const { currentUser: authUser, updateUserProfile, updateUserPassword } = useAuth();
   const { students, teachers, updateStudent, updateTeacher, showToast } = useApp();
 
   const activeUser = targetUser || authUser;
@@ -80,7 +80,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setName(activeUser.name || '');
       setEmail(activeUser.email || '');
       setPhone(activeUser.phone || '');
-      setPassword(activeUser.password || 'password123');
+      setPassword('');
       setAvatar(activeUser.avatar || '');
       setAvatarPreview(activeUser.avatar || '');
       setAvatarFile(null);
@@ -214,9 +214,13 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         occupation: occupation.trim() || undefined,
         emergencyContact: emergencyContact.trim() || undefined,
         bloodGroup: bloodGroup || undefined,
-        dateOfBirth: dateOfBirth || undefined,
-        password: password.trim() || undefined
+        dateOfBirth: dateOfBirth || undefined
       };
+
+      // If user specified a new password, update via Firebase Auth
+      if (password.trim() && password.trim().length >= 6) {
+        await updateUserPassword(phone, password.trim());
+      }
 
       // 2. Persist update in AuthContext (Firestore /users, Firebase Auth, localStorage) if self
       const isSelf = !targetUser || targetUser.id === authUser?.id;
@@ -228,24 +232,6 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           await setDoc(doc(db, 'users', activeUser.id), { ...activeUser, ...updates }, { merge: true });
         } catch (e) {
           console.warn('Direct Firestore users update:', e);
-        }
-      }
-
-      // Also update credentials collection if password or phone is set
-      const cleanDigits = phone.replace(/[^0-9]/g, '').slice(-10);
-      if (cleanDigits && password.trim()) {
-        try {
-          await setDoc(doc(db, 'credentials', cleanDigits), {
-            phone: cleanDigits,
-            userId: activeUser.id,
-            password: password.trim(),
-            role: activeUser.role,
-            name: name.trim(),
-            email: email.trim(),
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-        } catch (e) {
-          console.warn('Direct Firestore credentials update:', e);
         }
       }
 

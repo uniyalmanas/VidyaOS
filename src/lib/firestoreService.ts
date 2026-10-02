@@ -1,4 +1,5 @@
 import {
+  auth,
   db,
   doc,
   setDoc,
@@ -53,7 +54,7 @@ let seedingAlreadyCompleted = false;
  * Initializes Firestore collections with baseline coaching data once in development if empty.
  */
 export async function seedInitialFirestoreDataIfEmpty() {
-  if (isSeedingInProgress || seedingAlreadyCompleted) return;
+  if (isSeedingInProgress || seedingAlreadyCompleted || !auth.currentUser) return;
   isSeedingInProgress = true;
 
   try {
@@ -70,7 +71,7 @@ export async function seedInitialFirestoreDataIfEmpty() {
 
       // Seed Users without passwords in public collections
       for (const user of MOCK_USERS) {
-        const safeUser = { ...user };
+        const safeUser = { ...user } as any;
         delete safeUser.password;
         batch.set(doc(db, 'users', user.id), safeUser);
       }

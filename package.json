@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
+    "test": "tsx test-auth.ts",
     "deploy": "firebase deploy --only hosting,firestore:rules"
   },
   "dependencies": {

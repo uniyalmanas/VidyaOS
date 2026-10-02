@@ -107,8 +107,8 @@ service cloud.firestore {
     // ORGANIZATIONS (TUITION & COACHING CENTERS)
     // ------------------------------------------------------------------------
     match /organizations/{orgId} {
-      // Anyone authenticated can read organization meta (needed for discovery, login & branding)
-      allow read: if isSignedIn();
+      // Public read for coaching center directory, branding, and registration discovery
+      allow read: if true;
 
       // Creating a new organization allowed during onboarding or by Platform Owner
       allow create: if isSignedIn();

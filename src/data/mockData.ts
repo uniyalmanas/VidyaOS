@@ -198,7 +198,6 @@ export const MOCK_USERS: User[] = [
     name: 'Kunal Singhal (SaaS Architect)',
     phone: '+91 99999 11223',
     email: 'kunal@vidyaos.in',
-    password: 'owner123',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
   },
   // Apex Academy Admin
@@ -209,7 +208,6 @@ export const MOCK_USERS: User[] = [
     name: 'Er. Manoj Verma',
     phone: '+91 98971 23456',
     email: 'admin@apexacademy.in',
-    password: 'admin123',
     branchId: 'branch-rajpur',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
   },
@@ -221,7 +219,6 @@ export const MOCK_USERS: User[] = [
     name: 'Pooja Verma',
     phone: '+91 98765 43299',
     email: 'staff@apexacademy.in',
-    password: 'staff123',
     branchId: 'branch-rajpur',
     avatar: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80'
   },
@@ -233,7 +230,6 @@ export const MOCK_USERS: User[] = [
     name: 'Prof. Anjali Sharma',
     phone: '+91 97600 33445',
     email: 'anjali@apexacademy.in',
-    password: 'teacher123',
     branchId: 'branch-rajpur',
     subjects: ['Mathematics', 'Quantitative Aptitude'],
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
@@ -245,7 +241,6 @@ export const MOCK_USERS: User[] = [
     name: 'Dr. Rohit Negi',
     phone: '+91 94111 66554',
     email: 'rohitnegi@apexacademy.in',
-    password: 'teacher123',
     branchId: 'branch-rajpur',
     subjects: ['Physics', 'Science'],
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80'
@@ -258,7 +253,6 @@ export const MOCK_USERS: User[] = [
     name: 'Rajesh Sharma',
     phone: '+91 98371 99887',
     email: 'rajesh.sharma.parent@gmail.com',
-    password: 'parent123',
     branchId: 'branch-rajpur',
     linkedStudentIds: ['stud-rahul-10', 'stud-priya-8'],
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80'
@@ -271,7 +265,6 @@ export const MOCK_USERS: User[] = [
     name: 'Sunita Bhatt',
     phone: '+91 98970 44332',
     email: 'sunita.bhatt@gmail.com',
-    password: 'parent123',
     branchId: 'branch-rajpur',
     linkedStudentIds: ['stud-ankit-12'],
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80'
@@ -284,7 +277,6 @@ export const MOCK_USERS: User[] = [
     name: 'Rahul Sharma',
     phone: '+91 98371 99880',
     email: 'rahul.s@student.apex.in',
-    password: 'student123',
     branchId: 'branch-rajpur',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'
   }
