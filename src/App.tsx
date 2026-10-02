@@ -170,6 +170,10 @@ const MainView: React.FC = () => {
     // 1. Universal portal aliases (/dashboard, /app, /portal, /console)
     const portalAliases = ['/dashboard', '/app', '/portal', '/console'];
     if (portalAliases.includes(normalizedPath)) {
+      if (!isAuthenticated) {
+        navigate('/login', { replace: true });
+        return;
+      }
       const myPortal = (currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF') ? `/admin/${currentOrg.id || currentUser.orgId || 'org-apex'}`
         : currentUser.role === 'TEACHER' ? '/teacher'
         : currentUser.role === 'PARENT' ? '/parent'
@@ -182,8 +186,19 @@ const MainView: React.FC = () => {
 
     // 2. Center Admin & Staff routes (/admin, /admin/:tenantId, /admin/:tenantId/:tab)
     if (normalizedPath === '/admin' || normalizedPath.startsWith('/admin/')) {
+      if (!isAuthenticated) {
+        navigate('/login', { replace: true });
+        return;
+      }
+
       if (currentUser.role !== 'CENTER_ADMIN' && currentUser.role !== 'STAFF' && currentUser.role !== 'PLATFORM_OWNER') {
-        switchRole('CENTER_ADMIN');
+        const myPortal = currentUser.role === 'TEACHER' ? '/teacher'
+          : currentUser.role === 'PARENT' ? '/parent'
+          : currentUser.role === 'STUDENT' ? '/student'
+          : '/';
+        showToast(`Access Restricted: Your account (${currentUser.role}) does not have permission to access the Center Admin console.`, 'warning');
+        navigate(myPortal, { replace: true });
+        return;
       }
 
       const validAdminTabs = [
@@ -267,24 +282,42 @@ const MainView: React.FC = () => {
 
     // 3. Parent routes (/parent, /parent/:tab)
     if (normalizedPath === '/parent' || normalizedPath.startsWith('/parent/')) {
-      if (currentUser.role !== 'PARENT') {
-        switchRole('PARENT');
+      if (!isAuthenticated) {
+        navigate('/login', { replace: true });
+        return;
+      }
+      if (currentUser.role !== 'PARENT' && currentUser.role !== 'PLATFORM_OWNER') {
+        showToast('Access Restricted: Only registered parents can access the Parent Portal.', 'warning');
+        navigate(currentUser.role === 'TEACHER' ? '/teacher' : currentUser.role === 'STUDENT' ? '/student' : `/admin/${currentUser.orgId}`, { replace: true });
+        return;
       }
       return;
     }
 
     // 4. Teacher routes (/teacher, /teacher/:tab)
     if (normalizedPath === '/teacher' || normalizedPath.startsWith('/teacher/')) {
-      if (currentUser.role !== 'TEACHER') {
-        switchRole('TEACHER');
+      if (!isAuthenticated) {
+        navigate('/login', { replace: true });
+        return;
+      }
+      if (currentUser.role !== 'TEACHER' && currentUser.role !== 'PLATFORM_OWNER') {
+        showToast('Access Restricted: Only faculty can access the Faculty Portal.', 'warning');
+        navigate(currentUser.role === 'PARENT' ? '/parent' : currentUser.role === 'STUDENT' ? '/student' : `/admin/${currentUser.orgId}`, { replace: true });
+        return;
       }
       return;
     }
 
     // 5. Student routes (/student, /student/:tab)
     if (normalizedPath === '/student' || normalizedPath.startsWith('/student/')) {
-      if (currentUser.role !== 'STUDENT') {
-        switchRole('STUDENT');
+      if (!isAuthenticated) {
+        navigate('/login', { replace: true });
+        return;
+      }
+      if (currentUser.role !== 'STUDENT' && currentUser.role !== 'PLATFORM_OWNER') {
+        showToast('Access Restricted: Only students can access the Student Portal.', 'warning');
+        navigate(currentUser.role === 'PARENT' ? '/parent' : currentUser.role === 'TEACHER' ? '/teacher' : `/admin/${currentUser.orgId}`, { replace: true });
+        return;
       }
       return;
     }

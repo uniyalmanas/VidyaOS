@@ -83,28 +83,35 @@ export async function createSecondaryUser(
       return { success: true, uid };
     } catch (createErr: any) {
       if (createErr?.code === 'auth/email-already-in-use') {
-        // User already exists in Firebase Auth - attempt to update their password
+        // User already exists in Firebase Auth - verify or update credentials
         try {
-          const existingCred = await signInWithEmailAndPassword(secAuth, email, pass).catch(async () => {
-            return await signInWithEmailAndPassword(secAuth, email, 'teacher123').catch(async () => {
-              return await signInWithEmailAndPassword(secAuth, email, 'admin123').catch(async () => {
-                return await signInWithEmailAndPassword(secAuth, email, 'password123');
-              });
-            });
-          });
-          if (existingCred?.user) {
-            await updatePassword(existingCred.user, pass);
+          const existingCred = await signInWithEmailAndPassword(secAuth, email, pass);
+          if (displayName && existingCred.user.displayName !== displayName) {
+            await updateProfile(existingCred.user, { displayName });
+          }
+          const uid = existingCred.user.uid;
+          await signOut(secAuth);
+          return { success: true, uid };
+        } catch (signInErr: any) {
+          try {
+            const fallbackCred = await signInWithEmailAndPassword(secAuth, email, 'teacher123');
+            await updatePassword(fallbackCred.user, pass);
             if (displayName) {
-              await updateProfile(existingCred.user, { displayName });
+              await updateProfile(fallbackCred.user, { displayName });
             }
-            const uid = existingCred.user.uid;
+            const uid = fallbackCred.user.uid;
             await signOut(secAuth);
             return { success: true, uid };
+          } catch (_) {
+            return {
+              success: false,
+              error: 'An account with this mobile number already exists. Please ask the faculty member to sign in.'
+            };
           }
-        } catch (_) {}
+        }
       }
       console.warn('createSecondaryUser notice:', createErr?.code, createErr?.message);
-      return { success: false, error: createErr?.code || createErr?.message };
+      return { success: false, error: createErr?.message || createErr?.code };
     }
   } catch (err: any) {
     return { success: false, error: err?.code || err?.message };

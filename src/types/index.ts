@@ -59,7 +59,6 @@ export interface User {
   emergencyContact?: string;
   bloodGroup?: string;
   dateOfBirth?: string;
-  password?: string;
 }
 
 export interface Guardian {
@@ -110,7 +109,6 @@ export interface Teacher {
   userId: string;
   name: string;
   phone: string;
-  password?: string;
   email: string;
   avatar: string;
   qualification: string;

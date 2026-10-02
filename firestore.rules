@@ -3,11 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ------------------------------------------------------------------------
-    // AUTHENTICATION & RBAC HELPER FUNCTIONS
+    // AUTHENTICATION & MULTI-TENANT RBAC HELPERS
     // ------------------------------------------------------------------------
 
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function getUserDoc() {
@@ -25,38 +29,37 @@ service cloud.firestore {
     function isPlatformOwner() {
       return isSignedIn() && (
         (request.auth.token.role == 'PLATFORM_OWNER') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'PLATFORM_OWNER')
+        (hasUserDoc() && getUserRole() == 'PLATFORM_OWNER')
       );
     }
 
     function isCenterAdmin() {
       return isSignedIn() && (
         (request.auth.token.role == 'CENTER_ADMIN') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'CENTER_ADMIN') ||
-        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        (hasUserDoc() && getUserRole() == 'CENTER_ADMIN')
       );
     }
 
     function isStaff() {
       return isSignedIn() && (
         (request.auth.token.role == 'STAFF') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'STAFF')
+        (hasUserDoc() && getUserRole() == 'STAFF')
       );
     }
 
     function isTeacher() {
       return isSignedIn() && (
         (request.auth.token.role == 'TEACHER') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'TEACHER')
+        (hasUserDoc() && getUserRole() == 'TEACHER')
       );
     }
 
+    // Strict multi-tenant isolation helper (NO unprofiled bypass)
     function isTenantMember(orgId) {
-      return isSignedIn() && (
+      return isSignedIn() && orgId != null && (
         isPlatformOwner() ||
         (request.auth.token.orgId == orgId) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserOrgId() == orgId) ||
-        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        (hasUserDoc() && getUserOrgId() == orgId)
       );
     }
 
@@ -72,28 +75,28 @@ service cloud.firestore {
     // USER PROFILES & ROLES
     // ------------------------------------------------------------------------
     match /users/{userId} {
-      // User can read their own profile, or tenant admin/staff can read users in their org, or platform owner
+      // User can read their own profile, or tenant admin/staff in the same center, or platform owner
       allow read: if isSignedIn() && (
         request.auth.uid == userId ||
         isPlatformOwner() ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserOrgId() == resource.data.orgId)
+        (hasUserDoc() && resource.data.orgId != null && getUserOrgId() == resource.data.orgId)
       );
 
-      // User can create their own profile upon authentication; Admins can create staff/teachers in their org
+      // User can create their own profile upon authentication; Admins can provision staff/teachers in their org
       allow create: if isSignedIn() && (
         request.auth.uid == userId ||
         isPlatformOwner() ||
-        (isCenterAdmin() && request.resource.data.orgId == getUserOrgId())
+        (isCenterAdmin() && hasUserDoc() && request.resource.data.orgId == getUserOrgId())
       );
 
       // Updates: Users can update their own non-sensitive profile (name, phone, avatar).
-      // Role & OrgId changes require Platform Owner or Center Admin.
+      // Role & OrgId changes require Platform Owner or Center Admin of that org.
       allow update: if isSignedIn() && (
         isPlatformOwner() ||
         (request.auth.uid == userId && 
          request.resource.data.role == resource.data.role && 
          request.resource.data.orgId == resource.data.orgId) ||
-        (isCenterAdmin() && resource.data.orgId == getUserOrgId() && request.resource.data.orgId == resource.data.orgId)
+        (isCenterAdmin() && hasUserDoc() && resource.data.orgId == getUserOrgId() && request.resource.data.orgId == resource.data.orgId)
       );
 
       // Only Platform Owner can permanently delete user records
@@ -107,7 +110,7 @@ service cloud.firestore {
       // Anyone authenticated can read organization meta (needed for discovery, login & branding)
       allow read: if isSignedIn();
 
-      // Creating a new organization allowed during Center Admin onboarding or by Platform Owner
+      // Creating a new organization allowed during onboarding or by Platform Owner
       allow create: if isSignedIn();
 
       // Only Center Admin of that organization or Platform Owner can update center profile & settings
@@ -121,7 +124,7 @@ service cloud.firestore {
     // STUDENTS COLLECTION
     // ------------------------------------------------------------------------
     match /students/{studentId} {
-      // Read: Tenant members can read students in their own center; Parents read their linked students
+      // Read: Tenant members can read students in their own center
       allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
 
       // Create: Center Admin or Staff can admit new students into their org
@@ -166,7 +169,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
 
       allow create, update, delete: if isSignedIn() && 
-        isTenantMember(resource.data.orgId) && 
+        isTenantMember(request.resource.data.orgId != null ? request.resource.data.orgId : resource.data.orgId) && 
         (isCenterAdmin() || isPlatformOwner());
     }
 
@@ -174,14 +177,11 @@ service cloud.firestore {
     // INVOICES & FEE PAYMENTS
     // ------------------------------------------------------------------------
     match /invoices/{invoiceId} {
-      // Students and parents can read invoices only if belonging to their org and studentId
       allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
 
-      // Create: Only Center Admin or Staff can issue invoices
       allow create: if isSignedIn() && 
         isCenterStaffOrAdmin(request.resource.data.orgId);
 
-      // Update: Admin/Staff can update, or parent recording a digital payment
       allow update: if isSignedIn() && 
         isTenantMember(resource.data.orgId) &&
         request.resource.data.orgId == resource.data.orgId;
@@ -197,7 +197,6 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
 
-      // Teachers, Staff, and Admins can record and update attendance
       allow create, update: if isSignedIn() && 
         (isCenterStaffOrAdmin(request.resource.data.orgId) || isTeacher()) &&
         isTenantMember(request.resource.data.orgId);
@@ -222,11 +221,14 @@ service cloud.firestore {
     // EXAM RESULTS & MARKS
     // ------------------------------------------------------------------------
     match /examResults/{resultId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource.data.orgId == null || isTenantMember(resource.data.orgId)
+      );
 
-      // Only teachers and center admins can create or update graded results
-      allow create, update, delete: if isSignedIn() && 
-        (isCenterAdmin() || isTeacher() || isPlatformOwner());
+      // Only teachers and center admins within tenant can create, update, delete graded results
+      allow create, update, delete: if isSignedIn() && (
+        isCenterInstructorOrAdmin(request.resource.data.orgId != null ? request.resource.data.orgId : resource.data.orgId)
+      );
     }
 
     // ------------------------------------------------------------------------
@@ -279,10 +281,9 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
-    // DEPRECATED / LOCKED CREDENTIALS COLLECTION (PREVENT PLAIN-TEXT EXPOSURE)
+    // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {
-      // Disallow all client reads and writes to prevent plain-text credential leaks
       allow read, write: if false;
     }
 

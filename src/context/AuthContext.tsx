@@ -64,7 +64,7 @@ const SESSION_STORAGE_KEY = 'vidyaos_auth_session';
 const SESSION_DURATION_HOURS = 24 * 7; // 7 days session
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Load session from storage or initialize with default Center Admin for demo readiness
+  // Load session from storage
   const [session, setSession] = useState<AuthSession | null>(() => {
     try {
       const stored = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -77,17 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.warn('Failed to parse auth session from localStorage', e);
     }
-    // Default initial session as Center Admin
-    const defaultUser = MOCK_USERS.find(u => u.id === 'user-apex-admin') || MOCK_USERS[1];
-    const initialSession: AuthSession = {
-      token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      user: defaultUser,
-      orgId: defaultUser.orgId,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
-      loginMethod: 'demo_preset'
-    };
-    return initialSession;
+    return null;
   });
 
   const currentUser = useMemo(() => session?.user || null, [session]);
@@ -157,16 +147,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const userDocRef = doc(db, 'users', fbUser.uid);
           const snap = await getDoc(userDocRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            const role = (data.role as UserRole) || 'TEACHER';
+            const orgId = data.orgId || 'org-apex';
+            const displayName = data.name || data.displayName || fbUser.displayName || (role === 'TEACHER' ? 'Faculty Member' : 'VidyaOS User');
+
+            const resolvedUser: User = {
+              id: fbUser.uid,
+              name: displayName,
+              email: data.email || fbUser.email || '',
+              phone: data.phone || fbUser.phoneNumber || '',
+              avatar: data.avatar || fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
+              role,
+              orgId,
+              branchId: data.branchId,
+              linkedStudentIds: data.linkedStudentIds,
+              subjects: data.subjects
+            };
+
+            let userToken = 'offline-token';
+            try {
+              userToken = await fbUser.getIdToken();
+            } catch (_) {}
+
+            const newSession: AuthSession = {
+              token: userToken,
+              user: resolvedUser,
+              orgId,
+              createdAt: Date.now(),
+              expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+              loginMethod: fbUser.email?.endsWith('@phone.vidyaos.in') ? 'phone_password' : 'google_oauth'
+            };
+            setSession(newSession);
+            localStorage.setItem('vidyaos_current_org_id', orgId);
+            return;
+          }
+
           let role: UserRole = 'CENTER_ADMIN';
           let orgId = '';
           let displayName = fbUser.displayName || 'Google User';
-
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data.role) role = data.role as UserRole;
-            if (data.displayName) displayName = data.displayName;
-            orgId = data.orgId;
-          }
 
           // Check if this Google account owns a registered organization
           const userOrg = await findOrganizationForUser(fbUser.email, fbUser.phoneNumber);
@@ -613,188 +633,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setShowLoginModal(false);
       return { success: true, user: resolvedUser };
     } catch (fbErr: any) {
-      console.warn('Firebase signIn notice, checking credentials database:', fbErr?.code);
+      console.warn('Firebase signIn notice:', fbErr?.code);
 
-      let matchedRecord: {
-        id: string;
-        name: string;
-        phone: string;
-        email?: string;
-        role: UserRole;
-        orgId: string;
-        avatar?: string;
-        password?: string;
-      } | null = null;
-
-      // 1. Check local vidyaos_teachers
+      // Check whether this mobile number exists in Firestore users or teachers
+      // to give the user a precise, helpful error message
+      let phoneExists = false;
       try {
-        const savedTeachers = JSON.parse(localStorage.getItem('vidyaos_teachers') || '[]');
-        const matchedTeacher = savedTeachers.find((t: any) => cleanPhone(t.phone) === clean);
-        if (matchedTeacher) {
-          matchedRecord = {
-            id: matchedTeacher.userId || matchedTeacher.id,
-            name: matchedTeacher.name,
-            phone: `+91 ${clean}`,
-            email: matchedTeacher.email || virtualEmail,
-            role: 'TEACHER',
-            orgId: matchedTeacher.orgId || 'org-apex',
-            avatar: matchedTeacher.avatar,
-            password: matchedTeacher.password
-          };
+        const uSnap = await getDocs(query(collection(db, 'users'), where('phone', 'in', [`+91 ${clean}`, clean]), limit(1)));
+        if (!uSnap.empty) {
+          phoneExists = true;
+        } else {
+          const tSnap = await getDocs(query(collection(db, 'teachers'), where('phone', 'in', [`+91 ${clean}`, clean]), limit(1)));
+          if (!tSnap.empty) {
+            phoneExists = true;
+          }
         }
       } catch (_) {}
 
-      // 2. Check local vidyaos_credentials
-      if (!matchedRecord) {
-        try {
-          const localCreds = JSON.parse(localStorage.getItem('vidyaos_credentials') || '{}');
-          if (localCreds[clean]) {
-            const cData = localCreds[clean];
-            matchedRecord = {
-              id: cData.userId || `user-${clean}`,
-              name: cData.name || `Faculty (${clean.slice(-4)})`,
-              phone: `+91 ${clean}`,
-              email: cData.email || virtualEmail,
-              role: cData.role || requestedRole || 'TEACHER',
-              orgId: cData.orgId || 'org-apex',
-              avatar: cData.avatar,
-              password: cData.password
-            };
-          }
-        } catch (_) {}
-      }
-
-      // 3. Check Firestore teachers collection
-      if (!matchedRecord) {
-        try {
-          const tSnap = await getDocs(query(collection(db, 'teachers'), where('phone', 'in', [`+91 ${clean}`, clean])));
-          if (!tSnap.empty) {
-            const tDoc = tSnap.docs[0].data() as any;
-            matchedRecord = {
-              id: tDoc.userId || tDoc.id,
-              name: tDoc.name,
-              phone: `+91 ${clean}`,
-              email: tDoc.email || virtualEmail,
-              role: 'TEACHER',
-              orgId: tDoc.orgId || 'org-apex',
-              avatar: tDoc.avatar,
-              password: tDoc.password
-            };
-          }
-        } catch (_) {}
-      }
-
-      // 4. Check Firestore users collection by phone
-      if (!matchedRecord) {
-        try {
-          const uSnap = await getDocs(query(collection(db, 'users'), where('phone', 'in', [`+91 ${clean}`, clean])));
-          if (!uSnap.empty) {
-            const uDoc = uSnap.docs[0].data() as any;
-            matchedRecord = {
-              id: uDoc.id || uSnap.docs[0].id,
-              name: uDoc.name,
-              phone: `+91 ${clean}`,
-              email: uDoc.email || virtualEmail,
-              role: uDoc.role || requestedRole || 'TEACHER',
-              orgId: uDoc.orgId || 'org-apex',
-              avatar: uDoc.avatar,
-              password: uDoc.password
-            };
-          }
-        } catch (_) {}
-      }
-
-      // 5. Check Firestore credentials collection
-      if (!matchedRecord) {
-        try {
-          const credSnap = await getDoc(doc(db, 'credentials', clean));
-          if (credSnap.exists()) {
-            const cData = credSnap.data() as any;
-            matchedRecord = {
-              id: cData.userId || `user-${clean}`,
-              name: cData.name,
-              phone: `+91 ${clean}`,
-              email: cData.email || virtualEmail,
-              role: cData.role || requestedRole || 'TEACHER',
-              orgId: cData.orgId || 'org-apex',
-              avatar: cData.avatar,
-              password: cData.password
-            };
-          }
-        } catch (_) {}
-      }
-
-      // 6. Check MOCK_USERS
-      if (!matchedRecord) {
-        const matchingMock = MOCK_USERS.find(u => cleanPhone(u.phone) === clean);
-        if (matchingMock) {
-          matchedRecord = {
-            id: matchingMock.id,
-            name: matchingMock.name,
-            phone: `+91 ${clean}`,
-            email: matchingMock.email || virtualEmail,
-            role: requestedRole || matchingMock.role,
-            orgId: matchingMock.orgId,
-            avatar: matchingMock.avatar,
-            password: matchingMock.password || 'teacher123'
-          };
-        }
-      }
-
-      // If matching user was found in any system record:
-      if (matchedRecord) {
-        const expectedPass = (matchedRecord.password || 'teacher123').trim();
-        const isPasswordCorrect = (
-          cleanPass === expectedPass ||
-          cleanPass === 'teacher123' ||
-          cleanPass === 'password123' ||
-          cleanPass === 'admin123'
-        );
-
-        if (isPasswordCorrect) {
-          // Transparently provision/migrate this account into Firebase Auth!
-          try {
-            const cred = await createUserWithEmailAndPassword(auth, virtualEmail, cleanPass);
-            await updateProfile(cred.user, { displayName: matchedRecord.name });
-            setFirebaseUser(cred.user);
-          } catch (_) {}
-
-          const resolvedUser: User = {
-            id: matchedRecord.id,
-            name: matchedRecord.name,
-            phone: matchedRecord.phone,
-            email: matchedRecord.email || virtualEmail,
-            role: matchedRecord.role,
-            orgId: matchedRecord.orgId,
-            avatar: matchedRecord.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(matchedRecord.name)}`
-          };
-
-          const newSession: AuthSession = {
-            token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            user: resolvedUser,
-            orgId: resolvedUser.orgId,
-            createdAt: Date.now(),
-            expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
-            loginMethod: 'phone_password'
-          };
-
-          setSession(newSession);
-          localStorage.setItem('vidyaos_current_org_id', resolvedUser.orgId);
-          setShowLoginModal(false);
-          return { success: true, user: resolvedUser };
-        } else {
-          return { success: false, error: 'Incorrect password for this mobile number. Please try again.' };
-        }
-      }
-
-      // If no account exists for this mobile number anywhere
       const errCode = fbErr?.code;
-      if (errCode === 'auth/wrong-password') {
+      if (errCode === 'auth/wrong-password' || (errCode === 'auth/invalid-credential' && phoneExists)) {
         return { success: false, error: 'Incorrect password for this mobile number. Please try again.' };
       }
+      if (errCode === 'auth/user-not-found' || !phoneExists) {
+        return {
+          success: false,
+          error: `No account found for mobile number +91 ${clean}. Please verify the number or contact your coaching institute admin to register you.`
+        };
+      }
+      if (errCode === 'auth/too-many-requests') {
+        return { success: false, error: 'Access temporarily blocked due to too many failed attempts. Please try again later.' };
+      }
+
       return {
         success: false,
-        error: `No account registered with mobile number +91 ${clean}. Please contact your coaching center admin to register you.`
+        error: fbErr?.message || 'Authentication failed. Please check your credentials.'
       };
     }
   };
@@ -914,63 +786,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalUserId = fbResult.uid;
       }
     } catch (fbErr: any) {
-      console.warn('createSecondaryUser notice (will fallback to local & Firestore):', fbErr);
+      console.warn('createSecondaryUser notice:', fbErr);
     }
 
-    // 2. Immediately cache in local vidyaos_credentials
-    try {
-      const localCreds = JSON.parse(localStorage.getItem('vidyaos_credentials') || '{}');
-      localCreds[clean] = {
-        userId: finalUserId,
-        phone: clean,
-        password: cleanPass,
-        role,
-        name,
-        email: email || virtualEmail,
-        orgId,
-        updatedAt: new Date().toISOString()
-      };
-      localStorage.setItem('vidyaos_credentials', JSON.stringify(localCreds));
-    } catch (_) {}
-
-    // 3. Update vidyaos_teachers in localStorage so teacher record has finalUserId & password
-    try {
-      const storedTeachers = JSON.parse(localStorage.getItem('vidyaos_teachers') || '[]');
-      const updatedTeachers = storedTeachers.map((t: any) => {
-        if (cleanPhone(t.phone) === clean) {
-          return { ...t, userId: finalUserId, password: cleanPass };
-        }
-        return t;
-      });
-      localStorage.setItem('vidyaos_teachers', JSON.stringify(updatedTeachers));
-    } catch (_) {}
-
-    // 4. Persist to Firestore credentials collection
-    try {
-      await setDoc(doc(db, 'credentials', clean), {
-        userId: finalUserId,
-        phone: clean,
-        password: cleanPass,
-        role,
-        name,
-        email: email || virtualEmail,
-        orgId,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    } catch (e) {
-      console.warn('Firestore setDoc credentials error:', e);
-    }
-
-    // 5. Persist to Firestore users collection
+    // 2. Persist user profile to Firestore users collection WITHOUT storing any plaintext password
     try {
       await setDoc(doc(db, 'users', finalUserId), {
         id: finalUserId,
+        uid: finalUserId,
         phone: `+91 ${clean}`,
-        password: cleanPass,
         role,
         name,
         email: email || virtualEmail,
         orgId,
+        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
         createdAt: new Date().toISOString()
       }, { merge: true });
     } catch (e) {

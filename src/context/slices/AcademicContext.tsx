@@ -19,9 +19,16 @@ import {
 import {
   subscribeToTeachers,
   subscribeToExams,
+  subscribeToExamResults,
+  subscribeToAssignments,
   subscribeToStudyMaterials,
   persistTeacherToFirestore,
+  deleteTeacherFromFirestore,
   persistExamToFirestore,
+  deleteExamFromFirestore,
+  persistExamResultsToFirestore,
+  persistAssignmentToFirestore,
+  deleteAssignmentFromFirestore,
   persistStudyMaterialToFirestore,
   deleteStudyMaterialFromFirestore
 } from '../../lib/firestoreService';
@@ -37,8 +44,10 @@ export interface AcademicContextType {
   updateTeacher: (teacherId: string, updates: Partial<Teacher>) => void;
   deleteTeacher: (teacherId: string) => void;
   createExam: (exam: Omit<Exam, 'id' | 'orgId'>) => Exam;
+  deleteExam: (examId: string) => void;
   saveExamResults: (examId: string, marksData: { studentId: string; marksObtained: number; remarks?: string }[]) => void;
   createAssignment: (assign: Omit<Assignment, 'id' | 'orgId' | 'submissions'>) => Assignment;
+  deleteAssignment: (assignId: string) => void;
   addStudyMaterial: (mat: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>) => StudyMaterial;
   deleteStudyMaterial: (matId: string) => void;
 }
@@ -118,6 +127,14 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
       if (data) setExams(data);
     }, targetOrg);
 
+    const unsubResults = subscribeToExamResults(data => {
+      if (data) setExamResults(data);
+    }, targetOrg);
+
+    const unsubAssignments = subscribeToAssignments(data => {
+      if (data) setAssignments(data);
+    }, targetOrg);
+
     const unsubMaterials = subscribeToStudyMaterials(data => {
       if (data) setStudyMaterials(data);
     }, targetOrg);
@@ -125,6 +142,8 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     return () => {
       unsubTeachers();
       unsubExams();
+      unsubResults();
+      unsubAssignments();
       unsubMaterials();
     };
   }, [currentOrg.id, isPlatformOwner]);
@@ -187,6 +206,7 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
 
   const deleteTeacher = (teacherId: string) => {
     setTeachers(prev => prev.filter(t => t.id !== teacherId));
+    deleteTeacherFromFirestore(teacherId);
   };
 
   const createExam = (data: Omit<Exam, 'id' | 'orgId'>): Exam => {
@@ -198,6 +218,11 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     setExams(prev => [newExam, ...prev]);
     persistExamToFirestore(newExam);
     return newExam;
+  };
+
+  const deleteExam = (examId: string) => {
+    setExams(prev => prev.filter(e => e.id !== examId));
+    deleteExamFromFirestore(examId);
   };
 
   const saveExamResults = (examId: string, marksData: { studentId: string; marksObtained: number; remarks?: string }[]) => {
@@ -224,6 +249,7 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     });
 
     setExams(prev => prev.map(e => e.id === examId ? { ...e, status: 'graded' } : e));
+    persistExamResultsToFirestore(examId, newResults, currentOrg.id);
   };
 
   const createAssignment = (data: Omit<Assignment, 'id' | 'orgId' | 'submissions'>): Assignment => {
@@ -234,7 +260,13 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
       submissions: []
     };
     setAssignments(prev => [newAssign, ...prev]);
+    persistAssignmentToFirestore(newAssign);
     return newAssign;
+  };
+
+  const deleteAssignment = (assignId: string) => {
+    setAssignments(prev => prev.filter(a => a.id !== assignId));
+    deleteAssignmentFromFirestore(assignId);
   };
 
   const addStudyMaterial = (data: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>): StudyMaterial => {
@@ -267,8 +299,10 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
         updateTeacher,
         deleteTeacher,
         createExam,
+        deleteExam,
         saveExamResults,
         createAssignment,
+        deleteAssignment,
         addStudyMaterial,
         deleteStudyMaterial
       }}

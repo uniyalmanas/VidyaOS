@@ -446,11 +446,30 @@ export const AdminDashboard: React.FC = () => {
     const assignedPassword = (teacherPassword || 'teacher123').trim();
     const assignedEmail = teacherEmail.trim() || `${teacherName.toLowerCase().replace(/\s+/g, '.')}@${currentOrg.slug}.in`;
 
-    const newTeacher = addTeacher({
+    // 1. Provision Firebase Auth account & Firestore user profile first to obtain primary UID
+    let authUid = `user-${Date.now()}`;
+    try {
+      const createdUserId = await registerUserCredentials(
+        cleanDigits,
+        assignedPassword,
+        'TEACHER',
+        teacherName.trim(),
+        assignedEmail,
+        currentOrg.id
+      );
+      if (createdUserId) {
+        authUid = createdUserId;
+      }
+    } catch (credErr) {
+      console.warn('Teacher credentials registration note:', credErr);
+    }
+
+    // 2. Create teacher document referencing Firebase Auth UID as primary identity (no password stored)
+    addTeacher({
       branchId: currentOrg.branches[0]?.id || 'branch-1',
+      userId: authUid,
       name: teacherName.trim(),
       phone: `+91 ${cleanDigits}`,
-      password: assignedPassword,
       email: assignedEmail,
       qualification: teacherQualification.trim() || 'Graduate / Subject Specialist',
       subjects: teacherSubject.split(',').map(s => s.trim()).filter(Boolean),
@@ -460,30 +479,12 @@ export const AdminDashboard: React.FC = () => {
       status: 'active'
     });
 
-    // Provision teacher credentials so they can log in via phone + password immediately
-    try {
-      const createdUserId = await registerUserCredentials(
-        cleanDigits,
-        assignedPassword,
-        'TEACHER',
-        teacherName.trim(),
-        assignedEmail,
-        currentOrg.id,
-        newTeacher.userId
-      );
-      if (createdUserId && createdUserId !== newTeacher.userId) {
-        updateTeacher(newTeacher.id, { userId: createdUserId });
-      }
-    } catch (credErr) {
-      console.warn('Teacher credentials registration note:', credErr);
-    }
-
     setShowAddTeacherModal(false);
     setTeacherName('');
     setTeacherEmail('');
     setTeacherPhone('');
     setTeacherPassword('teacher123');
-    showToast(`Faculty ${teacherName} added! Teacher can log in with phone & password: "${assignedPassword}"`, 'success');
+    showToast(`Faculty ${teacherName} added! Immediate sign-in available via Mobile (+91 ${cleanDigits}) & Password.`, 'success');
   };
 
   // Dynamic Academic & Center Analytics Calculations

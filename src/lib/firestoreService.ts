@@ -496,9 +496,27 @@ export async function persistBatchToFirestore(batch: Batch): Promise<void> {
 
 export async function persistTeacherToFirestore(teacher: Teacher): Promise<void> {
   try {
-    await setDoc(doc(db, 'teachers', teacher.id), teacher);
+    const safeTeacher = { ...teacher } as any;
+    delete safeTeacher.password;
+    await setDoc(doc(db, 'teachers', teacher.id), safeTeacher);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `teachers/${teacher.id}`);
+  }
+}
+
+export async function deleteTeacherFromFirestore(teacherId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'teachers', teacherId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `teachers/${teacherId}`);
+  }
+}
+
+export async function deleteBatchFromFirestore(batchId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'batches', batchId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `batches/${batchId}`);
   }
 }
 
@@ -510,6 +528,14 @@ export async function persistInvoiceToFirestore(invoice: FeeInvoice): Promise<vo
   }
 }
 
+export async function deleteInvoiceFromFirestore(invoiceId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'invoices', invoiceId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `invoices/${invoiceId}`);
+  }
+}
+
 export async function persistAttendanceToFirestore(record: AttendanceRecord): Promise<void> {
   try {
     await setDoc(doc(db, 'attendance', record.id), record);
@@ -518,11 +544,111 @@ export async function persistAttendanceToFirestore(record: AttendanceRecord): Pr
   }
 }
 
+export async function deleteAttendanceFromFirestore(attId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'attendance', attId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `attendance/${attId}`);
+  }
+}
+
 export async function persistExamToFirestore(exam: Exam): Promise<void> {
   try {
     await setDoc(doc(db, 'exams', exam.id), exam);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `exams/${exam.id}`);
+  }
+}
+
+export async function deleteExamFromFirestore(examId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'exams', examId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `exams/${examId}`);
+  }
+}
+
+export function subscribeToExamResults(onData: (results: ExamResult[]) => void, orgId?: string) {
+  try {
+    const targetRef = orgId
+      ? query(collection(db, 'examResults'), where('orgId', '==', orgId), limit(500))
+      : query(collection(db, 'examResults'), limit(500));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map(d => d.data() as ExamResult);
+          onData(list);
+        } else {
+          onData(MOCK_EXAM_RESULTS);
+        }
+      },
+      (error) => {
+        console.warn('Real-time exam results listener notice:', error.message);
+        onData(MOCK_EXAM_RESULTS);
+      }
+    );
+  } catch (e) {
+    onData(MOCK_EXAM_RESULTS);
+    return () => {};
+  }
+}
+
+export async function persistExamResultsToFirestore(examId: string, results: ExamResult[], orgId?: string): Promise<void> {
+  try {
+    const batch = writeBatch(db);
+    for (const r of results) {
+      const recordWithOrg = orgId ? { ...r, orgId } : r;
+      batch.set(doc(db, 'examResults', r.id), recordWithOrg);
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `examResults/${examId}`);
+  }
+}
+
+export function subscribeToAssignments(onData: (assignments: Assignment[]) => void, orgId?: string) {
+  try {
+    const targetRef = orgId
+      ? query(collection(db, 'assignments'), where('orgId', '==', orgId), limit(150))
+      : query(collection(db, 'assignments'), limit(150));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map(d => d.data() as Assignment);
+          onData(list);
+        } else {
+          const fallback = orgId ? MOCK_ASSIGNMENTS.filter(a => a.orgId === orgId) : MOCK_ASSIGNMENTS;
+          onData(fallback);
+        }
+      },
+      (error) => {
+        console.warn('Real-time assignments listener notice:', error.message);
+        const fallback = orgId ? MOCK_ASSIGNMENTS.filter(a => a.orgId === orgId) : MOCK_ASSIGNMENTS;
+        onData(fallback);
+      }
+    );
+  } catch (e) {
+    const fallback = orgId ? MOCK_ASSIGNMENTS.filter(a => a.orgId === orgId) : MOCK_ASSIGNMENTS;
+    onData(fallback);
+    return () => {};
+  }
+}
+
+export async function persistAssignmentToFirestore(assign: Assignment): Promise<void> {
+  try {
+    await setDoc(doc(db, 'assignments', assign.id), assign);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `assignments/${assign.id}`);
+  }
+}
+
+export async function deleteAssignmentFromFirestore(assignId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'assignments', assignId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `assignments/${assignId}`);
   }
 }
 
@@ -536,7 +662,7 @@ export async function persistOrganizationToFirestore(org: Organization): Promise
 
 export async function persistUserRoleToFirestore(user: User): Promise<void> {
   try {
-    const safeUser = { ...user };
+    const safeUser = { ...user } as any;
     delete safeUser.password;
     await setDoc(doc(db, 'users', user.id), safeUser, { merge: true });
   } catch (error) {
@@ -549,6 +675,14 @@ export async function persistAnnouncementToFirestore(announcement: Announcement)
     await setDoc(doc(db, 'announcements', announcement.id), announcement);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `announcements/${announcement.id}`);
+  }
+}
+
+export async function deleteAnnouncementFromFirestore(annId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'announcements', annId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `announcements/${annId}`);
   }
 }
 
