@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { uploadFileToStorage, db } from '../../lib/firebase';
+import { uploadFileToStorage, db, cleanFirestoreData } from '../../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { User, UserRole, Student, Teacher } from '../../types';
 import {
@@ -107,6 +107,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   if (!isOpen || !activeUser) return null;
 
   // Handle local avatar file selection with client-side compression
+  // Clean phone utility for matching
+  const cleanPhoneDigits = (p?: string) => (p || '').replace(/[^0-9]/g, '').slice(-10);
+
+  // Handle local avatar file selection with high-fidelity client-side square compression
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -119,26 +123,21 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            const maxDim = 256;
-            let width = img.width;
-            let height = img.height;
-            if (width > height) {
-              if (width > maxDim) {
-                height = Math.round((height * maxDim) / width);
-                width = maxDim;
-              }
-            } else {
-              if (height > maxDim) {
-                width = Math.round((width * maxDim) / height);
-                height = maxDim;
-              }
-            }
-            canvas.width = width;
-            canvas.height = height;
+            const targetDim = 160; // 160x160 retina avatar (~4KB-7KB JPEG)
+            
+            // Center-crop to a true square
+            const minSide = Math.min(img.width, img.height);
+            const startX = (img.width - minSide) / 2;
+            const startY = (img.height - minSide) / 2;
+
+            canvas.width = targetDim;
+            canvas.height = targetDim;
             const ctx = canvas.getContext('2d');
             if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              const compressed = canvas.toDataURL('image/jpeg', 0.88);
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, startX, startY, minSide, minSide, 0, 0, targetDim, targetDim);
+              const compressed = canvas.toDataURL('image/jpeg', 0.82);
               setAvatarPreview(compressed);
               setAvatar(compressed);
               return;
@@ -154,6 +153,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         img.src = rawResult;
       };
       reader.readAsDataURL(file);
+      // Reset input value so same file can be re-selected if desired
+      e.target.value = '';
     }
   };
 
@@ -181,15 +182,23 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       if (avatarFile) {
         setUploadingAvatar(true);
         try {
-          const storagePath = `avatars/${activeUser.id}_${Date.now()}_${avatarFile.name.replace(/\s+/g, '_')}`;
-          finalAvatarUrl = await uploadFileToStorage(storagePath, avatarFile, avatarFile.type);
+          const safeName = (avatarFile.name || 'avatar.jpg').replace(/[^a-zA-Z0-9.-]/g, '_');
+          const storagePath = `avatars/${activeUser.id}/${Date.now()}_${safeName}`;
+          finalAvatarUrl = await uploadFileToStorage(storagePath, avatarFile, avatarFile.type || 'image/jpeg');
         } catch (storageErr) {
-          console.warn('Cloud Storage upload skipped/failed; using compressed image data directly:', storageErr);
-          // Fall back gracefully to the compressed data URL from avatarPreview
+          console.warn('Cloud Storage upload skipped/unavailable; using high-fidelity local compressed image directly:', storageErr);
+          // Fall back gracefully to the optimized 160x160 data URL from avatarPreview
           finalAvatarUrl = avatarPreview || avatar;
         } finally {
           setUploadingAvatar(false);
         }
+      }
+
+      // Cache avatar in user-scoped localStorage for instant offline restoration
+      if (finalAvatarUrl) {
+        try {
+          localStorage.setItem(`vidyaos_avatar_${activeUser.id}`, finalAvatarUrl);
+        } catch (_) {}
       }
 
       // Parse subjects array
@@ -198,7 +207,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         .map(s => s.trim())
         .filter(Boolean);
 
-      const updates: Partial<User> = {
+      const rawUpdates: Record<string, any> = {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -217,6 +226,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         dateOfBirth: dateOfBirth || undefined
       };
 
+      const updates: Partial<User> = cleanFirestoreData(rawUpdates);
+
       // If user specified a new password, update via Firebase Auth
       if (password.trim() && password.trim().length >= 6) {
         await updateUserPassword(phone, password.trim());
@@ -229,14 +240,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       } else {
         // Persist directly to Firestore users collection
         try {
-          await setDoc(doc(db, 'users', activeUser.id), { ...activeUser, ...updates }, { merge: true });
+          await setDoc(doc(db, 'users', activeUser.id), cleanFirestoreData({ ...activeUser, ...updates }), { merge: true });
         } catch (e) {
-          console.warn('Direct Firestore users update:', e);
+          console.warn('Direct Firestore users update notice:', e);
         }
       }
 
       // 3. If target is a teacher, keep teacher record synchronized in AppContext & Firestore
-      const linkedTeacher = teachers.find(t => t.id === activeUser.id || t.email === activeUser.email || (t as any).userId === activeUser.id);
+      const targetPhoneClean = cleanPhoneDigits(phone);
+      const linkedTeacher = teachers.find(t => 
+        t.id === activeUser.id || 
+        (t as any).userId === activeUser.id || 
+        (t.email && t.email.toLowerCase() === email.toLowerCase()) ||
+        (t.phone && cleanPhoneDigits(t.phone) === targetPhoneClean)
+      );
       if (linkedTeacher) {
         updateTeacher(linkedTeacher.id, {
           name: name.trim(),
@@ -249,7 +266,11 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       }
 
       // 4. If target is a student, keep student record synchronized in AppContext & Firestore
-      const linkedStudent = students.find(s => s.id === activeUser.id || s.email === activeUser.email);
+      const linkedStudent = students.find(s => 
+        s.id === activeUser.id || 
+        (s.email && s.email.toLowerCase() === email.toLowerCase()) ||
+        (s.phone && cleanPhoneDigits(s.phone) === targetPhoneClean)
+      );
       if (linkedStudent) {
         updateStudent(linkedStudent.id, {
           name: name.trim(),
@@ -265,9 +286,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         });
       }
 
-      showToast('Profile updated successfully across Firestore & Firebase Auth!', 'success');
+      showToast('Profile photo and details updated successfully!', 'success');
       if (onSaved) {
-        onSaved({ ...activeUser, ...updates });
+        onSaved({ ...activeUser, ...updates, avatar: finalAvatarUrl });
       }
       onClose();
     } catch (err: any) {
@@ -488,6 +509,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                   onChange={e => {
                     setAvatar(e.target.value);
                     setAvatarPreview(e.target.value);
+                    setAvatarFile(null);
                   }}
                   className="w-full px-3 py-2 bg-white dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[#202124] dark:text-[#E8EAED] rounded-lg transition"
                 />

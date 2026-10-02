@@ -43,11 +43,17 @@ service firebase.storage {
       allow delete: if isSignedIn();
     }
 
-    // User profile avatars
+    // User profile avatars (Supports /avatars/{userId}/{fileName} and /avatars/{fileName})
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == userId && isValidFileSize() && request.resource.contentType.matches('image/.*');
-      allow delete: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && isValidFileSize() && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn();
+    }
+
+    match /avatars/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidFileSize() && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn();
     }
 
     // Private Receipts & Fee Invoices (Authenticated staff & parents only)

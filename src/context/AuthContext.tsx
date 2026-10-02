@@ -24,7 +24,8 @@ import {
   testFirestoreConnection,
   handleFirestoreError,
   OperationType,
-  FirebaseUser
+  FirebaseUser,
+  cleanFirestoreData
 } from '../lib/firebase';
 
 interface AuthContextType {
@@ -154,12 +155,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const orgId = data.orgId || 'org-apex';
             const displayName = data.name || data.displayName || fbUser.displayName || (role === 'TEACHER' ? 'Faculty Member' : 'VidyaOS User');
 
+            const cachedAvatar = localStorage.getItem(`vidyaos_avatar_${fbUser.uid}`);
             const resolvedUser: User = {
               id: fbUser.uid,
               name: displayName,
               email: data.email || fbUser.email || '',
               phone: data.phone || fbUser.phoneNumber || '',
-              avatar: data.avatar || fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
+              avatar: data.avatar || cachedAvatar || fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
               role,
               orgId,
               branchId: data.branchId,
@@ -542,6 +544,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.orgId) orgId = data.orgId;
         if (data.name) name = data.name;
         if (data.avatar) avatar = data.avatar;
+      }
+
+      if (!avatar) {
+        avatar = localStorage.getItem(`vidyaos_avatar_${fbUser.uid}`) || undefined;
       }
 
       // Check local teachers storage if role/orgId/name missing
@@ -1143,36 +1149,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Update profile with real-time Firebase Auth and Firestore sync
   const updateUserProfile = async (updates: Partial<User>): Promise<{ success: boolean; error?: string }> => {
     if (!session || !currentUser) return { success: false, error: 'No active session found' };
-    const updatedUser: User = { ...currentUser, ...updates };
+    const cleanedUpdates = cleanFirestoreData(updates);
+    const updatedUser: User = { ...currentUser, ...cleanedUpdates };
 
     // Update session state & localStorage
-    setSession({
+    const newSession: AuthSession = {
       ...session,
       orgId: updatedUser.orgId,
       user: updatedUser
-    });
+    };
+    setSession(newSession);
+
+    if (updatedUser.avatar) {
+      try {
+        localStorage.setItem(`vidyaos_avatar_${updatedUser.id}`, updatedUser.avatar);
+      } catch (_) {}
+    }
+
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newSession));
+    } catch (_) {}
 
     if (updatedUser.orgId && updatedUser.orgId !== 'system') {
       localStorage.setItem('vidyaos_current_org_id', updatedUser.orgId);
     }
 
-    // Update Firebase Auth profile if signed in
+    // Update Firebase Auth profile if signed in (only pass photoURL if it's a valid web URL)
     if (auth.currentUser) {
       try {
+        const isHttpUrl = updatedUser.avatar && !updatedUser.avatar.startsWith('data:') && updatedUser.avatar.length < 2000;
+        const authPhotoUrl = isHttpUrl
+          ? updatedUser.avatar
+          : (auth.currentUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(updatedUser.name)}`);
+
         await updateProfile(auth.currentUser, {
           displayName: updatedUser.name,
-          photoURL: updatedUser.avatar || ''
+          photoURL: authPhotoUrl
         });
       } catch (e) {
-        console.warn('Firebase Auth updateProfile:', e);
+        console.warn('Firebase Auth updateProfile warning:', e);
       }
     }
 
-    // Persist to Firestore /users/{uid}
+    // Persist to Firestore /users/{uid} using clean data without undefined properties
     try {
-      await setDoc(doc(db, 'users', updatedUser.id), updatedUser, { merge: true });
+      await setDoc(doc(db, 'users', updatedUser.id), cleanFirestoreData(updatedUser), { merge: true });
     } catch (e) {
-      console.warn('Firestore users update:', e);
+      console.warn('Firestore users update notice:', e);
     }
 
     return { success: true };

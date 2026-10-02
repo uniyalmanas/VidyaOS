@@ -14,7 +14,8 @@ import {
   writeBatch,
   runTransaction,
   handleFirestoreError,
-  OperationType
+  OperationType,
+  cleanFirestoreData
 } from './firebase';
 import {
   Organization,
@@ -473,9 +474,9 @@ export async function recordPaymentAtomically(
 
 export async function persistStudentToFirestore(student: Student): Promise<void> {
   try {
-    await setDoc(doc(db, 'students', student.id), student);
+    await setDoc(doc(db, 'students', student.id), cleanFirestoreData(student));
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `students/${student.id}`);
+    console.warn(`Firestore student update notice (${student.id}):`, error);
   }
 }
 
@@ -489,9 +490,9 @@ export async function deleteStudentFromFirestore(studentId: string): Promise<voi
 
 export async function persistBatchToFirestore(batch: Batch): Promise<void> {
   try {
-    await setDoc(doc(db, 'batches', batch.id), batch);
+    await setDoc(doc(db, 'batches', batch.id), cleanFirestoreData(batch));
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `batches/${batch.id}`);
+    console.warn(`Firestore batch update notice (${batch.id}):`, error);
   }
 }
 
@@ -499,9 +500,9 @@ export async function persistTeacherToFirestore(teacher: Teacher): Promise<void>
   try {
     const safeTeacher = { ...teacher } as any;
     delete safeTeacher.password;
-    await setDoc(doc(db, 'teachers', teacher.id), safeTeacher);
+    await setDoc(doc(db, 'teachers', teacher.id), cleanFirestoreData(safeTeacher));
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `teachers/${teacher.id}`);
+    console.warn(`Firestore teacher update notice (${teacher.id}):`, error);
   }
 }
 

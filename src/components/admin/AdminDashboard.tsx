@@ -3493,6 +3493,7 @@ export const AdminDashboard: React.FC = () => {
           isOpen={!!editingPerson}
           targetUser={editingPerson}
           onClose={() => setEditingPerson(null)}
+          onSaved={() => setEditingPerson(null)}
         />
       )}
     </div>
