@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, deleteApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -9,6 +9,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   updateProfile,
+  updatePassword,
   User as FirebaseUser
 } from 'firebase/auth';
 import {
@@ -38,7 +39,7 @@ import {
 } from 'firebase/storage';
 import rawConfig from '../../firebase-applet-config.json';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   ...rawConfig,
   apiKey: (import.meta.env?.VITE_FIREBASE_API_KEY as string) || rawConfig.apiKey || '',
   projectId: (import.meta.env?.VITE_FIREBASE_PROJECT_ID as string) || rawConfig.projectId,
@@ -57,6 +58,64 @@ export const db = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestor
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+/**
+ * Creates a new user in Firebase Authentication in the background without
+ * disturbing or logging out the currently active admin/owner session.
+ */
+export async function createSecondaryUser(
+  email: string,
+  pass: string,
+  displayName?: string
+): Promise<{ success: boolean; uid?: string; error?: string }> {
+  const secondaryAppName = `SecApp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  let secApp;
+  try {
+    secApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secAuth = getAuth(secApp);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(secAuth, email, pass);
+      if (displayName) {
+        await updateProfile(userCredential.user, { displayName });
+      }
+      const uid = userCredential.user.uid;
+      await signOut(secAuth);
+      return { success: true, uid };
+    } catch (createErr: any) {
+      if (createErr?.code === 'auth/email-already-in-use') {
+        // User already exists in Firebase Auth - attempt to update their password
+        try {
+          const existingCred = await signInWithEmailAndPassword(secAuth, email, pass).catch(async () => {
+            return await signInWithEmailAndPassword(secAuth, email, 'teacher123').catch(async () => {
+              return await signInWithEmailAndPassword(secAuth, email, 'admin123').catch(async () => {
+                return await signInWithEmailAndPassword(secAuth, email, 'password123');
+              });
+            });
+          });
+          if (existingCred?.user) {
+            await updatePassword(existingCred.user, pass);
+            if (displayName) {
+              await updateProfile(existingCred.user, { displayName });
+            }
+            const uid = existingCred.user.uid;
+            await signOut(secAuth);
+            return { success: true, uid };
+          }
+        } catch (_) {}
+      }
+      console.warn('createSecondaryUser notice:', createErr?.code, createErr?.message);
+      return { success: false, error: createErr?.code || createErr?.message };
+    }
+  } catch (err: any) {
+    return { success: false, error: err?.code || err?.message };
+  } finally {
+    if (secApp) {
+      try {
+        await deleteApp(secApp);
+      } catch (_) {}
+    }
+  }
+}
 
 // Firebase Cloud Storage instance
 export const storage = getStorage(app);

@@ -98,6 +98,7 @@ export const AdminDashboard: React.FC = () => {
     addStudent,
     addBatch,
     addTeacher,
+    updateTeacher,
     markAttendance,
     markBatchAllPresent,
     recordPayment,
@@ -449,6 +450,7 @@ export const AdminDashboard: React.FC = () => {
       branchId: currentOrg.branches[0]?.id || 'branch-1',
       name: teacherName.trim(),
       phone: `+91 ${cleanDigits}`,
+      password: assignedPassword,
       email: assignedEmail,
       qualification: teacherQualification.trim() || 'Graduate / Subject Specialist',
       subjects: teacherSubject.split(',').map(s => s.trim()).filter(Boolean),
@@ -460,7 +462,7 @@ export const AdminDashboard: React.FC = () => {
 
     // Provision teacher credentials so they can log in via phone + password immediately
     try {
-      await registerUserCredentials(
+      const createdUserId = await registerUserCredentials(
         cleanDigits,
         assignedPassword,
         'TEACHER',
@@ -469,6 +471,9 @@ export const AdminDashboard: React.FC = () => {
         currentOrg.id,
         newTeacher.userId
       );
+      if (createdUserId && createdUserId !== newTeacher.userId) {
+        updateTeacher(newTeacher.id, { userId: createdUserId });
+      }
     } catch (credErr) {
       console.warn('Teacher credentials registration note:', credErr);
     }

@@ -110,6 +110,7 @@ export interface Teacher {
   userId: string;
   name: string;
   phone: string;
+  password?: string;
   email: string;
   avatar: string;
   qualification: string;
