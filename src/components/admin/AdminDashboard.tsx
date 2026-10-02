@@ -730,54 +730,54 @@ export const AdminDashboard: React.FC = () => {
       {/* 2. OVERVIEW MODULE */}
       {currentModule === 'overview' && (
         <div className="space-y-6">
-          {/* Operational Hub: Aaj Ka Kaam (Google Cloud Operational Banner) */}
-          <div className="bg-white dark:bg-[#1E1F20] border-l-4 border-l-[#FFA000] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 sm:p-5 shadow-xs space-y-4">
+          {/* Operational Hub: Aaj Ka Kaam (Apple HIG Glass / Tactile Operational Banner) */}
+          <div className="bg-white dark:bg-[#1C1C1E] border-l-4 border-l-amber-500 border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-lg bg-[#FFA000]/15 text-[#FFA000] dark:text-[#FFCA28] flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-500 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
                   <Zap className="w-4 h-4 fill-current stroke-[2.5]" />
                 </div>
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h3 className="font-google-sans font-bold text-sm sm:text-base text-[#202124] dark:text-[#E8EAED]">
+                    <h3 className="font-apple-display font-bold text-sm sm:text-base text-slate-900 dark:text-white">
                       Daily Action Center · Aaj Ka Kaam
                     </h3>
                     <StatusChip label="PRIORITY" variant="warning" size="xs" />
                   </div>
-                  <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                  <p className="text-xs text-slate-500 dark:text-neutral-400">
                     Immediate attendance and pending fee recoveries for {currentOrg.name}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 text-xs font-mono text-[#5F6368] dark:text-[#9AA0A6] self-start sm:self-auto bg-[#F8F9FA] dark:bg-[#282A2C] px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043]">
-                <span className="w-2 h-2 rounded-full bg-[#188038] animate-pulse"></span>
-                <span>UPI: <strong className="text-[#202124] dark:text-white">{currentOrg.upiId}</strong></span>
+              <div className="flex items-center space-x-2 text-xs font-mono text-slate-500 dark:text-neutral-400 self-start sm:self-auto bg-black/[0.03] dark:bg-white/[0.04] px-2.5 py-1 rounded-xl border border-black/[0.06] dark:border-white/[0.08]">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>UPI: <strong className="text-slate-900 dark:text-white">{currentOrg.upiId}</strong></span>
               </div>
             </div>
 
             {/* Sub-actions Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
               {/* Batch Attendance Action */}
-              <div className="bg-[#F8F9FA] dark:bg-[#282A2C] p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] flex flex-col justify-between space-y-3">
+              <div className="bg-black/[0.02] dark:bg-[#2C2C2E]/60 p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.08] flex flex-col justify-between space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#188038] dark:text-[#81C995]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                       Batch Attendance Roster
                     </span>
-                    <h4 className="font-bold font-google-sans text-sm text-[#202124] dark:text-[#E8EAED] mt-0.5">
+                    <h4 className="font-bold font-apple-display text-sm text-slate-900 dark:text-white mt-0.5">
                       {todayBatch ? todayBatch.name : 'No batches created yet'}
                     </h4>
-                    <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                    <p className="text-xs text-slate-500 dark:text-neutral-400">
                       {todayBatch
                         ? `${todayBatch.timeSlot} · ${todayBatch.studentIds.length} students enrolled`
                         : 'Set up batches to schedule rosters and track attendance.'}
                     </p>
                   </div>
-                  <Clock className="w-4 h-4 text-[#5F6368] dark:text-[#9AA0A6]" />
+                  <Clock className="w-4 h-4 text-slate-400 dark:text-neutral-500" />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#DADCE0]/60 dark:border-[#3C4043]/60">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
                   {todayBatch ? (
                     <>
                       <ConsoleButton
@@ -793,7 +793,7 @@ export const AdminDashboard: React.FC = () => {
                         <ConsoleButton
                           variant="secondary"
                           size="sm"
-                          icon={<MessageSquare className="w-3.5 h-3.5 text-[#188038]" />}
+                          icon={<MessageSquare className="w-3.5 h-3.5 text-emerald-600" />}
                           onClick={() => handleSendAbsentWhatsApp(todayBatch, todayBatch.studentIds[0])}
                         >
                           Absent WhatsApp Alert
@@ -814,13 +814,13 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {/* Overdue Fee Collection Action */}
-              <div className="bg-[#F8F9FA] dark:bg-[#282A2C] p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] flex flex-col justify-between space-y-3">
+              <div className="bg-black/[0.02] dark:bg-[#2C2C2E]/60 p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.08] flex flex-col justify-between space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#B06000] dark:text-[#FDD663]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                       Monthly Fee Recovery
                     </span>
-                    <h4 className="font-bold font-google-sans text-sm text-[#202124] dark:text-[#E8EAED] mt-0.5">
+                    <h4 className="font-bold font-apple-display text-sm text-slate-900 dark:text-white mt-0.5 tabular-nums">
                       {topDueStudent && topDueInvoice
                         ? `${topDueStudent.name} (Due: ₹${(((topDueInvoice.netAmount ?? 0) - (topDueInvoice.paidAmount ?? 0))).toLocaleString('en-IN')})`
                         : students.length === 0
@@ -829,16 +829,16 @@ export const AdminDashboard: React.FC = () => {
                         ? 'All Monthly Dues Cleared'
                         : 'No pending fee recoveries'}
                     </h4>
-                    <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                    <p className="text-xs text-slate-500 dark:text-neutral-400">
                       {students.length === 0
                         ? 'Enroll students to issue digital UPI fee invoices.'
                         : `${pendingInvoices.length} parents with unpaid fee balances`}
                     </p>
                   </div>
-                  <CreditCard className="w-4 h-4 text-[#FFA000]" />
+                  <CreditCard className="w-4 h-4 text-amber-500" />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#DADCE0]/60 dark:border-[#3C4043]/60">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
                   {topDueInvoice ? (
                     <>
                       <ConsoleButton
@@ -853,7 +853,7 @@ export const AdminDashboard: React.FC = () => {
                       <ConsoleButton
                         variant="secondary"
                         size="sm"
-                        icon={<QrCode className="w-3.5 h-3.5 text-[#188038]" />}
+                        icon={<QrCode className="w-3.5 h-3.5 text-emerald-600" />}
                         onClick={() => setActiveUpiModalInvoice(topDueInvoice)}
                       >
                         Desk QR

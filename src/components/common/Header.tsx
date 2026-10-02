@@ -172,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="bg-white dark:bg-[#1E1F20] border-b border-[#DADCE0] dark:border-[#3C4043] sticky top-0 z-40 h-14 transition-colors duration-150 select-none">
+    <header className="bg-white/90 dark:bg-[#1C1C1E]/90 backdrop-blur-xl border-b border-black/[0.08] dark:border-white/[0.08] sticky top-0 z-40 h-14 transition-colors duration-150 select-none">
       <div className="h-full px-2 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
         {/* Left Section: Sidebar Toggle & Brand (Flex-shrinkable so right profile never gets pushed out) */}
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink">
@@ -181,7 +181,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative group flex-shrink-0">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-1.5 sm:p-2 rounded-xl text-[#202124] dark:text-[#E8EAED] bg-[#F1F3F4] dark:bg-[#282A2C] hover:bg-[#E8EAED] dark:hover:bg-[#3C4043] shadow-2xs transition-all duration-200 cursor-pointer flex items-center justify-center"
+                className="p-1.5 sm:p-2 rounded-xl text-[#1D1D1F] dark:text-[#F5F5F7] bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] shadow-2xs transition-all duration-200 cursor-pointer flex items-center justify-center"
                 aria-label="Open sidebar"
                 title="Open sidebar"
               >
@@ -198,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
           {setSidebarOpen && currentUser.role !== 'CENTER_ADMIN' && currentUser.role !== 'STAFF' && currentUser.role !== 'PLATFORM_OWNER' && (
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer flex-shrink-0"
+              className="md:hidden p-1.5 rounded-lg text-[#86868B] dark:text-[#86868B] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition focus:outline-none cursor-pointer flex-shrink-0"
               title="Toggle navigation"
               aria-label="Toggle navigation"
             >
@@ -217,19 +217,19 @@ export const Header: React.FC<HeaderProps> = ({
             <VidyaLogo size="sm" showBadge={false} />
           </div>
 
-          <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] hidden sm:block mx-0.5 flex-shrink-0" />
+          <div className="h-4 w-px bg-black/[0.08] dark:bg-white/[0.12] hidden sm:block mx-0.5 flex-shrink-0" />
 
           {/* Coaching Center Display: Responsive flexbox shrinking */}
           {isAuthenticated && currentUser.role !== 'PLATFORM_OWNER' ? (
             <div
-              className="flex items-center gap-1.5 px-1.5 sm:px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-left shadow-2xs select-none min-w-0 flex-shrink"
+              className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.06] text-left shadow-2xs select-none min-w-0 flex-shrink"
               title={`Active Coaching Center: ${currentOrg.name}`}
             >
-              <div className="w-5 h-5 rounded bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
+              <div className="w-5 h-5 rounded-lg bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0 shadow-2xs">
                 {currentOrg.logoText.slice(0, 2)}
               </div>
               <div className="max-w-[70px] sm:max-w-[160px] md:max-w-[200px] truncate min-w-0 hidden min-[480px]:block">
-                <span className="text-xs font-semibold font-google-sans text-[#202124] dark:text-[#E8EAED] truncate block leading-tight">
+                <span className="text-xs font-semibold font-apple-text text-[#1D1D1F] dark:text-[#F5F5F7] truncate block leading-tight">
                   {currentOrg.name}
                 </span>
               </div>
@@ -238,24 +238,24 @@ export const Header: React.FC<HeaderProps> = ({
             <div ref={orgDropdownRef} className="relative">
               <button
                 onClick={() => setShowOrgDropdown(!showOrgDropdown)}
-                className="flex items-center space-x-2 px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] hover:bg-[#F1F3F4] dark:hover:bg-[#303134] hover:border-[#BDC1C6] transition text-left cursor-pointer shadow-2xs"
+                className="flex items-center space-x-2 px-2.5 py-1 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] dark:hover:bg-white/[0.1] transition text-left cursor-pointer shadow-2xs"
                 title="Select Coaching Center Workspace"
               >
-                <div className="w-4 h-4 rounded bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0">
+                <div className="w-4 h-4 rounded-lg bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0">
                   {currentOrg.logoText.slice(0, 2)}
                 </div>
                 <div className="max-w-[100px] sm:max-w-[150px] truncate">
-                  <span className="text-xs font-semibold font-google-sans text-[#202124] dark:text-[#E8EAED] truncate block leading-tight">
+                  <span className="text-xs font-semibold font-apple-text text-[#1D1D1F] dark:text-[#F5F5F7] truncate block leading-tight">
                     {currentOrg.name}
                   </span>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-[#5F6368] dark:text-[#9AA0A6] flex-shrink-0" />
+                <ChevronDown className="w-3.5 h-3.5 text-[#86868B] dark:text-[#86868B] flex-shrink-0" />
               </button>
 
               {/* Firebase Project Switcher Dropdown (Super Admin only) */}
               {showOrgDropdown && (
-                <div className="absolute left-0 mt-1.5 w-72 bg-white dark:bg-[#1E1F20] rounded-xl shadow-lg border border-[#DADCE0] dark:border-[#3C4043] p-1.5 z-50 animate-in fade-in slide-in-from-top-1">
-                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#5F6368] dark:text-[#9AA0A6]">
+                <div className="absolute left-0 mt-2 w-72 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-2 z-50 animate-in fade-in slide-in-from-top-1">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
                     Active Centers ({organizations.length})
                   </div>
                   <div className="space-y-0.5 max-h-56 overflow-y-auto custom-scrollbar">
@@ -268,17 +268,17 @@ export const Header: React.FC<HeaderProps> = ({
                             setCurrentOrgId(org.id);
                             setShowOrgDropdown(false);
                           }}
-                          className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition cursor-pointer ${
+                          className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition cursor-pointer ${
                             isSelected
                               ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold'
-                              : 'hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED]'
+                              : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7]'
                           }`}
                         >
                           <div className="truncate">
-                            <div className="text-xs font-medium font-google-sans leading-tight">
+                            <div className="text-xs font-semibold font-apple-text leading-tight">
                               {org.name}
                             </div>
-                            <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                            <div className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">
                               {org.city} · {org.branches.length} Branch · {org.planId.toUpperCase()}
                             </div>
                           </div>
@@ -289,13 +289,13 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
 
                   {onOpenRegister && (
-                    <div className="pt-1.5 mt-1 border-t border-[#DADCE0] dark:border-[#3C4043]">
+                    <div className="pt-1.5 mt-1 border-t border-black/[0.06] dark:border-white/[0.08]">
                       <button
                         onClick={() => {
                           setShowOrgDropdown(false);
                           onOpenRegister();
                         }}
-                        className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 rounded-lg bg-gradient-to-r from-[#FFF8E1] to-[#FFE082] dark:from-[#3E2723] dark:to-[#4E342E] text-[#B06000] dark:text-[#FFD54F] font-bold text-xs hover:shadow-2xs transition cursor-pointer"
+                        className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-gradient-to-r from-[#FFF8E1] to-[#FFE082] dark:from-[#3E2723] dark:to-[#4E342E] text-[#B06000] dark:text-[#FFD54F] font-bold text-xs hover:shadow-2xs transition cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                         <span>+ Register New Center</span>
@@ -306,12 +306,12 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
           ) : (
-            <div className="flex items-center space-x-2 px-2.5 py-1 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-left shadow-2xs select-none">
+            <div className="flex items-center space-x-2 px-2.5 py-1 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.06] text-left shadow-2xs select-none">
               <div className="w-4 h-4 rounded bg-[#FFA000] text-slate-950 text-[9px] font-black flex items-center justify-center flex-shrink-0">
                 {currentOrg.logoText.slice(0, 2)}
               </div>
               <div className="max-w-[120px] sm:max-w-[200px] truncate">
-                <span className="text-xs font-semibold font-google-sans text-[#202124] dark:text-[#E8EAED] truncate block leading-tight">
+                <span className="text-xs font-semibold font-apple-text text-[#1D1D1F] dark:text-[#F5F5F7] truncate block leading-tight">
                   {currentOrg.name}
                 </span>
               </div>
@@ -319,18 +319,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Center: Google Omnibox Search Bar */}
+        {/* Center: Apple-style Omnibox Search Bar */}
         <div ref={searchRef} className="flex-1 max-w-lg mx-2 relative hidden md:block">
           <div
             className={`flex items-center px-3.5 py-1.5 rounded-full transition-all duration-150 border ${
               searchFocused
-                ? 'bg-white dark:bg-[#1E1F20] border-[#FFA000] shadow-sm ring-2 ring-[#FFA000]/25'
-                : 'bg-[#F1F3F4] dark:bg-[#282A2C] border-transparent hover:bg-[#E8EAED] dark:hover:bg-[#333538]'
+                ? 'bg-white dark:bg-[#2C2C2E] border-[#FFA000] shadow-sm ring-2 ring-[#FFA000]/25'
+                : 'bg-black/[0.04] dark:bg-white/[0.06] border-black/[0.06] dark:border-white/[0.08] hover:bg-black/[0.06] dark:hover:bg-white/[0.1]'
             }`}
           >
             <Search
               className={`w-4 h-4 mr-2.5 flex-shrink-0 transition-colors ${
-                searchFocused ? 'text-[#FFA000]' : 'text-[#5F6368] dark:text-[#9AA0A6]'
+                searchFocused ? 'text-[#FFA000]' : 'text-[#86868B]'
               }`}
             />
             <input
@@ -339,7 +339,7 @@ export const Header: React.FC<HeaderProps> = ({
               onChange={e => setSearchQuery(e.target.value)}
               onFocus={() => setSearchFocused(true)}
               placeholder="Search students, batches, fees, teachers..."
-              className="w-full bg-transparent text-xs text-[#202124] dark:text-[#E8EAED] placeholder-[#5F6368] dark:placeholder-[#9AA0A6] focus:outline-none"
+              className="w-full bg-transparent text-xs text-[#1D1D1F] dark:text-[#F5F5F7] placeholder-[#86868B] focus:outline-none font-apple-text"
             />
             {searchQuery && (
               <button
@@ -353,9 +353,9 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Omnibox Search Results Dropdown */}
           {searchFocused && searchResults && (
-            <div className="absolute top-10 left-0 right-0 bg-white dark:bg-[#1E1F20] rounded-xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-2 z-50 max-h-80 overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1">
+            <div className="absolute top-10 left-0 right-0 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-2 z-50 max-h-80 overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1">
               {!searchResults.hasResults ? (
-                <div className="py-6 text-center text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                <div className="py-6 text-center text-xs text-[#86868B]">
                   No matching records found for "{searchQuery}".
                 </div>
               ) : (
@@ -476,25 +476,25 @@ export const Header: React.FC<HeaderProps> = ({
           <div ref={notifDropdownRef} className="relative flex-shrink-0">
             <button
               onClick={() => setShowNotifDropdown(!showNotifDropdown)}
-              className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition relative focus:outline-none cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition relative focus:outline-none cursor-pointer"
               title="Notifications"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#D93025]" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#FF3B30] ring-2 ring-white dark:ring-[#1C1C1E]" />
               )}
             </button>
 
             {showNotifDropdown && (
-              <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-[#1E1F20] rounded-xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-3 z-50 animate-in fade-in slide-in-from-top-1">
-                <div className="flex items-center justify-between pb-2 border-b border-[#DADCE0] dark:border-[#3C4043]">
-                  <span className="text-xs font-bold text-[#202124] dark:text-[#E8EAED]">Notifications</span>
-                  <span className="text-[10px] text-[#1A73E8] dark:text-[#8AB4F8] font-medium cursor-pointer hover:underline">
+              <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-1.5rem)] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-3 z-50 animate-in fade-in slide-in-from-top-1">
+                <div className="flex items-center justify-between pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+                  <span className="text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">Notifications</span>
+                  <span className="text-[10px] text-[#0071E3] dark:text-[#2997FF] font-semibold cursor-pointer hover:underline">
                     Mark all read
                   </span>
                 </div>
-                <div className="divide-y divide-[#DADCE0]/50 dark:divide-[#3C4043] max-h-64 overflow-y-auto mt-1 custom-scrollbar">
+                <div className="divide-y divide-black/[0.04] dark:divide-white/[0.06] max-h-64 overflow-y-auto mt-1 custom-scrollbar">
                   {notifications.map(n => (
                     <div
                       key={n.id}
@@ -507,13 +507,13 @@ export const Header: React.FC<HeaderProps> = ({
                         }
                         setShowNotifDropdown(false);
                       }}
-                      className="py-2 px-1.5 hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] rounded-lg cursor-pointer transition text-xs space-y-0.5"
+                      className="py-2.5 px-2 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] rounded-xl cursor-pointer transition text-xs space-y-0.5"
                     >
-                      <div className="font-semibold text-[#202124] dark:text-[#E8EAED] flex items-center justify-between">
+                      <div className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] flex items-center justify-between">
                         <span>{n.title}</span>
-                        <span className="text-[10px] text-[#80868B] font-normal">{n.timestamp}</span>
+                        <span className="text-[10px] text-[#86868B] font-normal font-apple-text">{n.timestamp}</span>
                       </div>
-                      <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] line-clamp-2">{n.message}</p>
+                      <p className="text-[11px] text-[#86868B] line-clamp-2">{n.message}</p>
                     </div>
                   ))}
                 </div>
@@ -521,7 +521,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          <div className="h-4 w-px bg-[#DADCE0] dark:bg-[#3C4043] mx-0.5" />
+          <div className="h-4 w-px bg-black/[0.08] dark:bg-white/[0.12] mx-0.5" />
 
           {/* User Account Avatar & Dropdown (Always visible and accessible) */}
           <div ref={userDropdownRef} className="relative flex-shrink-0">
@@ -539,35 +539,35 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {showUserDropdown && (
-              <div className="absolute right-0 mt-1.5 w-72 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-[#1E1F20] rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] p-3 z-50 animate-in fade-in slide-in-from-top-1 text-left">
+              <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-3 z-50 animate-in fade-in slide-in-from-top-1 text-left">
                 {/* Account Header */}
-                <div className="flex items-center space-x-3 pb-3 border-b border-[#DADCE0] dark:border-[#3C4043]">
+                <div className="flex items-center space-x-3 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
                   <img
                     src={currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
                     alt={currentUser.name}
-                    className="w-10 h-10 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
+                    className="w-10 h-10 rounded-full object-cover border border-black/[0.08] dark:border-white/[0.1]"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold font-google-sans text-xs text-[#202124] dark:text-[#E8EAED] truncate">
+                    <div className="font-bold font-apple-text text-xs text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
                       {currentUser.name}
                     </div>
-                    <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] truncate font-mono">
+                    <div className="text-[11px] text-[#86868B] truncate font-mono">
                       {currentUser.email}
                     </div>
-                    <div className="text-[10px] font-bold uppercase text-[#E65100] dark:text-[#FFD54F] mt-0.5">
+                    <div className="text-[10px] font-bold uppercase text-[#E65100] dark:text-[#FFD54F] mt-0.5 font-apple-text">
                       {currentUser.role.replace('_', ' ')}
                     </div>
                   </div>
                 </div>
 
                 {/* Edit Profile Button */}
-                <div className="py-2 border-b border-[#DADCE0] dark:border-[#3C4043]">
+                <div className="py-2 border-b border-black/[0.06] dark:border-white/[0.08]">
                   <button
                     onClick={() => {
                       setShowUserDropdown(false);
                       setShowEditProfileModal(true);
                     }}
-                    className="w-full flex items-center justify-center space-x-2 py-1.5 px-3 rounded-lg bg-[#FFF8E1] dark:bg-[#FFA000]/15 border border-[#FFE082] dark:border-[#FFA000]/30 hover:bg-[#FFE082]/60 text-[#B06000] dark:text-[#FFCA28] font-bold text-xs transition cursor-pointer"
+                    className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-xl bg-[#FFF8E1] dark:bg-[#FFA000]/15 border border-[#FFE082] dark:border-[#FFA000]/30 hover:bg-[#FFE082]/60 text-[#B06000] dark:text-[#FFCA28] font-bold text-xs transition cursor-pointer"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
                     <span>Edit Person Profile</span>
@@ -575,8 +575,8 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 {/* Switch Workspace Role Section */}
-                <div className="py-2 border-b border-[#DADCE0] dark:border-[#3C4043]">
-                  <div className="text-[10px] uppercase font-bold text-[#5F6368] dark:text-[#9AA0A6] px-2 mb-1">
+                <div className="py-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+                  <div className="text-[10px] uppercase font-bold text-[#86868B] px-2 mb-1.5 font-apple-text tracking-wider">
                     Switch Active Portal
                   </div>
                   <div className="space-y-0.5">
@@ -600,13 +600,13 @@ export const Header: React.FC<HeaderProps> = ({
                           }
                           setShowUserDropdown(false);
                         }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer flex items-center justify-between ${
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between ${
                           currentUser.role === r.role
                             ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold'
-                            : 'hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED]'
+                            : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7]'
                         }`}
                       >
-                        <span>{r.label}</span>
+                        <span className="font-apple-text">{r.label}</span>
                         {currentUser.role === r.role && <Check className="w-3.5 h-3.5 text-[#FFA000]" />}
                       </button>
                     ))}
@@ -620,9 +620,9 @@ export const Header: React.FC<HeaderProps> = ({
                       setShowUserDropdown(false);
                       setShowEditProfileModal(true);
                     }}
-                    className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] text-xs font-medium text-[#202124] dark:text-[#E8EAED] transition cursor-pointer"
+                    className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] transition cursor-pointer font-apple-text"
                   >
-                    <UserCheck className="w-3.5 h-3.5 text-[#5F6368] dark:text-[#9AA0A6]" />
+                    <UserCheck className="w-3.5 h-3.5 text-[#86868B]" />
                     <span>My Account Settings</span>
                   </button>
 
@@ -631,9 +631,9 @@ export const Header: React.FC<HeaderProps> = ({
                       setShowUserDropdown(false);
                       setShowLoginModal(true);
                     }}
-                    className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] text-xs font-medium text-[#202124] dark:text-[#E8EAED] transition cursor-pointer"
+                    className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] transition cursor-pointer font-apple-text"
                   >
-                    <KeyRound className="w-3.5 h-3.5 text-[#5F6368] dark:text-[#9AA0A6]" />
+                    <KeyRound className="w-3.5 h-3.5 text-[#86868B]" />
                     <span>Switch Profile / Login</span>
                   </button>
 
@@ -643,7 +643,7 @@ export const Header: React.FC<HeaderProps> = ({
                       logout();
                       navigate('/');
                     }}
-                    className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-medium text-[#D93025] dark:text-[#F28B82] transition cursor-pointer"
+                    className="w-full flex items-center space-x-2 px-2.5 py-2 rounded-xl hover:bg-rose-500/10 text-xs font-medium text-[#FF3B30] dark:text-[#FF453A] transition cursor-pointer font-apple-text"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Sign Out</span>

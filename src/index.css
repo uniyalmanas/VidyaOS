@@ -267,6 +267,60 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Safe Area Insets for Mobile/PWA */
+  .pb-safe {
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  }
+  .pt-safe {
+    padding-top: max(16px, env(safe-area-inset-top, 16px));
+  }
+
+  /* High-legibility Tabular Figures */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Premium Glassmorphic Surfaces */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .dark .glass-card {
+    background: rgba(28, 28, 30, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-pill {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .dark .glass-pill {
+    background: rgba(44, 44, 46, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  /* Ergonomic Touch Target (WCAG 2.2 AA) */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Subtle Warm Glow */
+  .glow-saffron {
+    box-shadow: 0 0 24px -4px rgba(255, 107, 0, 0.35);
+  }
+  .glow-indigo {
+    box-shadow: 0 0 24px -4px rgba(99, 102, 241, 0.35);
+  }
 }
 
 @media print {

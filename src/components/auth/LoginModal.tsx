@@ -15,14 +15,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onOpenRegister }) => {
   if (!showLoginModal) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-[#1E1F20] w-full max-w-md rounded-3xl shadow-2xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-md rounded-3xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-white dark:bg-[#1E1F20]">
+        <div className="px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between bg-white dark:bg-[#1C1C1E]">
           <VidyaLogo size="md" badgeText="SIGN IN" subtitle="Coaching & Education Center OS" />
           <button
             onClick={() => setShowLoginModal(false)}
-            className="p-1 rounded-lg text-[#5F6368] hover:text-[#202124] dark:text-[#9AA0A6] dark:hover:text-white transition cursor-pointer"
+            className="p-1 rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -42,9 +42,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onOpenRegister }) => {
         </div>
 
         {/* Security Footer */}
-        <div className="px-6 py-2.5 bg-slate-50 dark:bg-[#282A2C] border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-center space-x-1.5 text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#188038]" />
-          <span>Role-Based Access Control · Firestore Encrypted</span>
+        <div className="px-6 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center space-x-2 text-[11px] text-[#86868B] font-apple-text">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" />
+          <span>Role-Based Multi-Tenant Isolation · Firebase Encrypted</span>
         </div>
       </div>
     </div>

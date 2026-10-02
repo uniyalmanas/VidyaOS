@@ -267,14 +267,14 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-[#1E1F20] w-full max-w-lg rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-lg rounded-3xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-white dark:bg-[#1E1F20]">
+        <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between bg-white dark:bg-[#1C1C1E]">
           <VidyaLogo size="md" badgeText="14-DAY TRIAL" subtitle="Register your coaching center in 60 seconds" />
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-[#5F6368] hover:text-[#202124] dark:text-[#9AA0A6] dark:hover:text-white transition cursor-pointer"
+            className="p-1 rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -283,13 +283,13 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
 
         {success ? (
           <div className="p-8 text-center space-y-3">
-            <div className="w-14 h-14 rounded-full bg-[#E6F4EA] dark:bg-emerald-950/60 text-[#188038] dark:text-[#81C995] mx-auto flex items-center justify-center">
+            <div className="w-14 h-14 rounded-full bg-[#E6F4EA] dark:bg-emerald-950/60 text-[#34C759] dark:text-[#30D158] mx-auto flex items-center justify-center">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+            <h3 className="text-lg font-bold font-apple-text text-[#1D1D1F] dark:text-[#F5F5F7]">
               {centerName || 'Your Coaching Center'} is Live!
             </h3>
-            <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+            <p className="text-xs text-[#86868B] font-apple-text">
               Your isolated coaching console is provisioned. Loading Center Admin Dashboard...
             </p>
           </div>
@@ -298,8 +298,8 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
             {/* 3-Tier Plan Selection */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-[#202124] dark:text-[#E8EAED]">Choose Your VidyaOS Plan</span>
-                <span className="text-[10px] font-bold text-[#188038] dark:text-[#81C995] bg-[#E6F4EA] dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-[#CEEAD6] dark:border-emerald-800/40">
+                <span className="text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">Choose Your VidyaOS Plan</span>
+                <span className="text-[10px] font-bold text-[#34C759] dark:text-[#30D158] bg-[#E6F4EA] dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-[#CEEAD6] dark:border-emerald-800/40">
                   14-Day Free Trial
                 </span>
               </div>
@@ -334,10 +334,10 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
                       key={p.id}
                       type="button"
                       onClick={() => setSelectedPlanId(p.id as any)}
-                      className={`p-2.5 rounded-xl border text-left transition cursor-pointer relative flex flex-col justify-between ${
+                      className={`p-2.5 rounded-2xl border text-left transition cursor-pointer relative flex flex-col justify-between ${
                         isSelected
-                          ? 'border-2 border-[#FFA000] bg-amber-50/50 dark:bg-amber-950/30 shadow-sm'
-                          : 'border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] opacity-75 hover:opacity-100'
+                          ? 'border-2 border-[#FFA000] bg-amber-500/10 dark:bg-amber-500/15 shadow-xs'
+                          : 'border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] opacity-80 hover:opacity-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
                       }`}
                     >
                       {p.popular && (

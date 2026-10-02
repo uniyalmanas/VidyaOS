@@ -165,7 +165,7 @@ export const StudentPortal: React.FC = () => {
       />
 
       {/* Tabs */}
-      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] pb-1 overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
+      <div className="flex items-center space-x-1 border-b border-black/[0.08] dark:border-white/[0.08] pb-1 overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
         {[
           { id: 'schedule', label: 'My Schedule', icon: Clock },
           { id: 'assignments', label: 'Homework & Tasks', icon: BookOpen },
@@ -181,8 +181,8 @@ export const StudentPortal: React.FC = () => {
               onClick={() => handleSelectTab(tab.id)}
               className={`flex items-center space-x-1.5 px-3.5 py-2.5 min-h-[40px] text-xs font-semibold transition cursor-pointer border-b-2 whitespace-nowrap active:scale-95 ${
                 isActive
-                  ? 'border-[#FFA000] text-[#202124] dark:text-white font-bold'
-                  : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+                  ? 'border-[#FFA000] text-[#1D1D1F] dark:text-white font-bold'
+                  : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -203,13 +203,13 @@ export const StudentPortal: React.FC = () => {
               {enrolledBatches.map(b => (
                 <div
                   key={b.id}
-                  className="p-3.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-1 text-xs"
+                  className="p-3.5 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] space-y-1 text-xs"
                 >
-                  <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">{b.name}</div>
-                  <div className="text-[#5F6368] dark:text-[#9AA0A6]">
+                  <div className="font-semibold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">{b.name}</div>
+                  <div className="text-[#86868B] font-apple-text">
                     Schedule: {b.scheduleDays.join(', ')} · {b.timeSlot}
                   </div>
-                  <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">Classroom: {b.classroom}</div>
+                  <div className="text-[11px] text-[#86868B] font-apple-text">Classroom: {b.classroom}</div>
                 </div>
               ))}
             </div>
@@ -225,17 +225,17 @@ export const StudentPortal: React.FC = () => {
                 .map(t => (
                   <div
                     key={t.id}
-                    className="p-3 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20] flex items-center justify-between text-xs"
+                    className="p-3 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1C1C1E] flex items-center justify-between text-xs"
                   >
                     <div>
-                      <span className="font-bold text-[#FFA000] dark:text-[#FFCA28] text-[11px] uppercase tracking-wide">
+                      <span className="font-bold text-[#FFA000] dark:text-[#FFCA28] text-[11px] uppercase tracking-wide font-apple-text">
                         {t.dayOfWeek}
                       </span>
-                      <div className="font-semibold text-[#202124] dark:text-[#E8EAED]">{t.subject}</div>
+                      <div className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">{t.subject}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-mono text-[#5F6368] dark:text-[#9AA0A6]">{t.startTime} - {t.endTime}</div>
-                      <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">{t.classroom}</div>
+                      <div className="font-mono text-[#86868B] tabular-nums">{t.startTime} - {t.endTime}</div>
+                      <div className="text-[10px] text-[#86868B] font-apple-text">{t.classroom}</div>
                     </div>
                   </div>
                 ))}
@@ -256,12 +256,12 @@ export const StudentPortal: React.FC = () => {
               return (
                 <div
                   key={asg.id}
-                  className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex items-center justify-between gap-3 text-xs"
+                  className="p-4 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] flex items-center justify-between gap-3 text-xs"
                 >
                   <div className="space-y-1">
-                    <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">{asg.title}</div>
-                    <p className="text-[#5F6368] dark:text-[#9AA0A6]">{asg.description}</p>
-                    <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
+                    <div className="font-semibold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">{asg.title}</div>
+                    <p className="text-[#86868B] font-apple-text">{asg.description}</p>
+                    <div className="text-[11px] text-[#86868B] font-apple-text">
                       Due: {asg.dueDate} · Subject: {asg.subject}
                     </div>
                   </div>
@@ -269,7 +269,7 @@ export const StudentPortal: React.FC = () => {
                   <ConsoleButton
                     variant={isDone ? 'secondary' : 'primary'}
                     size="xs"
-                    icon={isDone ? <Check className="w-3.5 h-3.5 text-[#188038]" /> : null}
+                    icon={isDone ? <Check className="w-3.5 h-3.5 text-[#34C759] dark:text-[#30D158]" /> : null}
                     onClick={() => handleToggleSubmit(asg.id)}
                   >
                     {isDone ? 'Completed' : 'Mark as Done'}
@@ -293,24 +293,24 @@ export const StudentPortal: React.FC = () => {
               return (
                 <div
                   key={res.id}
-                  className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-2 text-xs"
+                  className="p-4 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] space-y-2 text-xs"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">{exam?.title}</div>
-                      <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">{exam?.subject} · Exam Date: {exam?.examDate}</div>
+                      <div className="font-semibold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">{exam?.title}</div>
+                      <div className="text-[11px] text-[#86868B] font-apple-text">{exam?.subject} · Exam Date: {exam?.examDate}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xl font-bold font-mono text-[#FFA000] dark:text-[#FFCA28]">
+                      <div className="text-xl font-bold font-mono text-[#FFA000] dark:text-[#FFCA28] tabular-nums">
                         {res.marksObtained} / {exam?.maxMarks}
                       </div>
-                      <div className="text-[10px] font-bold text-[#188038] dark:text-[#81C995]">{res.percentage}% Score</div>
+                      <div className="text-[10px] font-bold text-[#34C759] dark:text-[#30D158] tabular-nums">{res.percentage}% Score</div>
                     </div>
                   </div>
-                  <div className="bg-white dark:bg-[#1E1F20] p-2.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between text-[11px]">
-                    <div>Batch Rank: <strong className="text-[#202124] dark:text-[#E8EAED]">#{res.rank}</strong></div>
-                    <div>Percentile: <strong className="text-[#1A73E8] dark:text-[#8AB4F8]">{res.percentile}th</strong></div>
-                    <span className="text-[#5F6368] dark:text-[#9AA0A6] truncate">Faculty: "{res.teacherRemarks}"</span>
+                  <div className="bg-white dark:bg-[#1C1C1E] p-3 rounded-xl border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[11px]">
+                    <div>Batch Rank: <strong className="text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">#{res.rank}</strong></div>
+                    <div>Percentile: <strong className="text-[#0071E3] dark:text-[#2997FF] font-apple-text">{res.percentile}th</strong></div>
+                    <span className="text-[#86868B] truncate font-apple-text">Faculty: "{res.teacherRemarks}"</span>
                   </div>
                 </div>
               );
@@ -329,12 +329,12 @@ export const StudentPortal: React.FC = () => {
             {studentMaterials.map(mat => (
               <div
                 key={mat.id}
-                className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-2 text-xs flex flex-col justify-between"
+                className="p-4 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] space-y-2 text-xs flex flex-col justify-between"
               >
                 <div>
                   <StatusChip label={mat.type} variant="info" size="xs" />
-                  <div className="font-semibold text-[#202124] dark:text-[#E8EAED] text-sm mt-1">{mat.title}</div>
-                  <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">{mat.chapterTopic} · {mat.fileSize}</p>
+                  <div className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] text-sm mt-1 font-apple-text">{mat.title}</div>
+                  <p className="text-[11px] text-[#86868B] mt-0.5 font-apple-text">{mat.chapterTopic} · {mat.fileSize}</p>
                 </div>
 
                 <ConsoleButton

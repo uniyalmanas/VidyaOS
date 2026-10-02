@@ -225,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ? (typeof window !== 'undefined' && window.innerWidth >= 768 ? `${sidebarWidth || 256}px` : undefined)
             : '0px'
         }}
-        className={`bg-white dark:bg-[#1E1F20] border-r border-[#DADCE0] dark:border-[#3C4043] flex flex-col flex-shrink-0 select-none relative ${
+        className={`bg-white dark:bg-[#1C1C1E] border-r border-black/[0.08] dark:border-white/[0.08] flex flex-col flex-shrink-0 select-none relative ${
           isResizing ? 'transition-none select-none' : 'transition-[width,opacity] duration-300 ease-in-out'
         } ${
           isOpen
@@ -258,11 +258,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Mobile Close Button in Drawer Header */}
-        <div className="flex md:hidden items-center justify-between p-2.5 border-b border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C]">
-          <span className="text-xs font-bold text-[#5F6368] dark:text-[#9AA0A6] font-google-sans">NAVIGATION</span>
+        <div className="flex md:hidden items-center justify-between p-3 border-b border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04]">
+          <span className="text-xs font-bold text-[#86868B] font-apple-text tracking-wider">NAVIGATION</span>
           <button
             onClick={onToggle}
-            className="p-1 rounded-lg text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+            className="p-1 rounded-lg text-slate-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.1] transition cursor-pointer"
             aria-label="Close Navigation"
           >
             <X className="w-4 h-4" />
@@ -287,13 +287,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* Group Title */}
               <div className="flex items-center justify-between px-3 py-1">
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-[10px] font-bold tracking-wider text-[#80868B] dark:text-[#9AA0A6] uppercase font-google-sans">
+                  <span className="text-[10px] font-bold tracking-wider text-[#86868B] uppercase font-apple-text">
                     {group.title}
                   </span>
                   {group.title === 'CORE OPERATIONS' && (
                     <button
                       onClick={onToggle}
-                      className="p-1 rounded-md text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] hover:text-[#202124] dark:hover:text-white transition-all cursor-pointer group/toggle inline-flex items-center justify-center"
+                      className="p-1 rounded-md text-[#86868B] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#1D1D1F] dark:hover:text-white transition-all cursor-pointer group/toggle inline-flex items-center justify-center"
                       title="Collapse sidebar"
                       aria-label="Collapse sidebar"
                     >
@@ -321,7 +321,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={`w-full flex items-center transition-all duration-150 relative text-left group cursor-pointer px-3 py-2 rounded-xl space-x-3 text-xs ${
                       isActive
                         ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold shadow-2xs'
-                        : 'text-[#5F6368] dark:text-[#C4C7C5] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] hover:text-[#202124] dark:hover:text-white font-medium'
+                        : 'text-[#86868B] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#1D1D1F] dark:hover:text-white font-medium'
                     }`}
                   >
                     {/* Active Left Indicator Bar */}
@@ -333,22 +333,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className={`w-4 h-4 flex-shrink-0 transition-colors ${
                         isActive
                           ? 'text-[#FFA000]'
-                          : 'text-[#5F6368] dark:text-[#9AA0A6] group-hover:text-[#202124] dark:group-hover:text-white'
+                          : 'text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white'
                       }`}
                     />
 
-                    <span className="flex-1 truncate tracking-tight text-xs font-google-sans">
+                    <span className="flex-1 truncate tracking-tight text-xs font-apple-text">
                       {item.label}
                     </span>
 
                     {item.badge !== undefined && (
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums ${
                           item.badgeColor
                             ? item.badgeColor
                             : isActive
                             ? 'bg-[#FFA000]/25 text-[#B06000] dark:text-[#FFD54F]'
-                            : 'bg-[#F1F3F4] text-[#5F6368] dark:bg-[#3C4043] dark:text-[#9AA0A6]'
+                            : 'bg-black/[0.04] text-[#86868B] dark:bg-white/[0.08] dark:text-[#86868B]'
                         }`}
                       >
                         {item.badge}

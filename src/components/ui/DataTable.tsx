@@ -72,18 +72,18 @@ export function DataTable<T>({
   const currentRows = data.slice(startIndex, endIndex);
 
   return (
-    <div className={`bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl overflow-hidden transition-colors ${className}`}>
+    <div className={`bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl overflow-hidden transition-colors shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] ${className}`}>
       {/* Table Toolbar */}
-      <div className="p-3 sm:p-4 border-b border-[#DADCE0] dark:border-[#3C4043] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#1E1F20]">
+      <div className="p-3 sm:p-4 border-b border-black/[0.06] dark:border-white/[0.08] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-md">
         <div className="flex items-center space-x-2 flex-1 max-w-md">
           <div className="relative w-full">
-            <Search className="w-4 h-4 text-[#5F6368] dark:text-[#9AA0A6] absolute left-3 top-2.5 pointer-events-none" />
+            <Search className="w-4 h-4 text-[#86868B] absolute left-3 top-2.5 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={handleSearch}
               placeholder={searchPlaceholder}
-              className="w-full pl-9 pr-3 py-1.5 text-xs text-[#202124] dark:text-[#E8EAED] bg-[#F1F3F4] dark:bg-[#282A2C] border border-transparent hover:border-[#DADCE0] focus:border-[#FFA000] focus:bg-white dark:focus:bg-[#1E1F20] focus:ring-2 focus:ring-[#FFA000]/20 rounded-lg transition-all focus:outline-none"
+              className="w-full pl-9 pr-3 py-2 text-xs text-[#1D1D1F] dark:text-[#F5F5F7] bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] focus:border-[#FFA000] focus:bg-white dark:focus:bg-[#2C2C2E] focus:ring-2 focus:ring-[#FFA000]/20 rounded-xl transition-all focus:outline-none font-apple-text placeholder-[#86868B]"
             />
           </div>
           {filterComponent}
@@ -100,14 +100,14 @@ export function DataTable<T>({
       <div className="overflow-x-auto custom-scrollbar">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-[#F8F9FA] dark:bg-[#282A2C] border-b border-[#DADCE0] dark:border-[#3C4043] text-[#5F6368] dark:text-[#9AA0A6] uppercase font-google-sans text-[11px] font-bold tracking-wider select-none">
+            <tr className="bg-black/[0.02] dark:bg-white/[0.03] border-b border-black/[0.08] dark:border-white/[0.08] text-[#86868B] uppercase font-apple-text text-[11px] font-bold tracking-wider select-none">
               {columns.map(col => (
                 <th
                   key={col.key}
                   style={{ width: col.width }}
-                  className={`py-3 px-4 ${
+                  className={`py-3.5 px-4 ${
                     col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
-                  } ${col.sortable ? 'cursor-pointer hover:text-[#202124] dark:hover:text-white' : ''}`}
+                  } ${col.sortable ? 'cursor-pointer hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]' : ''}`}
                   onClick={() => col.sortable && handleSort(col.key)}
                 >
                   <div className={`flex items-center space-x-1 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
@@ -120,27 +120,27 @@ export function DataTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#DADCE0] dark:divide-[#3C4043]">
+          <tbody className="divide-y divide-black/[0.06] dark:divide-white/[0.08]">
             {currentRows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="py-12 text-center text-slate-500">
+                <td colSpan={columns.length} className="py-12 text-center text-[#86868B]">
                   {emptyState ? (
                     <div className="max-w-xs mx-auto space-y-2">
                       {emptyState.icon && (
-                        <div className="w-10 h-10 rounded-full bg-[#F1F3F4] dark:bg-[#282A2C] mx-auto flex items-center justify-center text-[#5F6368] dark:text-[#9AA0A6]">
+                        <div className="w-10 h-10 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] mx-auto flex items-center justify-center text-[#86868B]">
                           {emptyState.icon}
                         </div>
                       )}
-                      <h4 className="font-bold text-sm text-[#202124] dark:text-[#E8EAED]">
+                      <h4 className="font-bold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">
                         {emptyState.title}
                       </h4>
-                      <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                      <p className="text-xs text-[#86868B] font-apple-text">
                         {emptyState.description}
                       </p>
                       {emptyState.action && <div className="pt-2">{emptyState.action}</div>}
                     </div>
                   ) : (
-                    <span>No records found.</span>
+                    <span className="font-apple-text">No records found.</span>
                   )}
                 </td>
               </tr>
@@ -153,14 +153,14 @@ export function DataTable<T>({
                     onClick={() => onRowClick && onRowClick(row)}
                     className={`transition-colors duration-100 ${
                       onRowClick ? 'cursor-pointer' : ''
-                    } hover:bg-[#F8F9FA] dark:hover:bg-[#282A2C]/60 text-[#202124] dark:text-[#E8EAED]`}
+                    } hover:bg-black/[0.02] dark:hover:bg-white/[0.04] text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text`}
                   >
                     {columns.map(col => {
                       const val = (row as any)[col.key];
                       return (
                         <td
                           key={col.key}
-                          className={`py-3 px-4 ${
+                          className={`py-3.5 px-4 ${
                             col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                           }`}
                         >
@@ -177,36 +177,36 @@ export function DataTable<T>({
       </div>
 
       {/* Pagination Footer */}
-      <div className="px-4 py-2.5 border-t border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex items-center justify-between text-xs text-[#5F6368] dark:text-[#9AA0A6] font-google-sans">
+      <div className="px-4 py-3 border-t border-black/[0.06] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between text-xs text-[#86868B] font-apple-text tabular-nums">
         <div>
           {totalItems > 0 ? (
             <span>
-              Showing <strong className="text-[#202124] dark:text-white">{startIndex + 1}</strong> to{' '}
-              <strong className="text-[#202124] dark:text-white">{endIndex}</strong> of{' '}
-              <strong className="text-[#202124] dark:text-white">{totalItems}</strong> records
+              Showing <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">{startIndex + 1}</strong> to{' '}
+              <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">{endIndex}</strong> of{' '}
+              <strong className="text-[#1D1D1F] dark:text-[#F5F5F7]">{totalItems}</strong> records
             </span>
           ) : (
             <span>0 records</span>
           )}
         </div>
 
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1.5">
           <button
             onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
             disabled={currentPage <= 1}
-            className="p-1.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] hover:bg-white dark:hover:bg-[#1E1F20] disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="p-1.5 rounded-xl border border-black/[0.08] dark:border-white/[0.1] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
             title="Previous Page"
             aria-label="Previous Page"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-          <span className="px-2 font-medium">
+          <span className="px-2 font-semibold">
             Page {currentPage} of {totalPages}
           </span>
           <button
             onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
             disabled={currentPage >= totalPages}
-            className="p-1.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] hover:bg-white dark:hover:bg-[#1E1F20] disabled:opacity-40 disabled:cursor-not-allowed transition"
+            className="p-1.5 rounded-xl border border-black/[0.08] dark:border-white/[0.1] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
             title="Next Page"
             aria-label="Next Page"
           >

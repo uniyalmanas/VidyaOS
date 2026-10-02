@@ -264,62 +264,62 @@ export const TeacherPortal: React.FC = () => {
         <div className="space-y-6">
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 shadow-2xs">
+            <div className="bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#5F6368] dark:text-[#9AA0A6]">Assigned Batches</span>
-                <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-[#1A73E8] flex items-center justify-center">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider font-apple-text">Assigned Batches</span>
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-[#0071E3] dark:text-[#2997FF] flex items-center justify-center">
                   <BookOpen className="w-3.5 h-3.5" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+              <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
                 {batches.length}
               </div>
-              <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">Active teaching sections</p>
+              <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Active teaching sections</p>
             </div>
 
-            <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 shadow-2xs">
+            <div className="bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#5F6368] dark:text-[#9AA0A6]">Total Students</span>
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-[#188038] flex items-center justify-center">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider font-apple-text">Total Students</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-[#34C759] dark:text-[#30D158] flex items-center justify-center">
                   <Users className="w-3.5 h-3.5" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+              <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
                 {students.length}
               </div>
-              <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">Enrolled under coaching</p>
+              <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Enrolled under coaching</p>
             </div>
 
-            <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 shadow-2xs">
+            <div className="bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#5F6368] dark:text-[#9AA0A6]">Coursework Posted</span>
-                <div className="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider font-apple-text">Coursework Posted</span>
+                <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-[#AF52DE] dark:text-[#BF5AF2] flex items-center justify-center">
                   <Check className="w-3.5 h-3.5" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+              <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
                 {assignments.length}
               </div>
-              <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">Homework assignments</p>
+              <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Homework assignments</p>
             </div>
 
-            <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 shadow-2xs">
+            <div className="bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-[#5F6368] dark:text-[#9AA0A6]">Unit Tests / Exams</span>
-                <div className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-[#FFA000] flex items-center justify-center">
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider font-apple-text">Unit Tests / Exams</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-[#FFA000] dark:text-[#FFCA28] flex items-center justify-center">
                   <Award className="w-3.5 h-3.5" />
                 </div>
               </div>
-              <div className="mt-2 text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+              <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
                 {exams.length}
               </div>
-              <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">Scheduled tests</p>
+              <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Scheduled tests</p>
             </div>
           </div>
 
           {/* Quick-Launch Feature Cards */}
           <div>
-            <h2 className="text-sm font-bold font-google-sans text-[#202124] dark:text-[#E8EAED] mb-3">
+            <h2 className="text-sm font-bold font-apple-text text-[#1D1D1F] dark:text-[#F5F5F7] mb-3">
               Faculty Workspaces & Actions
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -329,25 +329,25 @@ export const TeacherPortal: React.FC = () => {
                   setActiveTab('attendance');
                   navigate('/teacher/attendance');
                 }}
-                className="group p-5 bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] hover:border-[#1A73E8] dark:hover:border-[#8AB4F8] rounded-2xl shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+                className="group p-5 bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] hover:border-[#0071E3] dark:hover:border-[#2997FF] rounded-2xl shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-[#1A73E8] flex items-center justify-center group-hover:scale-105 transition">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-[#0071E3] dark:text-[#2997FF] flex items-center justify-center group-hover:scale-105 transition">
                       <Calendar className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-sm text-[#202124] dark:text-[#E8EAED] group-hover:text-[#1A73E8] transition">
+                      <h3 className="font-bold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#0071E3] dark:group-hover:text-[#2997FF] transition font-apple-text">
                         1-Tap Batch Attendance
                       </h3>
-                      <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                      <p className="text-xs text-[#86868B] mt-0.5 font-apple-text">
                         Mark daily student presence, mark absentees & trigger WhatsApp alerts
                       </p>
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#1A73E8] group-hover:translate-x-1 transition" />
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#0071E3] dark:group-hover:text-[#2997FF] group-hover:translate-x-1 transition" />
                 </div>
-                <div className="mt-4 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between text-[11px] text-[#1A73E8] font-semibold">
+                <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[11px] text-[#0071E3] dark:text-[#2997FF] font-semibold font-apple-text">
                   <span>Open Attendance Register</span>
                   <span>{batches.length} Active Batches →</span>
                 </div>
@@ -359,25 +359,25 @@ export const TeacherPortal: React.FC = () => {
                   setActiveTab('marks');
                   navigate('/teacher/marks');
                 }}
-                className="group p-5 bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] hover:border-[#FFA000] rounded-2xl shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
+                className="group p-5 bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] hover:border-[#FFA000] rounded-2xl shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-[#FFA000] flex items-center justify-center group-hover:scale-105 transition">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-[#FFA000] flex items-center justify-center group-hover:scale-105 transition">
                       <Award className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-sm text-[#202124] dark:text-[#E8EAED] group-hover:text-[#FFA000] transition">
+                      <h3 className="font-bold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] group-hover:text-[#FFA000] transition font-apple-text">
                         Enter Exam & Test Marks
                       </h3>
-                      <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                      <p className="text-xs text-[#86868B] mt-0.5 font-apple-text">
                         Record diagnostic test scores, compute percentiles, and analyze ranks
                       </p>
                     </div>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#FFA000] group-hover:translate-x-1 transition" />
                 </div>
-                <div className="mt-4 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between text-[11px] text-[#FFA000] font-semibold">
+                <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[11px] text-[#FFA000] font-semibold font-apple-text">
                   <span>Evaluate Marks</span>
                   <span>{exams.length} Diagnostic Tests →</span>
                 </div>
@@ -512,10 +512,10 @@ export const TeacherPortal: React.FC = () => {
               <select
                 value={selectedBatchId}
                 onChange={e => setSelectedBatchId(e.target.value)}
-                className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#202124] dark:text-[#E8EAED] min-h-[36px]"
+                className="bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] min-h-[38px] font-apple-text cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
               >
                 {batches.map(b => (
-                  <option key={b.id} value={b.id}>
+                  <option key={b.id} value={b.id} className="dark:bg-[#1C1C1E]">
                     {b.name} ({b.studentIds.length} students)
                   </option>
                 ))}
@@ -525,7 +525,7 @@ export const TeacherPortal: React.FC = () => {
                 type="date"
                 value={attendanceDate}
                 onChange={e => setAttendanceDate(e.target.value)}
-                className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2 py-1.5 text-xs text-[#202124] dark:text-[#E8EAED] min-h-[36px]"
+                className="bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] min-h-[38px] font-apple-text focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
               />
 
               <ConsoleButton
@@ -540,7 +540,7 @@ export const TeacherPortal: React.FC = () => {
           }
         >
           {/* Student Roster Cards */}
-          <div className="divide-y divide-[#DADCE0]/60 dark:divide-[#3C4043]">
+          <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08]">
             {batchStudents.map(student => {
               const rec = attendanceRecords.find(
                 a => a.batchId === activeBatch.id && a.studentId === student.id && a.date === attendanceDate
@@ -556,20 +556,20 @@ export const TeacherPortal: React.FC = () => {
                     <img
                       src={student.avatar}
                       alt={student.name}
-                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043] flex-shrink-0"
+                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border border-black/[0.08] dark:border-white/[0.1] flex-shrink-0"
                     />
                     <div className="min-w-0">
-                      <div className="font-bold text-xs sm:text-sm text-[#202124] dark:text-[#E8EAED] truncate">{student.name}</div>
-                      <div className="text-[10px] sm:text-xs text-[#5F6368] dark:text-[#9AA0A6]">Roll: {student.rollNo}</div>
+                      <div className="font-bold text-xs sm:text-sm text-[#1D1D1F] dark:text-[#F5F5F7] truncate font-apple-text">{student.name}</div>
+                      <div className="text-[10px] sm:text-xs text-[#86868B] font-apple-text">Roll: {student.rollNo}</div>
                     </div>
                   </div>
 
                   {/* Quick Toggle Status Buttons (Touch ergonomic 44px min targets) */}
-                  <div className="flex items-center space-x-1 sm:space-x-1.5 flex-shrink-0">
+                  <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">
                     {[
-                      { status: 'present', label: 'P', title: 'Present', activeBg: 'bg-[#188038] text-white shadow-xs' },
-                      { status: 'absent', label: 'A', title: 'Absent', activeBg: 'bg-[#D93025] text-white shadow-xs' },
-                      { status: 'late', label: 'L', title: 'Late', activeBg: 'bg-[#FFA000] text-white shadow-xs' }
+                      { status: 'present', label: 'P', title: 'Present', activeBg: 'bg-[#34C759] text-white shadow-xs ring-2 ring-[#34C759]/40' },
+                      { status: 'absent', label: 'A', title: 'Absent', activeBg: 'bg-[#FF3B30] text-white shadow-xs ring-2 ring-[#FF3B30]/40' },
+                      { status: 'late', label: 'L', title: 'Late', activeBg: 'bg-[#FF9F0A] text-white shadow-xs ring-2 ring-[#FF9F0A]/40' }
                     ].map(btn => {
                       const isSelected = currentStatus === btn.status;
                       return (
@@ -577,10 +577,10 @@ export const TeacherPortal: React.FC = () => {
                           key={btn.status}
                           onClick={() => handleStatusChange(student.id, btn.status as any)}
                           title={`Mark ${btn.title}`}
-                          className={`w-10 h-10 sm:w-11 sm:h-10 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer active:scale-90 flex items-center justify-center ${
+                          className={`w-11 h-11 sm:w-12 sm:h-11 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer active:scale-90 flex items-center justify-center touch-target ${
                             isSelected
                               ? `${btn.activeBg} font-black`
-                              : 'bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#E8EAED] dark:hover:bg-[#3C4043]'
+                              : 'bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.06] dark:hover:bg-white/[0.1]'
                           }`}
                         >
                           {btn.label}

@@ -190,8 +190,8 @@ export const ParentPortal: React.FC = () => {
             >
               Profile
             </ConsoleButton>
-            <div className="flex items-center space-x-1.5 bg-[#F1F3F4] dark:bg-[#282A2C] p-1 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] overflow-x-auto max-w-full">
-              <span className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] font-medium px-1.5 hidden xs:inline">Child:</span>
+            <div className="flex items-center space-x-1.5 bg-black/[0.04] dark:bg-white/[0.06] p-1 rounded-xl border border-black/[0.08] dark:border-white/[0.08] overflow-x-auto max-w-full">
+              <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-medium px-1.5 hidden xs:inline">Child:</span>
               {parentLinkedChildren.map(child => {
                 const isSelected = child.id === selectedChildId;
                 return (
@@ -200,14 +200,14 @@ export const ParentPortal: React.FC = () => {
                     onClick={() => setSelectedChildId(child.id)}
                     className={`flex items-center space-x-1.5 px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-semibold transition cursor-pointer active:scale-95 ${
                       isSelected
-                        ? 'bg-white dark:bg-[#1E1F20] text-[#FFA000] dark:text-[#FFCA28] shadow-xs'
-                        : 'text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+                        ? 'bg-white dark:bg-[#1C1C1E] text-amber-600 dark:text-amber-400 shadow-xs border border-black/[0.06] dark:border-white/[0.08]'
+                        : 'text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     <img
                       src={child.avatar}
                       alt={child.name}
-                      className="w-5 h-5 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
+                      className="w-5 h-5 rounded-full object-cover border border-black/[0.08] dark:border-white/[0.08]"
                     />
                     <span className="truncate max-w-[90px]">{child.name.split(' ')[0]}</span>
                   </button>
@@ -219,7 +219,7 @@ export const ParentPortal: React.FC = () => {
       />
 
       {/* Navigation Sub-Tabs (Scrollable with sticky touch UX) */}
-      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] overflow-x-auto custom-scrollbar pb-1 -mx-2 px-2 sm:mx-0 sm:px-0">
+      <div className="flex items-center space-x-1 border-b border-black/[0.08] dark:border-white/[0.08] overflow-x-auto custom-scrollbar pb-1 -mx-2 px-2 sm:mx-0 sm:px-0">
         {[
           { id: 'overview', label: 'Summary', icon: TrendingUp },
           { id: 'attendance', label: `Attendance (${attendanceRate}%)`, icon: Calendar },
@@ -237,8 +237,8 @@ export const ParentPortal: React.FC = () => {
               onClick={() => handleSelectTab(tab.id)}
               className={`flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold transition flex-shrink-0 cursor-pointer border-b-2 ${
                 isActive
-                  ? 'border-[#FFA000] text-[#202124] dark:text-white font-bold'
-                  : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+                  ? 'border-amber-500 text-slate-900 dark:text-white font-bold'
+                  : 'border-transparent text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -296,18 +296,18 @@ export const ParentPortal: React.FC = () => {
 
           {/* Pending Fee Callout Banner if applicable */}
           {pendingInvoices.length > 0 && (
-            <div className="bg-white dark:bg-[#1E1F20] border-l-4 border-l-[#FFA000] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="bg-white dark:bg-[#1C1C1E] border-l-4 border-l-amber-500 border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
               <div>
                 <div className="flex items-center space-x-2">
                   <StatusChip label="PAYMENT DUE" variant="warning" size="xs" />
-                  <span className="text-xs font-semibold text-[#5F6368] dark:text-[#9AA0A6]">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-neutral-400">
                     Due Date: {pendingInvoices[0].dueDate}
                   </span>
                 </div>
-                <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED] mt-1">
+                <h3 className="font-apple-display font-bold text-base text-slate-900 dark:text-white mt-1 tabular-nums">
                   Coaching Fee Due: ₹{(totalPendingFee ?? 0).toLocaleString('en-IN')}
                 </h3>
-                <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                <p className="text-xs text-slate-500 dark:text-neutral-400">
                   {pendingInvoices[0].title} · Instant digital fee receipt generated upon payment
                 </p>
               </div>
@@ -334,11 +334,11 @@ export const ParentPortal: React.FC = () => {
                 {childBatches.map(b => (
                   <div
                     key={b.id}
-                    className="p-3 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex items-center justify-between text-xs"
+                    className="p-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">{b.name}</div>
-                      <div className="text-[#5F6368] dark:text-[#9AA0A6]">
+                      <div className="font-semibold text-sm text-slate-900 dark:text-white">{b.name}</div>
+                      <div className="text-slate-500 dark:text-neutral-400">
                         {b.timeSlot} · {b.classroom}
                       </div>
                     </div>
@@ -358,15 +358,15 @@ export const ParentPortal: React.FC = () => {
                 {announcements.slice(0, 2).map(ann => (
                   <div
                     key={ann.id}
-                    className="p-3 rounded-lg bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] space-y-1 text-xs"
+                    className="p-3.5 rounded-xl bg-black/[0.02] dark:bg-white/[0.03] border border-black/[0.08] dark:border-white/[0.08] space-y-1 text-xs"
                   >
-                    <div className="font-semibold text-[#202124] dark:text-[#E8EAED] flex items-center justify-between">
+                    <div className="font-semibold text-slate-900 dark:text-white flex items-center justify-between">
                       <span>{ann.title}</span>
                       {ann.priority === 'urgent' && (
                         <StatusChip label="Urgent" variant="error" size="xs" />
                       )}
                     </div>
-                    <p className="text-[#5F6368] dark:text-[#9AA0A6] line-clamp-2 leading-relaxed">
+                    <p className="text-slate-500 dark:text-neutral-400 line-clamp-2 leading-relaxed">
                       {ann.content}
                     </p>
                   </div>
@@ -382,7 +382,7 @@ export const ParentPortal: React.FC = () => {
             icon={<MessageCircle className="w-4 h-4" />}
           >
             <div className="space-y-3 text-xs">
-              <p className="text-[#5F6368] dark:text-[#9AA0A6]">
+              <p className="text-slate-500 dark:text-neutral-400">
                 Need to inform about an upcoming leave, doubt, or fee inquiry? Send an official message directly to the institute desk:
               </p>
               <div className="flex gap-2">
@@ -391,7 +391,7 @@ export const ParentPortal: React.FC = () => {
                   value={directMsgText}
                   onChange={e => setDirectMsgText(e.target.value)}
                   placeholder="e.g. Rahul will be 15 mins late today due to school function..."
-                  className="flex-1 text-xs px-3 py-2 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
+                  className="flex-1 text-xs px-3.5 py-2.5 rounded-xl border border-black/[0.1] dark:border-white/[0.1] bg-white dark:bg-[#1C1C1E] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                 />
                 <ConsoleButton
                   variant="primary"
@@ -402,7 +402,7 @@ export const ParentPortal: React.FC = () => {
                 </ConsoleButton>
               </div>
               {msgSentNotice && (
-                <p className="text-[11px] text-[#188038] dark:text-[#81C995] font-semibold flex items-center gap-1">
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Message dispatched to institute administrator.
                 </p>
@@ -421,18 +421,18 @@ export const ParentPortal: React.FC = () => {
             <StatusChip label={`${attendanceRate}% OVERALL`} variant={attendanceRate >= 80 ? 'success' : 'warning'} size="xs" />
           }
         >
-          <div className="divide-y divide-[#DADCE0]/60 dark:divide-[#3C4043]">
+          <div className="divide-y divide-black/[0.06] dark:divide-white/[0.08]">
             {childAttendance.map(rec => {
               const batch = batches.find(b => b.id === rec.batchId);
               return (
                 <div key={rec.id} className="py-3 flex items-center justify-between text-xs">
                   <div className="space-y-0.5">
-                    <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">
+                    <div className="font-semibold text-sm text-slate-900 dark:text-white">
                       {batch?.name || 'Class Session'}
                     </div>
-                    <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">Date: {rec.date}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-neutral-400">Date: {rec.date}</div>
                     {rec.remarks && (
-                      <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] italic">Teacher remark: "{rec.remarks}"</p>
+                      <p className="text-[11px] text-slate-500 dark:text-neutral-400 italic">Teacher remark: "{rec.remarks}"</p>
                     )}
                   </div>
                   <div>
@@ -459,7 +459,7 @@ export const ParentPortal: React.FC = () => {
           title="Fee Ledger & Payment Receipts"
           subtitle="Monthly fees, admission receipts & online UPI payments"
           action={
-            <span className="text-xs font-mono font-bold text-[#202124] dark:text-white">
+            <span className="text-xs font-mono font-bold text-slate-900 dark:text-white tabular-nums">
               Total Pending: ₹{(totalPendingFee ?? 0).toLocaleString('en-IN')}
             </span>
           }
@@ -470,30 +470,30 @@ export const ParentPortal: React.FC = () => {
               return (
                 <div
                   key={inv.id}
-                  className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  className="p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-[#1C1C1E] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
-                      <span className="font-bold text-sm text-[#202124] dark:text-[#E8EAED]">{inv.monthYear}</span>
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">{inv.monthYear}</span>
                       <StatusChip
                         label={inv.status.replace('_', ' ')}
                         variant={isPaid ? 'success' : 'warning'}
                         size="xs"
                       />
                     </div>
-                    <p className="text-[#5F6368] dark:text-[#9AA0A6]">{inv.title}</p>
-                    <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
+                    <p className="text-slate-500 dark:text-neutral-400">{inv.title}</p>
+                    <div className="text-[11px] text-slate-500 dark:text-neutral-400">
                       Invoice No: <span className="font-mono">{inv.invoiceNo}</span> · Due Date: {inv.dueDate}
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-3 justify-between sm:justify-end">
                     <div className="text-right">
-                      <div className="font-mono font-bold text-sm text-[#202124] dark:text-[#E8EAED]">
+                      <div className="font-mono font-bold text-sm text-slate-900 dark:text-white tabular-nums">
                         ₹{(inv.paidAmount ?? 0).toLocaleString('en-IN')} / ₹{(inv.netAmount ?? 0).toLocaleString('en-IN')}
                       </div>
                       {((inv.netAmount ?? 0) - (inv.paidAmount ?? 0)) > 0 && (
-                        <div className="text-[10px] text-[#D93025] dark:text-[#F28B82] font-bold">
+                        <div className="text-[10px] text-rose-600 dark:text-rose-400 font-bold tabular-nums">
                           Balance: ₹{(((inv.netAmount ?? 0) - (inv.paidAmount ?? 0))).toLocaleString('en-IN')}
                         </div>
                       )}
@@ -540,25 +540,25 @@ export const ParentPortal: React.FC = () => {
               return (
                 <div
                   key={res.id}
-                  className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-2 text-xs"
+                  className="p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-[#1C1C1E] space-y-2 text-xs"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-bold text-sm text-[#202124] dark:text-[#E8EAED]">{exam?.title || 'Subject Test'}</span>
-                      <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">{exam?.subject} · Exam Date: {exam?.examDate}</p>
+                      <span className="font-bold text-sm text-slate-900 dark:text-white">{exam?.title || 'Subject Test'}</span>
+                      <p className="text-[11px] text-slate-500 dark:text-neutral-400">{exam?.subject} · Exam Date: {exam?.examDate}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-xl font-bold font-mono text-[#1A73E8] dark:text-[#8AB4F8]">
-                        {res.marksObtained} <span className="text-xs font-normal text-[#5F6368]">/ {exam?.maxMarks || 50}</span>
+                      <span className="text-xl font-bold font-mono text-indigo-600 dark:text-indigo-400 tabular-nums">
+                        {res.marksObtained} <span className="text-xs font-normal text-slate-500">/ {exam?.maxMarks || 50}</span>
                       </span>
-                      <div className="text-[10px] font-bold text-[#188038] dark:text-[#81C995]">{res.percentage}% Score</div>
+                      <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{res.percentage}% Score</div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-4 bg-white dark:bg-[#1E1F20] p-2.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] text-[11px]">
-                    <div>Batch Rank: <strong className="text-[#202124] dark:text-[#E8EAED]">#{res.rank || 1}</strong></div>
-                    <div>Percentile: <strong className="text-[#1A73E8] dark:text-[#8AB4F8]">{res.percentile || 90}th</strong></div>
-                    <div className="text-[#5F6368] dark:text-[#9AA0A6] truncate">Feedback: "{res.teacherRemarks}"</div>
+                  <div className="flex items-center space-x-4 bg-white dark:bg-[#2C2C2E] p-2.5 rounded-lg border border-black/[0.06] dark:border-white/[0.08] text-[11px]">
+                    <div>Batch Rank: <strong className="text-slate-900 dark:text-white">#{res.rank || 1}</strong></div>
+                    <div>Percentile: <strong className="text-indigo-600 dark:text-indigo-400">{res.percentile || 90}th</strong></div>
+                    <div className="text-slate-500 dark:text-neutral-400 truncate">Feedback: "{res.teacherRemarks}"</div>
                   </div>
                 </div>
               );
@@ -579,14 +579,14 @@ export const ParentPortal: React.FC = () => {
               .map(slot => (
                 <div
                   key={slot.id}
-                  className="p-3.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-1 text-xs"
+                  className="p-3.5 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-[#1C1C1E] space-y-1 text-xs"
                 >
-                  <div className="font-bold text-[#FFA000] dark:text-[#FFCA28] text-[11px] uppercase tracking-wider">
+                  <div className="font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wider">
                     {slot.dayOfWeek}
                   </div>
-                  <div className="font-bold text-[#202124] dark:text-[#E8EAED]">{slot.subject}</div>
-                  <div className="text-[#5F6368] dark:text-[#9AA0A6]">{slot.startTime} - {slot.endTime}</div>
-                  <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">{slot.classroom}</div>
+                  <div className="font-bold text-slate-900 dark:text-white">{slot.subject}</div>
+                  <div className="text-slate-500 dark:text-neutral-400 tabular-nums">{slot.startTime} - {slot.endTime}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-neutral-400">{slot.classroom}</div>
                 </div>
               ))}
           </div>
@@ -606,12 +606,12 @@ export const ParentPortal: React.FC = () => {
               return (
                 <div
                   key={asg.id}
-                  className="p-3 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex items-center justify-between text-xs"
+                  className="p-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-[#1C1C1E] flex items-center justify-between text-xs"
                 >
                   <div>
-                    <div className="font-bold text-[#202124] dark:text-[#E8EAED]">{asg.title}</div>
-                    <div className="text-[#5F6368] dark:text-[#9AA0A6]">{asg.subject} · Due: {asg.dueDate}</div>
-                    {sub?.feedback && <p className="text-[11px] text-[#188038] dark:text-[#81C995]">Teacher: "{sub.feedback}"</p>}
+                    <div className="font-bold text-slate-900 dark:text-white">{asg.title}</div>
+                    <div className="text-slate-500 dark:text-neutral-400">{asg.subject} · Due: {asg.dueDate}</div>
+                    {sub?.feedback && <p className="text-[11px] text-emerald-600 dark:text-emerald-400">Teacher: "{sub.feedback}"</p>}
                   </div>
                   <StatusChip
                     label={isSubmitted ? 'Submitted' : 'Pending'}
@@ -643,8 +643,8 @@ export const ParentPortal: React.FC = () => {
   // If mobile view mode is toggled, wrap in authentic smartphone frame
   if (mobileViewActive) {
     return (
-      <div className="py-6 flex justify-center bg-slate-100 dark:bg-slate-950 min-h-screen">
-        <div className="w-full max-w-md bg-white dark:bg-[#1E1F20] rounded-3xl shadow-2xl border-4 border-slate-800 overflow-hidden flex flex-col">
+      <div className="py-6 flex justify-center bg-slate-100 dark:bg-black min-h-screen">
+        <div className="w-full max-w-md bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-2xl border-4 border-slate-800 overflow-hidden flex flex-col">
           {/* Phone Speaker & Camera notch */}
           <div className="bg-slate-900 px-6 py-2 flex items-center justify-between text-[11px] text-white font-mono">
             <span>9:41</span>
@@ -653,7 +653,7 @@ export const ParentPortal: React.FC = () => {
           </div>
 
           {/* App title bar */}
-          <div className="bg-[#1A73E8] text-white p-3 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-3 flex items-center justify-between">
             <div className="font-bold text-xs flex items-center gap-1.5">
               <span>{currentOrg.name}</span>
             </div>
