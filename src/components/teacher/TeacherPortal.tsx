@@ -225,7 +225,7 @@ export const TeacherPortal: React.FC = () => {
       )}
 
       {/* Sub Tabs */}
-      <div className="flex items-center space-x-1 border-b border-[#DADCE0] dark:border-[#3C4043] pb-1 overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
+      <div className="flex items-center space-x-1 border-b border-black/[0.08] dark:border-white/[0.08] pb-1 overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0 font-apple-text">
         {[
           { id: 'overview', label: 'Faculty Console', icon: LayoutDashboard },
           { id: 'attendance', label: '1-Tap Attendance', icon: Calendar },
@@ -248,8 +248,8 @@ export const TeacherPortal: React.FC = () => {
               }}
               className={`flex items-center space-x-1.5 px-3.5 py-2.5 min-h-[40px] text-xs font-semibold transition cursor-pointer border-b-2 whitespace-nowrap active:scale-95 ${
                 isActive
-                  ? 'border-[#FFA000] text-[#202124] dark:text-white font-bold'
-                  : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+                  ? 'border-[#FFA000] text-[#1D1D1F] dark:text-[#F5F5F7] font-bold'
+                  : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
               }`}
             >
               <Icon className="w-3.5 h-3.5 flex-shrink-0" />

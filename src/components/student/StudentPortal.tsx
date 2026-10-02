@@ -181,8 +181,8 @@ export const StudentPortal: React.FC = () => {
               onClick={() => handleSelectTab(tab.id)}
               className={`flex items-center space-x-1.5 px-3.5 py-2.5 min-h-[40px] text-xs font-semibold transition cursor-pointer border-b-2 whitespace-nowrap active:scale-95 ${
                 isActive
-                  ? 'border-[#FFA000] text-[#1D1D1F] dark:text-white font-bold'
-                  : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white'
+                  ? 'border-[#FFA000] text-[#1D1D1F] dark:text-[#F5F5F7] font-bold'
+                  : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
               }`}
             >
               <Icon className="w-3.5 h-3.5 flex-shrink-0" />

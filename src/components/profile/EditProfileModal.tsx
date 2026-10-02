@@ -301,20 +301,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-[#1E1F20] w-full max-w-xl rounded-2xl shadow-2xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto font-apple-text">
+      <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-xl rounded-3xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-white dark:bg-[#1E1F20]">
+        <div className="px-6 py-4 border-b border-black/[0.08] dark:border-white/[0.08] flex items-center justify-between bg-white dark:bg-[#1C1C1E]">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-[#FFF8E1] dark:bg-[#FFA000]/15 border border-[#FFE082] dark:border-[#FFA000]/30 flex items-center justify-center text-[#FFA000]">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#FFA000]">
               <UserIcon className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED] leading-tight">
+              <h3 className="font-apple-display font-semibold text-base text-[#1D1D1F] dark:text-[#F5F5F7] leading-tight">
                 Edit Person Profile
               </h3>
-              <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+              <p className="text-xs text-[#86868B]">
                 Manage contact details, profile photo, and role attributes
               </p>
             </div>
@@ -322,7 +322,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-[#5F6368] hover:text-[#202124] dark:text-[#9AA0A6] dark:hover:text-white transition cursor-pointer"
+            className="p-1.5 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition cursor-pointer"
             title="Close"
           >
             <X className="w-4 h-4" />
@@ -330,14 +330,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] text-xs font-semibold px-6 pt-2">
+        <div className="flex border-b border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.02] text-xs font-semibold px-6 pt-2">
           <button
             type="button"
             onClick={() => setActiveTab('general')}
             className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'general'
-                ? 'border-[#FFA000] text-[#202124] dark:text-[#E8EAED] font-bold'
-                : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124]'
+                ? 'border-[#FFA000] text-[#1D1D1F] dark:text-[#F5F5F7] font-bold'
+                : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
             }`}
           >
             <UserIcon className="w-3.5 h-3.5" />
@@ -349,8 +349,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
             onClick={() => setActiveTab('role_details')}
             className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'role_details'
-                ? 'border-[#FFA000] text-[#202124] dark:text-[#E8EAED] font-bold'
-                : 'border-transparent text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124]'
+                ? 'border-[#FFA000] text-[#1D1D1F] dark:text-[#F5F5F7] font-bold'
+                : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
             }`}
           >
             {activeUser.role === 'TEACHER' && <BookOpen className="w-3.5 h-3.5" />}

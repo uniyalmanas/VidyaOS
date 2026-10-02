@@ -172,7 +172,7 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="bg-white/90 dark:bg-[#1C1C1E]/90 backdrop-blur-xl border-b border-black/[0.08] dark:border-white/[0.08] sticky top-0 z-40 h-14 transition-colors duration-150 select-none">
+    <header className="bg-white/90 dark:bg-[#000000]/90 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] sticky top-0 z-40 h-14 transition-colors duration-150 select-none">
       <div className="h-full px-2 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
         {/* Left Section: Sidebar Toggle & Brand (Flex-shrinkable so right profile never gets pushed out) */}
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink">
@@ -451,21 +451,21 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Theme Quick Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer flex-shrink-0"
+            className="p-2 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition focus:outline-none cursor-pointer flex-shrink-0"
             title={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             aria-label="Toggle dark/light theme"
           >
             {resolvedTheme === 'dark' ? (
               <Sun className="w-4 h-4 text-[#FFA000]" />
             ) : (
-              <Moon className="w-4 h-4 text-[#1A73E8]" />
+              <Moon className="w-4 h-4 text-[#0071E3]" />
             )}
           </button>
 
           {/* Help & Support Button (hidden on narrow screens to prevent crowding) */}
           <button
             onClick={() => setShowHelpModal(true)}
-            className="hidden sm:inline-flex p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition focus:outline-none cursor-pointer flex-shrink-0"
+            className="hidden sm:inline-flex p-2 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition focus:outline-none cursor-pointer flex-shrink-0"
             title="Help & Documentation"
             aria-label="Help & Documentation"
           >

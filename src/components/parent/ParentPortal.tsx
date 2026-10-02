@@ -235,10 +235,10 @@ export const ParentPortal: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => handleSelectTab(tab.id)}
-              className={`flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold transition flex-shrink-0 cursor-pointer border-b-2 ${
+              className={`flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold transition flex-shrink-0 cursor-pointer border-b-2 font-apple-text ${
                 isActive
-                  ? 'border-amber-500 text-slate-900 dark:text-white font-bold'
-                  : 'border-transparent text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white'
+                  ? 'border-[#FFA000] text-[#1D1D1F] dark:text-[#F5F5F7] font-bold'
+                  : 'border-transparent text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />

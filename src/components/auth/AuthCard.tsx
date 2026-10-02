@@ -275,7 +275,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
           type="button"
           onClick={() => handleGoogleSignIn()}
           disabled={loading}
-          className="w-full py-2.5 px-4 bg-white dark:bg-[#282A2C] hover:bg-slate-50 dark:hover:bg-[#3C4043] text-slate-800 dark:text-slate-100 rounded-xl text-xs font-bold transition border border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-center space-x-2.5 shadow-sm hover:shadow cursor-pointer"
+          className="w-full py-2.5 px-4 bg-white dark:bg-[#1C1C1E] hover:bg-black/[0.03] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] rounded-full text-xs font-semibold transition border border-black/[0.1] dark:border-white/[0.12] flex items-center justify-center space-x-2.5 shadow-2xs cursor-pointer font-apple-text"
         >
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -289,21 +289,21 @@ export const AuthCard: React.FC<AuthCardProps> = ({
 
       {/* Clean Divider */}
       <div className="relative flex items-center justify-center my-3">
-        <div className="border-t border-[#DADCE0] dark:border-[#3C4043] w-full"></div>
-        <span className="bg-white dark:bg-[#1E1F20] px-3 text-[10px] uppercase font-bold text-[#5F6368] dark:text-[#9AA0A6] tracking-wider shrink-0">
+        <div className="border-t border-black/[0.08] dark:border-white/[0.08] w-full"></div>
+        <span className="bg-white dark:bg-[#1C1C1E] px-3 text-[10px] uppercase font-bold text-[#86868B] tracking-wider shrink-0 font-apple-text">
           or sign in with credentials
         </span>
       </div>
 
       {/* Segmented Mode Selector */}
-      <div className="flex p-1 bg-slate-100 dark:bg-[#282A2C] rounded-xl border border-[#DADCE0] dark:border-[#3C4043] text-xs font-semibold">
+      <div className="flex p-1 bg-black/[0.04] dark:bg-white/[0.06] rounded-full border border-black/[0.06] dark:border-white/[0.08] text-xs font-semibold font-apple-text">
         <button
           type="button"
           onClick={() => { setActiveTab('phone'); setErrorMessage(null); }}
-          className={`flex-1 py-1.5 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+          className={`flex-1 py-1.5 rounded-full transition cursor-pointer flex items-center justify-center space-x-1.5 ${
             activeTab === 'phone'
-              ? 'bg-white dark:bg-[#1E1F20] text-[#E65100] dark:text-[#FFD54F] font-bold shadow-xs'
-              : 'text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+              ? 'bg-white dark:bg-[#1C1C1E] text-[#E65100] dark:text-[#FFCA28] font-bold shadow-xs'
+              : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
           }`}
         >
           <Lock className="w-3.5 h-3.5 text-[#FFA000]" />
@@ -313,10 +313,10 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         <button
           type="button"
           onClick={() => { setActiveTab('otp'); setErrorMessage(null); }}
-          className={`flex-1 py-1.5 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+          className={`flex-1 py-1.5 rounded-full transition cursor-pointer flex items-center justify-center space-x-1.5 ${
             activeTab === 'otp'
-              ? 'bg-white dark:bg-[#1E1F20] text-[#1A73E8] dark:text-[#8AB4F8] font-bold shadow-xs'
-              : 'text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+              ? 'bg-white dark:bg-[#1C1C1E] text-[#0071E3] dark:text-[#2997FF] font-bold shadow-xs'
+              : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
           }`}
         >
           <Smartphone className="w-3.5 h-3.5" />
@@ -326,10 +326,10 @@ export const AuthCard: React.FC<AuthCardProps> = ({
         <button
           type="button"
           onClick={() => { setActiveTab('signup'); setErrorMessage(null); }}
-          className={`flex-1 py-1.5 rounded-lg transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+          className={`flex-1 py-1.5 rounded-full transition cursor-pointer flex items-center justify-center space-x-1.5 ${
             activeTab === 'signup'
-              ? 'bg-white dark:bg-[#1E1F20] text-[#188038] dark:text-[#81C995] font-bold shadow-xs'
-              : 'text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-white'
+              ? 'bg-white dark:bg-[#1C1C1E] text-[#34C759] dark:text-[#30D158] font-bold shadow-xs'
+              : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
           }`}
         >
           <UserCheck className="w-3.5 h-3.5" />
@@ -590,13 +590,13 @@ export const AuthCard: React.FC<AuthCardProps> = ({
       )}
 
       {/* Quick 1-Click Demo Personas Strip */}
-      <div className="pt-2 border-t border-[#DADCE0] dark:border-[#3C4043]/80 space-y-2">
-        <div className="flex items-center justify-between text-[11px] text-[#5F6368] dark:text-[#9AA0A6] font-semibold">
+      <div className="pt-2 border-t border-black/[0.08] dark:border-white/[0.08] space-y-2 font-apple-text">
+        <div className="flex items-center justify-between text-[11px] text-[#86868B] font-semibold">
           <span className="flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-[#FFA000]" />
             1-Click Demo Testing:
           </span>
-          <span className="text-[10px] text-slate-400">Click to load & sign in</span>
+          <span className="text-[10px] text-[#86868B]">Click to load & sign in</span>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
@@ -619,11 +619,11 @@ export const AuthCard: React.FC<AuthCardProps> = ({
                 showToast(`Logged in as ${persona.label} (${persona.name})`, 'success');
                 navigateToRoleDashboard(persona.role);
               }}
-              className="px-1.5 py-2 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-slate-50 dark:bg-[#282A2C] hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:border-[#FFA000] transition flex flex-col items-center justify-center text-center cursor-pointer group"
+              className="px-1.5 py-2 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white dark:bg-[#1C1C1E] hover:border-[#FFA000] dark:hover:border-[#FFA000] transition flex flex-col items-center justify-center text-center cursor-pointer group shadow-2xs"
               title={`1-Click login as ${persona.name}`}
             >
               <persona.icon className={`w-3.5 h-3.5 ${persona.badgeColor} group-hover:scale-110 transition`} />
-              <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 mt-1 line-clamp-1">
+              <span className="text-[10px] font-bold text-[#1D1D1F] dark:text-[#F5F5F7] mt-1 line-clamp-1">
                 {persona.label}
               </span>
             </button>

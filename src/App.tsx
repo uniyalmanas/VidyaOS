@@ -425,7 +425,7 @@ const MainView: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#202124] text-[#202124] dark:text-[#E8EAED] transition-colors duration-200 overflow-hidden font-['Inter',system-ui,sans-serif]">
+    <div className="h-screen flex flex-col bg-[#F5F5F7] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7] transition-colors duration-200 overflow-hidden font-apple-text selection:bg-[#0071E3]/20 selection:text-[#0071E3]">
       <Header
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
@@ -452,7 +452,7 @@ const MainView: React.FC = () => {
           />
         )}
 
-        <main className="flex-1 overflow-y-auto pb-28 md:pb-16 custom-scrollbar">
+        <main className="flex-1 overflow-y-auto pb-28 md:pb-16 custom-scrollbar bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(0,113,227,0.04),rgba(245,245,247,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(41,151,255,0.06),rgba(0,0,0,0))]">
           {currentUser.role === 'PLATFORM_OWNER' && !normalizedPath.startsWith('/admin') && (
             <ProtectedRoute allowedRoles={['PLATFORM_OWNER']}>
               <PlatformDashboard />
@@ -489,18 +489,16 @@ const MainView: React.FC = () => {
         switcherMinimized ? (
           <button
             onClick={() => setSwitcherMinimized(false)}
-            style={{ backgroundColor: resolvedTheme === 'dark' ? '#1E1F20' : '#ffffff' }}
-            className="hidden md:flex fixed bottom-3 right-4 z-30 text-[#202124] dark:text-[#E8EAED] backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] items-center space-x-2 text-xs font-bold hover:shadow-2xl transition ring-1 ring-black/10 cursor-pointer"
+            className="hidden md:flex fixed bottom-3 right-4 z-30 bg-white/95 dark:bg-[#1C1C1E]/95 text-[#1D1D1F] dark:text-[#F5F5F7] backdrop-blur-2xl px-4 py-2.5 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-black/[0.08] dark:border-white/[0.1] items-center space-x-2 text-xs font-semibold hover:shadow-2xl transition cursor-pointer"
             title="Expand Super Admin Impersonation Bar"
           >
             <span className="w-2 h-2 rounded-full bg-[#FFA000] animate-pulse"></span>
-            <span>Super Admin Sandbox: <strong className="text-[#E65100] dark:text-[#FFD54F]">{currentUser.role.replace('_', ' ')}</strong></span>
-            <ChevronUp className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+            <span>Super Admin Sandbox: <strong className="text-[#E65100] dark:text-[#FFCA28]">{currentUser.role.replace('_', ' ')}</strong></span>
+            <ChevronUp className="w-3.5 h-3.5 text-[#86868B]" />
           </button>
         ) : (
           <div
-            style={{ backgroundColor: resolvedTheme === 'dark' ? '#1E1F20' : '#ffffff' }}
-            className="hidden md:flex fixed bottom-3 left-1/2 -translate-x-1/2 z-30 text-[#202124] dark:text-[#E8EAED] backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] items-center space-x-1.5 text-xs max-w-[95vw] overflow-x-auto ring-1 ring-black/10"
+            className="hidden md:flex fixed bottom-3 left-1/2 -translate-x-1/2 z-30 bg-white/95 dark:bg-[#1C1C1E]/95 text-[#1D1D1F] dark:text-[#F5F5F7] backdrop-blur-2xl px-3.5 py-2 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.5)] border border-black/[0.08] dark:border-white/[0.1] items-center space-x-1.5 text-xs max-w-[95vw] overflow-x-auto"
           >
             <span className="text-[10px] uppercase font-extrabold text-[#E65100] dark:text-[#FFD54F] pl-1 hidden sm:inline flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#FFA000] animate-pulse"></span>
@@ -513,10 +511,10 @@ const MainView: React.FC = () => {
                 <>
                   <button
                     onClick={() => handleRoleSelect('PLATFORM_OWNER')}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer tooltip-top ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer tooltip-top ${
                       activeRole === 'PLATFORM_OWNER'
-                        ? 'bg-[#FF5722] text-white font-extrabold shadow-sm'
-                        : 'hover:bg-slate-100 dark:hover:bg-[#282A2C] text-slate-700 dark:text-[#C4C7C5] font-medium'
+                        ? 'bg-[#FF3B30] text-white font-bold shadow-xs'
+                        : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08]'
                     }`}
                     data-tooltip="SaaS Master Platform Console (/owner)"
                     aria-label="SaaS Super Admin"
@@ -527,10 +525,10 @@ const MainView: React.FC = () => {
 
                   <button
                     onClick={() => handleRoleSelect('CENTER_ADMIN')}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer tooltip-top ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer tooltip-top ${
                       activeRole === 'CENTER_ADMIN'
-                        ? 'bg-gradient-to-r from-[#FFCA28] via-[#FFA000] to-[#F57C00] text-slate-950 font-extrabold shadow-sm'
-                        : 'hover:bg-slate-100 dark:hover:bg-[#282A2C] text-slate-700 dark:text-[#C4C7C5] font-medium'
+                        ? 'bg-gradient-to-r from-[#FF9500] to-[#FF3B30] text-white font-bold shadow-xs'
+                        : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08]'
                     }`}
                     data-tooltip="Center Operations & Finance (/admin)"
                     aria-label="Center Admin"
@@ -541,10 +539,10 @@ const MainView: React.FC = () => {
 
                   <button
                     onClick={() => handleRoleSelect('STAFF')}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer tooltip-top ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer tooltip-top ${
                       activeRole === 'STAFF'
-                        ? 'bg-[#1A73E8] text-white font-extrabold shadow-sm'
-                        : 'hover:bg-slate-100 dark:hover:bg-[#282A2C] text-slate-700 dark:text-[#C4C7C5] font-medium'
+                        ? 'bg-[#0071E3] text-white font-bold shadow-xs'
+                        : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08]'
                     }`}
                     data-tooltip="Front Desk Counter & Reception (/admin)"
                     aria-label="Staff Desk"
@@ -555,10 +553,10 @@ const MainView: React.FC = () => {
 
                   <button
                     onClick={() => handleRoleSelect('TEACHER')}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer tooltip-top ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer tooltip-top ${
                       activeRole === 'TEACHER'
-                        ? 'bg-[#039BE5] text-slate-950 font-extrabold shadow-sm'
-                        : 'hover:bg-slate-100 dark:hover:bg-[#282A2C] text-slate-700 dark:text-[#C4C7C5] font-medium'
+                        ? 'bg-[#2997FF] text-white font-bold shadow-xs'
+                        : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08]'
                     }`}
                     data-tooltip="Faculty Attendance & Marks (/teacher)"
                     aria-label="Teacher Portal"
@@ -569,10 +567,10 @@ const MainView: React.FC = () => {
 
                   <button
                     onClick={() => handleRoleSelect('PARENT')}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer tooltip-top ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer tooltip-top ${
                       activeRole === 'PARENT'
-                        ? 'bg-[#00C853] text-slate-950 font-extrabold shadow-sm'
-                        : 'hover:bg-slate-100 dark:hover:bg-[#282A2C] text-slate-700 dark:text-[#C4C7C5] font-medium'
+                        ? 'bg-[#34C759] text-white font-bold shadow-xs'
+                        : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08]'
                     }`}
                     data-tooltip="Parent Direct Portal & UPI Pay (/parent)"
                     aria-label="Parent Portal"
@@ -583,10 +581,10 @@ const MainView: React.FC = () => {
 
                   <button
                     onClick={() => handleRoleSelect('STUDENT')}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-xl transition cursor-pointer tooltip-top ${
+                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer tooltip-top ${
                       activeRole === 'STUDENT'
-                        ? 'bg-[#AB47BC] text-white font-extrabold shadow-sm'
-                        : 'hover:bg-slate-100 dark:hover:bg-[#282A2C] text-slate-700 dark:text-[#C4C7C5] font-medium'
+                        ? 'bg-[#AF52DE] text-white font-bold shadow-xs'
+                        : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08]'
                     }`}
                     data-tooltip="Student Study Workspace (/student)"
                     aria-label="Student Workspace"
@@ -601,7 +599,7 @@ const MainView: React.FC = () => {
             {/* Minimize button */}
             <button
               onClick={() => setSwitcherMinimized(true)}
-              className="p-1.5 hover:bg-slate-100 dark:hover:bg-[#282A2C] rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition ml-1"
+              className="p-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] transition ml-1 cursor-pointer"
               title="Minimize Bar"
             >
               <ChevronDown className="w-3.5 h-3.5" />

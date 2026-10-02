@@ -333,6 +333,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Firebase Google Sign-In
   const loginWithGoogle = async (requestedRole?: UserRole): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
       setFirebaseUser(fbUser);
