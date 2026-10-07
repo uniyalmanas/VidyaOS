@@ -68,6 +68,7 @@ import { AuditTrailModule } from './AuditTrailModule';
 import { InquiriesModule } from './InquiriesModule';
 import { LeavesModule } from './LeavesModule';
 import { StaffOpsModule } from '../staffops/StaffOpsModule';
+import { FinanceModule } from '../finance/FinanceModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -85,6 +86,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   inquiries: { label: 'Admission Leads Pipeline', breadcrumb: 'Inquiries', subtitle: 'Walk-ins, calls & WhatsApp enquiries tracked from first hello to final admission' },
   leaves: { label: 'Leave Requests & Absences', breadcrumb: 'Leaves', subtitle: 'Absence asks from students & faculty — review, decide, and keep the centre register' },
   staffops: { label: 'Staff Operations & Salary', breadcrumb: 'Staff Ops', subtitle: 'Faculty daily attendance grid, month-end salary slips, and pay-now settlement' },
+  finance: { label: 'Profit & Loss · Expenses', breadcrumb: 'Profit & Loss', subtitle: 'Money in vs money out per month — record rent, bills, salaries and see if the centre is profitable' },
   parents: { label: 'Parents & Guardians Directory', breadcrumb: 'Parents', subtitle: 'Direct communication channels, child linkages, and fee receipt sharing' },
   announcements: { label: 'Announcements & Broadcast System', breadcrumb: 'Announcements', subtitle: 'Publish urgent notices, holiday schedules, and WhatsApp broadcast templates' },
   discussions: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
@@ -150,7 +152,7 @@ export const AdminDashboard: React.FC = () => {
   // Staff see faculty salaries? No — pay stays owner/admin-only at the UI level
   // (the rules still permit staff writes per spec; this is product philosophy
   // matching the 'teachers' directory restriction).
-  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
+  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
 
   const currentModule = (!activeTab || activeTab === 'dashboard' || !MODULE_META[activeTab]) ? 'overview' : activeTab;
   const setCurrentModule = (tab: string) => {
@@ -2750,6 +2752,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 18. STAFF OPS (F4) — faculty self-attendance grid + salary slips (admin only) */}
       {!isStaff && currentModule === 'staffops' && <StaffOpsModule />}
+
+      {/* 19. PROFIT & LOSS (F5) — expense ledger + cash-basis P&L (admin only) */}
+      {!isStaff && currentModule === 'finance' && <FinanceModule />}
 
       {/* 15. ANALYTICS & REPORTS */}
       {!isStaff && (currentModule === 'analytics' || currentModule === 'reports') && (

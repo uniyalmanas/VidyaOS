@@ -677,6 +677,51 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // EXPENSES (F5) — money-out ledger powering the Profit & Loss tab
+    // ------------------------------------------------------------------------
+    match /expenses/{expenseId} {
+      // Any tenant member may view the ledger (owner, front desk, faculty).
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // Only staff/admins record money out. The amount and category are
+      // validated at birth so a malformed row can never skew the P&L, and the
+      // recorder is pinned to the caller.
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount > 0 &&
+        request.resource.data.amount <= 10000000 &&
+        request.resource.data.title is string &&
+        request.resource.data.expenseDate is string &&
+        request.resource.data.category in [
+          'rent', 'salaries', 'electricity', 'internet',
+          'marketing', 'maintenance', 'printing', 'misc'
+        ] &&
+        request.resource.data.recordedByUserId == request.auth.uid;
+
+      // Desk corrections may fix a typo, re-categorise, or move the date — but
+      // the org and the person who recorded it stay frozen, and the amount
+      // stays inside sane bounds.
+      allow update: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.recordedByUserId == resource.data.recordedByUserId &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount > 0 &&
+        request.resource.data.amount <= 10000000 &&
+        request.resource.data.title is string &&
+        request.resource.data.expenseDate is string &&
+        request.resource.data.category in [
+          'rent', 'salaries', 'electricity', 'internet',
+          'marketing', 'maintenance', 'printing', 'misc'
+        ];
+
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

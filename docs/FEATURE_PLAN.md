@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 shipped ✅ · F5–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 shipped ✅ · F6–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -228,7 +228,7 @@ teacher can't write another teacher's row; teacher can't touch slips.
 
 ---
 
-## F5 — Expense tracking & profit/loss
+## F5 — Expense tracking & profit/loss — ✅ SHIPPED (2026-10-07)
 
 **Simple words:** Owner records rent/₹ electricity/salaries; the dashboard shows money-in vs
 money-out per month, so "am I profitable?" is one glance.

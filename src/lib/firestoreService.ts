@@ -38,7 +38,8 @@ import {
   Inquiry,
   LeaveRequest,
   TeacherAttendance,
-  SalarySlip
+  SalarySlip,
+  Expense
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -57,7 +58,8 @@ import {
   MOCK_INQUIRIES,
   MOCK_LEAVE_REQUESTS,
   MOCK_TEACHER_ATTENDANCE,
-  MOCK_SALARY_SLIPS
+  MOCK_SALARY_SLIPS,
+  MOCK_EXPENSES
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -884,6 +886,60 @@ export async function deleteSalarySlipFromFirestore(slipId: string): Promise<voi
     await deleteDoc(doc(db, 'salarySlips', slipId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `salarySlips/${slipId}`);
+  }
+}
+
+// ----------------------------------------------------
+// F5 — EXPENSE TRACKING & PROFIT/LOSS
+// ----------------------------------------------------
+
+/**
+ * Tenant expense ledger, newest expense date first (composite index
+ * expenses: orgId ASC, expenseDate DESC). Falls back to demo rows in dev.
+ */
+export function subscribeToExpenses(onData: (expenses: Expense[]) => void, orgId?: string) {
+  try {
+    const expensesQuery = orgId
+      ? query(
+          collection(db, 'expenses'),
+          where('orgId', '==', orgId),
+          orderBy('expenseDate', 'desc'),
+          limit(1000)
+        )
+      : query(collection(db, 'expenses'), orderBy('expenseDate', 'desc'), limit(1000));
+
+    const unsubscribe = onSnapshot(
+      expensesQuery,
+      snapshot => {
+        onData(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+      },
+      error => {
+        logListenerFallback('expenses', error);
+        onData(developmentFallback(MOCK_EXPENSES, orgId));
+      }
+    );
+
+    return unsubscribe;
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start expenses listener:', e);
+    onData(developmentFallback(MOCK_EXPENSES, orgId));
+    return () => {};
+  }
+}
+
+export async function persistExpenseToFirestore(expense: Expense): Promise<void> {
+  try {
+    await setDoc(doc(db, 'expenses', expense.id), cleanFirestoreData(expense));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `expenses/${expense.id}`);
+  }
+}
+
+export async function deleteExpenseFromFirestore(expenseId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'expenses', expenseId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `expenses/${expenseId}`);
   }
 }
 

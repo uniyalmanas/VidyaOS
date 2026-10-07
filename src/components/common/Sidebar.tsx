@@ -23,7 +23,8 @@ import {
   History,
   PhoneIncoming,
   CalendarDays,
-  Wallet
+  Wallet,
+  PieChart
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -207,6 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'REPORTS & SYSTEM',
       items: [
         { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+        { id: 'finance', label: 'Profit & Loss', icon: PieChart },
         { id: 'reports', label: 'Reports Export', icon: FileSpreadsheet },
         { id: 'audit', label: 'Audit Trail', icon: History },
         { id: 'settings', label: 'Center Settings', icon: Settings },
@@ -217,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Role-based navigation filtering: Front Desk Staff cannot access faculty salaries/mgmt, center P&L analytics, reports, audit, settings, or SaaS billing
   // ('staffops' joins 'teachers' — salary slips stay owner/admin-only in the UI; the Firestore rules still allow staff writes per spec.)
-  const STAFF_RESTRICTED_TABS = ['teachers', 'staffops', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
+  const STAFF_RESTRICTED_TABS = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
   const isStaff = currentUser?.role === 'STAFF';
 
   const visibleNavGroups = navGroups.map(group => ({

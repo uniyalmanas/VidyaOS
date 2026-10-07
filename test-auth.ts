@@ -58,7 +58,20 @@ import {
   slipsForMonth,
   formatTimeHHMM
 } from './src/lib/staffOps';
-import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip } from './src/types';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice } from './src/types';
+import {
+  monthKeyFromSalaryLabel,
+  incomeForMonth,
+  salaryTotalForMonth,
+  expensesForMonth,
+  categoryTotals,
+  buildProfitAndLoss,
+  validateExpense,
+  sortExpensesNewestFirst,
+  searchExpenses,
+  EXPENSE_CATEGORY_LABEL,
+  MAX_EXPENSE_AMOUNT
+} from './src/lib/finance';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -947,6 +960,154 @@ assert(slipsForMonth(slipList, '2026-11').length === 0, 'A month without slips l
 // Clock stamp (HH:MM in India, regardless of the runner's timezone) -----------------
 assert(formatTimeHHMM(new Date('2026-10-07T10:05:00.000Z')) === '15:35', '10:05 UTC is 15:35 IST');
 assert(formatTimeHHMM(new Date('2026-10-06T18:30:00.000Z')) === '00:00', 'IST midnight formats as 00:00');
+
+// ============================================================================
+// F5 — expense tracking & profit/loss: month math, cash flow, category rollup
+// ============================================================================
+
+// Salary label → month key (inverse of monthYearFromKey) ------------------------
+assert(monthKeyFromSalaryLabel('October 2026') === '2026-10', 'Salary label → month key');
+assert(monthKeyFromSalaryLabel('  September 2026 ') === '2026-09', 'Whitespace is trimmed before parsing');
+assert(monthKeyFromSalaryLabel('Fake 2026') === '', 'An unknown month name yields an empty key');
+assert(monthKeyFromSalaryLabel('October') === '', 'A label with no year is rejected');
+assert(monthKeyFromSalaryLabel('') === '', 'An empty label yields an empty key');
+
+// Fixtures ---------------------------------------------------------------------
+const makeExpense = (overrides: Partial<Expense>): Expense => ({
+  id: 'exp-x',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  title: 'Expense',
+  category: 'misc',
+  amount: 1000,
+  expenseDate: '2026-10-05',
+  paymentMethod: 'Cash',
+  recordedByUserId: 'user-apex-admin',
+  recordedByName: 'Er. Manoj Verma',
+  createdAt: '2026-10-05T10:00:00.000Z',
+  createdAtMs: 1,
+  ...overrides
+});
+
+const makeInvoice = (overrides: Partial<FeeInvoice>): FeeInvoice => ({
+  id: 'inv-x',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  studentId: 'stud-x',
+  invoiceNo: 'INV-1',
+  monthYear: 'October 2026',
+  title: 'Monthly Fee',
+  amount: 2000,
+  discount: 0,
+  lateFee: 0,
+  netAmount: 2000,
+  paidAmount: 0,
+  dueDate: '2026-10-10',
+  status: 'pending',
+  payments: [],
+  createdAt: '2026-10-01T00:00:00.000Z',
+  ...overrides
+});
+
+// incomeForMonth — only recorded, in-month payments count -----------------------
+const invoicesForIncome: FeeInvoice[] = [
+  makeInvoice({
+    id: 'inv-1',
+    payments: [
+      { id: 'p1', invoiceId: 'inv-1', amount: 2000, paymentDate: '2026-10-03', paymentMethod: 'UPI', transactionRef: 'A', receivedBy: 'Desk', receiptNo: 'R1' },
+      { id: 'p2', invoiceId: 'inv-1', amount: 500, paymentDate: '2026-09-30', paymentMethod: 'Cash', transactionRef: 'B', receivedBy: 'Desk', receiptNo: 'R2' }
+    ]
+  }),
+  makeInvoice({
+    id: 'inv-2',
+    payments: [
+      { id: 'p3', invoiceId: 'inv-2', amount: 1500, paymentDate: '2026-10-20', paymentMethod: 'Cash', transactionRef: 'C', receivedBy: 'Desk', receiptNo: 'R3' },
+      { id: 'p4', invoiceId: 'inv-2', amount: 999, paymentDate: '2026-10-21', paymentMethod: 'UPI', transactionRef: 'D', receivedBy: 'Desk', receiptNo: 'R4', status: 'pending_verification' },
+      { id: 'p5', invoiceId: 'inv-2', amount: 777, paymentDate: '2026-10-22', paymentMethod: 'UPI', transactionRef: 'E', receivedBy: 'Desk', receiptNo: 'R5', status: 'rejected' }
+    ]
+  })
+];
+const octIncome = incomeForMonth(invoicesForIncome, '2026-10');
+assert(octIncome.total === 3500, 'Income sums only in-month recorded payments (2000 + 1500)');
+assert(octIncome.paymentCount === 2, 'Pending-verification and rejected payments are not "received"');
+assert(octIncome.invoiceCount === 2, 'Two invoices received money this month');
+assert(incomeForMonth(invoicesForIncome, '2026-11').total === 0, 'A month with no payments earns nothing');
+
+// salaryTotalForMonth — only paid slips, matched by label ------------------------
+const slipsForRollup: SalarySlip[] = [
+  makeSlip({ id: 's-paid-oct', monthYear: 'October 2026', status: 'paid', paidAmount: 30000, netAmount: 30000 }),
+  makeSlip({ id: 's-issued-oct', monthYear: 'October 2026', status: 'issued', paidAmount: 0, netAmount: 25000 }),
+  makeSlip({ id: 's-paid-sep', monthYear: 'September 2026', status: 'paid', paidAmount: 32000, netAmount: 32500 })
+];
+const octSalary = salaryTotalForMonth(slipsForRollup, '2026-10');
+assert(octSalary.total === 30000, 'Only the paid October slip counts as cash out');
+assert(octSalary.slipCount === 1, '…and only one slip is counted');
+assert(salaryTotalForMonth(slipsForRollup, '2026-08').total === 0, 'A month without paid slips costs nothing');
+assert(salaryTotalForMonth(slipsForRollup, '2026-09').total === 32000, 'Paid amount is used when present');
+
+// expensesForMonth + category rollup -------------------------------------------
+const expenseList: Expense[] = [
+  makeExpense({ id: 'e-rent', category: 'rent', amount: 30000, expenseDate: '2026-10-01' }),
+  makeExpense({ id: 'e-elec', category: 'electricity', amount: 4000, expenseDate: '2026-10-02' }),
+  makeExpense({ id: 'e-rent2', category: 'rent', amount: 5000, expenseDate: '2026-10-20' }),
+  makeExpense({ id: 'e-sep', category: 'internet', amount: 1499, expenseDate: '2026-09-05' })
+];
+assert(expensesForMonth(expenseList, '2026-10').length === 3, 'Only the three October expenses are in scope');
+const octCategories = categoryTotals(expenseList, '2026-10', 30000, 1);
+assert(octCategories[0].category === 'rent', 'Rent tops the category list');
+assert(octCategories[0].amount === 35000, 'Two rent rows aggregate into one total');
+assert(octCategories[0].count === 2, '…and the entry count aggregates too');
+const salaryCategory = octCategories.find(c => c.category === 'salaries');
+assert(!!salaryCategory && salaryCategory.amount === 30000, 'Paid salaries fold into a synthetic salaries row');
+assert(
+  octCategories.every((c, i) => i === 0 || octCategories[i - 1].amount >= c.amount),
+  'Categories read largest-first'
+);
+
+// buildProfitAndLoss — the whole equation --------------------------------------
+const octPnl = buildProfitAndLoss('2026-10', {
+  invoices: invoicesForIncome,
+  expenses: expenseList,
+  salarySlips: slipsForRollup
+});
+assert(octPnl.income === 3500, 'P&L income comes from in-month payments');
+assert(octPnl.recordedExpense === 39000, 'Recorded expenses are the October ledger rows');
+assert(octPnl.salaryTotal === 30000, 'Paid October salaries are included');
+assert(octPnl.expense === 69000, 'Total money out = recorded + salaries');
+assert(octPnl.net === -65500, 'Net is fees received minus money out (a loss here)');
+assert(octCategories.length === 3, 'Rent, electricity and salaries appear in the breakdown');
+
+// Net-profit case + margin -----------------------------------------------------
+const profitable = buildProfitAndLoss('2026-10', {
+  invoices: [makeInvoice({ id: 'ip', payments: [{ id: 'pp', invoiceId: 'pp', amount: 100000, paymentDate: '2026-10-05', paymentMethod: 'Cash', transactionRef: 'X', receivedBy: 'Desk', receiptNo: 'RX' }] })],
+  expenses: [makeExpense({ id: 'e1', category: 'rent', amount: 25000, expenseDate: '2026-10-01' })],
+  salarySlips: []
+});
+assert(profitable.net === 75000, 'Fees minus recorded expenses is the net');
+assert(profitable.marginPct === 75, 'Margin is net as a percent of fees received');
+
+// Empty month is safe ----------------------------------------------------------
+const emptyMonth = buildProfitAndLoss('2026-07', { invoices: [], expenses: [], salarySlips: [] });
+assert(emptyMonth.income === 0 && emptyMonth.expense === 0 && emptyMonth.net === 0, 'An empty month reports all zeros');
+assert(emptyMonth.categories.length === 0, 'An empty month has no category rows');
+assert(emptyMonth.marginPct === 0, 'A zero-income month has a zero margin (no divide-by-zero)');
+assert(emptyMonth.monthLabel === 'July 2026', 'The summary carries a printable month label');
+
+// validateExpense --------------------------------------------------------------
+assert(validateExpense({ title: 'Rent', amount: 5000, expenseDate: '2026-10-01' }) === null, 'A valid expense passes');
+assert(validateExpense({ title: ' ', amount: 5000, expenseDate: '2026-10-01' }) !== null, 'A blank title is rejected');
+assert(validateExpense({ title: 'Rent', amount: 0, expenseDate: '2026-10-01' }) !== null, 'Zero amount is rejected');
+assert(validateExpense({ title: 'Rent', amount: -5, expenseDate: '2026-10-01' }) !== null, 'Negative amount is rejected');
+assert(validateExpense({ title: 'Rent', amount: MAX_EXPENSE_AMOUNT + 1, expenseDate: '2026-10-01' }) !== null, 'Above the sanity cap is rejected');
+assert(validateExpense({ title: 'Rent', amount: 5000, expenseDate: '01-10-2026' }) !== null, 'A non-ISO date is rejected');
+
+// sortExpensesNewestFirst + searchExpenses -------------------------------------
+const sorted = sortExpensesNewestFirst(expenseList);
+assert(sorted[0].expenseDate >= sorted[sorted.length - 1].expenseDate, 'Ledger reads newest expense date first');
+assert(searchExpenses(expenseList, 'electric').length === 1, 'Search matches the category label');
+assert(searchExpenses(expenseList, 'rent').length === 2, 'Search matches a title substring');
+assert(searchExpenses(expenseList, '').length === expenseList.length, 'An empty search returns everything');
+assert(EXPENSE_CATEGORY_LABEL.electricity === 'Electricity', 'Category labels are human readable');
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

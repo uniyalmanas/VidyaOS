@@ -28,7 +28,8 @@ import {
   Inquiry,
   LeaveRequest,
   TeacherAttendance,
-  SalarySlip
+  SalarySlip,
+  Expense
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -64,6 +65,8 @@ import {
   NewSalarySlipInput,
   MarkAttendanceOptions
 } from './slices/StaffOpsContext';
+import { FinanceProvider, useFinance, ExpenseEdit } from './slices/FinanceContext';
+import { NewExpenseInput } from '../lib/finance';
 
 // Export domain hooks for direct fine-grained consumption
 export { useStudents } from './slices/StudentContext';
@@ -75,6 +78,7 @@ export { useAuditLog } from './slices/AuditContext';
 export { useInquiries } from './slices/InquiryContext';
 export { useLeaveRequests } from './slices/LeaveContext';
 export { useStaffOps } from './slices/StaffOpsContext';
+export { useFinance } from './slices/FinanceContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -138,6 +142,12 @@ export interface AppContextType {
   issueDraftSlip: (slipId: string) => void;
   markSlipPaid: (slipId: string, method: PaymentRecord['paymentMethod']) => void;
   deleteSalarySlip: (slipId: string) => void;
+
+  // Finance (F5) — expense tracking & profit/loss
+  expenses: Expense[];
+  addExpense: (input: NewExpenseInput) => Expense | null;
+  updateExpense: (expenseId: string, updates: ExpenseEdit) => Expense | null;
+  deleteExpense: (expenseId: string) => void;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -354,7 +364,13 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
                     currentUser={props.currentUser}
                     isPlatformOwner={props.isPlatformOwner}
                   >
-                    <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                    <FinanceProvider
+                      currentOrg={props.currentOrg}
+                      currentUser={props.currentUser}
+                      isPlatformOwner={props.isPlatformOwner}
+                    >
+                      <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                    </FinanceProvider>
                   </StaffOpsProvider>
                 </LeaveProvider>
               </InquiryProvider>
@@ -379,6 +395,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const inquirySlice = useInquiries();
   const leaveSlice = useLeaveRequests();
   const staffOpsSlice = useStaffOps();
+  const financeSlice = useFinance();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -494,6 +511,11 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     issueDraftSlip: staffOpsSlice.issueDraftSlip,
     markSlipPaid: staffOpsSlice.markSlipPaid,
     deleteSalarySlip: staffOpsSlice.deleteSalarySlip,
+    // Finance (F5) — expense tracking & profit/loss
+    expenses: financeSlice.expenses,
+    addExpense: financeSlice.addExpense,
+    updateExpense: financeSlice.updateExpense,
+    deleteExpense: financeSlice.deleteExpense,
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

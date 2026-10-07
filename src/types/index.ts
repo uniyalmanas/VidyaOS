@@ -496,6 +496,40 @@ export interface SalarySlip {
   createdAtMs: number;
 }
 
+export type ExpenseCategory =
+  | 'rent'
+  | 'salaries'
+  | 'electricity'
+  | 'internet'
+  | 'marketing'
+  | 'maintenance'
+  | 'printing'
+  | 'misc';
+
+/**
+ * A money-out entry (F5) — rent, electricity, salaries, etc. The desk records
+ * these so the Profit & Loss tab can answer "am I profitable?" at a glance.
+ * Paid salary slips (F4) are rolled into the `salaries` category at report time.
+ */
+export interface Expense {
+  id: string;
+  orgId: string;
+  branchId: string;
+  title: string;
+  category: ExpenseCategory;
+  amount: number;
+  /** YYYY-MM-DD (India). */
+  expenseDate: string;
+  paymentMethod: PaymentRecord['paymentMethod'];
+  vendor?: string;
+  notes?: string;
+  recordedByUserId: string;
+  recordedByName: string;
+  createdAt: string;
+  /** Sortable epoch-ms timestamp for the Firestore listener ordering. */
+  createdAtMs: number;
+}
+
 export interface AuthSession {
   // NOTE: Firebase Auth owns the ID token. It is deliberately NOT part of the
   // session shape — persisting it to localStorage only created a stale,

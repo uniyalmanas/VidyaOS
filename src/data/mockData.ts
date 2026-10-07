@@ -17,7 +17,8 @@ import {
   Inquiry,
   LeaveRequest,
   TeacherAttendance,
-  SalarySlip
+  SalarySlip,
+  Expense
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
 
@@ -1451,4 +1452,52 @@ export const MOCK_SALARY_SLIPS: SalarySlip[] = [
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     createdAtMs: Date.now() - 2 * 24 * 60 * 60 * 1000
   }
+];
+
+// ---------------------------------------------------------------------------
+// F5 — expense ledger (development fallback only; prod reads Firestore alone).
+// Dated in the same month as the demo invoices/slips so the Profit & Loss tab
+// has a complete month to show before the owner records their own.
+// ---------------------------------------------------------------------------
+
+const expenseRow = (
+  id: string,
+  title: string,
+  category: Expense['category'],
+  amount: number,
+  expenseDate: string,
+  paymentMethod: Expense['paymentMethod'],
+  extra: Partial<Expense> = {}
+): Expense => ({
+  id,
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  title,
+  category,
+  amount,
+  expenseDate,
+  paymentMethod,
+  recordedByUserId: 'user-apex-admin',
+  recordedByName: 'Er. Manoj Verma',
+  createdAt: `${expenseDate}T10:00:00.000Z`,
+  createdAtMs: Date.parse(`${expenseDate}T10:00:00.000Z`),
+  ...extra
+});
+
+export const MOCK_EXPENSES: Expense[] = [
+  expenseRow('exp-rent-sep', 'Centre rent — Rajpur Road', 'rent', 32000, '2026-09-01', 'NetBanking', {
+    vendor: 'Rajpur Property LLP'
+  }),
+  expenseRow('exp-elec-sep', 'Electricity bill', 'electricity', 6400, '2026-09-05', 'UPI', {
+    vendor: 'UPCL'
+  }),
+  expenseRow('exp-internet-sep', 'Broadband + WiFi', 'internet', 1499, '2026-09-03', 'Card', {
+    vendor: 'Airtel'
+  }),
+  expenseRow('exp-print-sep', 'Test papers & stationery', 'printing', 3800, '2026-09-12', 'Cash', {
+    vendor: 'Sharma Stationers'
+  }),
+  expenseRow('exp-maint-sep', 'Whiteboard & fan repair', 'maintenance', 2200, '2026-09-18', 'Cash', {
+    notes: 'Two ceiling fans rewound.'
+  })
 ];

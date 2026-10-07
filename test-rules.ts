@@ -934,6 +934,135 @@ async function main(): Promise<void> {
     throw err;
   }
 
+  // ------------------------------------------------------------------ expenses (F5)
+  console.log('\nSuite 8: Expenses — desk-only money-out ledger, tenant-isolated');
+  let suite8Step = 'provision an expense';
+
+  try {
+    const expenseDoc = (
+      id: string,
+      uid: string,
+      extra: Record<string, unknown> = {}
+    ) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      title: 'Centre rent',
+      category: 'rent',
+      amount: 25000,
+      expenseDate: '2026-10-01',
+      paymentMethod: 'NetBanking',
+      vendor: 'Rules Property LLP',
+      recordedByUserId: uid,
+      recordedByName: 'Rules Recorder',
+      createdAt: new Date().toISOString(),
+      createdAtMs: Date.now(),
+      ...extra
+    });
+
+    // --- writes are desk-only --------------------------------------------------
+    suite8Step = 'teacher records an expense';
+    const teacherCreateDenied = await expectDenied('teacher creates an expense', () =>
+      setDoc(doc(teacher.db, 'expenses', `exp-teacher-${stamp}`), expenseDoc(`exp-teacher-${stamp}`, teacherUid))
+    );
+    check('faculty cannot record money out', teacherCreateDenied);
+
+    suite8Step = 'staff records an expense';
+    const expenseId = `exp-rules-${stamp}`;
+    const expenseRef = doc(staff.db, 'expenses', expenseId);
+    await setDoc(expenseRef, expenseDoc(expenseId, staffUid));
+    check('front desk may record an expense', true);
+
+    suite8Step = 'teacher reads an expense';
+    let teacherRead = false;
+    try {
+      teacherRead = (await getDoc(doc(teacher.db, 'expenses', expenseId))).exists();
+    } catch {
+      teacherRead = false;
+    }
+    check('faculty can read the ledger (tenant member view)', teacherRead);
+
+    // --- create validation -----------------------------------------------------
+    suite8Step = 'zero amount';
+    const zeroDenied = await expectDenied('expense created with zero amount', () =>
+      setDoc(doc(admin.db, 'expenses', `exp-zero-${stamp}`), expenseDoc(`exp-zero-${stamp}`, adminUid, { amount: 0 }))
+    );
+    check('a zero amount is rejected', zeroDenied);
+
+    suite8Step = 'unknown category';
+    const categoryDenied = await expectDenied('expense created with an unknown category', () =>
+      setDoc(doc(admin.db, 'expenses', `exp-cat-${stamp}`), expenseDoc(`exp-cat-${stamp}`, adminUid, { category: 'gadgets' }))
+    );
+    check('categories are limited to the known list', categoryDenied);
+
+    suite8Step = 'over-cap amount';
+    const overCapDenied = await expectDenied('expense created above the sanity cap', () =>
+      setDoc(doc(admin.db, 'expenses', `exp-big-${stamp}`), expenseDoc(`exp-big-${stamp}`, adminUid, { amount: 20000000 }))
+    );
+    check('an over-cap amount is rejected', overCapDenied);
+
+    suite8Step = 'forged recorder';
+    const forgedDenied = await expectDenied('staff records an expense attributed to someone else', () =>
+      setDoc(doc(staff.db, 'expenses', `exp-forge-${stamp}`), expenseDoc(`exp-forge-${stamp}`, adminUid))
+    );
+    check('the recorder is pinned to the caller', forgedDenied);
+
+    // --- updates are desk-only and identity-pinned ----------------------------
+    suite8Step = 'teacher fixes an expense';
+    const teacherUpdateDenied = await expectDenied('teacher edits an expense', () =>
+      updateDoc(doc(teacher.db, 'expenses', expenseId), { title: 'not mine' })
+    );
+    check('faculty cannot edit the ledger', teacherUpdateDenied);
+
+    suite8Step = 'staff fixes a typo';
+    await updateDoc(expenseRef, { title: 'Centre rent (corrected)', amount: 26000 });
+    check('front desk may correct an expense', true);
+
+    suite8Step = 'staff re-points the recorder';
+    const reattributeDenied = await expectDenied('staff re-attributes an expense to the admin', () =>
+      updateDoc(expenseRef, { recordedByUserId: adminUid })
+    );
+    check('an expense cannot be handed to another recorder', reattributeDenied);
+
+    suite8Step = 'staff moves the expense org';
+    const moveOrgDenied = await expectDenied('staff moves an expense to another centre', () =>
+      updateDoc(expenseRef, { orgId: OTHER_ORG_ID })
+    );
+    check('the tenant of an expense is pinned on update', moveOrgDenied);
+
+    // --- deletes are desk-only -------------------------------------------------
+    suite8Step = 'teacher deletes an expense';
+    const teacherDeleteDenied = await expectDenied('teacher deletes an expense', () =>
+      deleteDoc(doc(teacher.db, 'expenses', expenseId))
+    );
+    check('faculty cannot delete from the ledger', teacherDeleteDenied);
+
+    suite8Step = 'staff deletes an expense';
+    await deleteDoc(expenseRef);
+    check('front desk may remove an expense', true);
+
+    // --- tenant isolation ------------------------------------------------------
+    suite8Step = 'cross-org expense write';
+    const crossOrgWriteDenied = await expectDenied('other-centre admin writes a foreign expense', () =>
+      setDoc(doc(adminOther.db, 'expenses', `exp-foreign-${stamp}`), {
+        ...expenseDoc(`exp-foreign-${stamp}`, otherUid),
+        orgId: ORG_ID
+      })
+    );
+    check('expenses are tenant-isolated on write', crossOrgWriteDenied);
+
+    suite8Step = 'cross-org expense read';
+    const foreignId = `exp-foreign-read-${stamp}`;
+    await setDoc(doc(admin.db, 'expenses', foreignId), expenseDoc(foreignId, adminUid));
+    const crossOrgReadDenied = await expectDenied('other-centre admin reads a foreign expense', () =>
+      getDoc(doc(adminOther.db, 'expenses', foreignId))
+    );
+    check('expenses are tenant-isolated on read', crossOrgReadDenied);
+  } catch (err) {
+    console.error(`\nSuite 8 failed at step: "${suite8Step}"`);
+    throw err;
+  }
+
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);
   console.log('----------------------------------------\n');
