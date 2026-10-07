@@ -29,6 +29,18 @@ export interface CommunicationContextType {
   announcements: Announcement[];
   createAnnouncement: (announcement: Omit<Announcement, 'id' | 'orgId' | 'createdAt' | 'createdBy'>) => Announcement;
   notifications: NotificationItem[];
+  /**
+   * Raises an in-app bell notification addressed to `userId` (F3 groundwork).
+   * Like the seeded notifications, it lives in session state — no FCM/push
+   * collection exists yet, so the bell updates instantly on this device.
+   */
+  pushNotification: (
+    userId: string,
+    title: string,
+    message: string,
+    type: NotificationItem['type'],
+    linkTab?: string
+  ) => void;
   chatChannels: ChatChannel[];
   chatMessages: ChatMessage[];
   activeChatChannelId: string;
@@ -186,6 +198,28 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
     }
   }, [tenantChatChannels, activeChatChannelId]);
 
+  /** Prepends a fresh bell item for `userId` — used by features like F3 leave reviews. */
+  const pushNotification = (
+    userId: string,
+    title: string,
+    message: string,
+    type: NotificationItem['type'],
+    linkTab?: string
+  ): void => {
+    const item: NotificationItem = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      orgId: currentOrg.id,
+      userId,
+      title,
+      message,
+      type,
+      timestamp: 'Just now',
+      read: false,
+      linkTab
+    };
+    setNotifications(prev => [item, ...prev]);
+  };
+
   const createAnnouncement = (data: Omit<Announcement, 'id' | 'orgId' | 'createdAt' | 'createdBy'>): Announcement => {
     const newAnn: Announcement = {
       ...data,
@@ -334,6 +368,7 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
         announcements: tenantAnnouncements,
         createAnnouncement,
         notifications: tenantNotifications,
+        pushNotification,
         chatChannels: tenantChatChannels,
         chatMessages: tenantChatMessages,
         activeChatChannelId,

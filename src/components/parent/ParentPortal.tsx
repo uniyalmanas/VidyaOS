@@ -21,7 +21,8 @@ import {
   TrendingUp,
   ExternalLink,
   UserCheck,
-  MessageSquare
+  MessageSquare,
+  CalendarDays
 } from 'lucide-react';
 import {
   PageHeader,
@@ -34,6 +35,7 @@ import {
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
 import { motion } from 'motion/react';
 import { easings } from '../../lib/motion';
 
@@ -64,7 +66,7 @@ export const ParentPortal: React.FC = () => {
     mobileViewActive
   } = useApp();
 
-  const [activeParentTab, setActiveParentTab] = useState<'overview' | 'attendance' | 'fees' | 'results' | 'schedule' | 'materials' | 'discussions'>(() => {
+  const [activeParentTab, setActiveParentTab] = useState<'overview' | 'attendance' | 'fees' | 'results' | 'schedule' | 'materials' | 'discussions' | 'leave'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('/attendance')) return 'attendance';
@@ -73,6 +75,7 @@ export const ParentPortal: React.FC = () => {
       if (path.includes('/schedule')) return 'schedule';
       if (path.includes('/materials')) return 'materials';
       if (path.includes('/discussions') || path.includes('/messages')) return 'discussions';
+      if (path.includes('/leave')) return 'leave';
     }
     return 'overview';
   });
@@ -86,6 +89,7 @@ export const ParentPortal: React.FC = () => {
     else if (path.includes('/schedule') && activeParentTab !== 'schedule') setActiveParentTab('schedule');
     else if (path.includes('/materials') && activeParentTab !== 'materials') setActiveParentTab('materials');
     else if ((path.includes('/discussions') || path.includes('/messages')) && activeParentTab !== 'discussions') setActiveParentTab('discussions');
+    else if (path.includes('/leave') && activeParentTab !== 'leave') setActiveParentTab('leave');
     else if ((path === '/parent' || path === '/parent/' || path.includes('/overview')) && activeParentTab !== 'overview') {
       setActiveParentTab('overview');
     }
@@ -260,6 +264,7 @@ export const ParentPortal: React.FC = () => {
           { id: 'results', label: 'Report Cards & Exams', icon: Award },
           { id: 'schedule', label: 'Timetable', icon: Clock },
           { id: 'materials', label: 'Homework & Notes', icon: BookOpen },
+          { id: 'leave', label: 'Apply Leave', icon: CalendarDays },
           { id: 'discussions', label: 'VidyaChat', icon: MessageSquare },
         ].map(tab => {
           const Icon = tab.icon;
@@ -668,6 +673,10 @@ export const ParentPortal: React.FC = () => {
       )}
 
       {/* TAB 7: VIDYACHAT DISCUSSIONS */}
+      {activeParentTab === 'leave' && (
+        <LeavePortalPanel requesterType="student" studentId={selectedChild.id} />
+      )}
+
       {activeParentTab === 'discussions' && (
         <InstituteMessenger className="mt-2" />
       )}

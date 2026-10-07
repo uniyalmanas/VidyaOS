@@ -23,6 +23,7 @@ import {
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
 import { motion } from 'motion/react';
 import { easings } from '../../lib/motion';
 
@@ -41,13 +42,14 @@ export const StudentPortal: React.FC = () => {
     announcements
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'schedule' | 'assignments' | 'results' | 'materials' | 'discussions'>(() => {
+  const [activeTab, setActiveTab] = useState<'schedule' | 'assignments' | 'results' | 'materials' | 'discussions' | 'leave'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('/assignments')) return 'assignments';
       if (path.includes('/results')) return 'results';
       if (path.includes('/materials')) return 'materials';
       if (path.includes('/discussions') || path.includes('/messages')) return 'discussions';
+      if (path.includes('/leave')) return 'leave';
     }
     return 'schedule';
   });
@@ -59,6 +61,7 @@ export const StudentPortal: React.FC = () => {
     else if (path.includes('/results') && activeTab !== 'results') setActiveTab('results');
     else if (path.includes('/materials') && activeTab !== 'materials') setActiveTab('materials');
     else if ((path.includes('/discussions') || path.includes('/messages')) && activeTab !== 'discussions') setActiveTab('discussions');
+    else if (path.includes('/leave') && activeTab !== 'leave') setActiveTab('leave');
     else if ((path === '/student' || path === '/student/' || path.includes('/schedule')) && activeTab !== 'schedule') {
       setActiveTab('schedule');
     }
@@ -206,6 +209,7 @@ export const StudentPortal: React.FC = () => {
           { id: 'assignments', label: 'Homework & Tasks', icon: BookOpen },
           { id: 'results', label: 'Exam Results', icon: Award },
           { id: 'materials', label: 'Study Vault', icon: FileText },
+          { id: 'leave', label: 'Apply Leave', icon: Calendar },
           { id: 'discussions', label: 'VidyaChat', icon: MessageSquare }
         ].map(tab => {
           const Icon = tab.icon;
@@ -392,6 +396,11 @@ export const StudentPortal: React.FC = () => {
             ))}
           </div>
         </ConsoleCard>
+      )}
+
+      {/* TAB 6: APPLY LEAVE */}
+      {activeTab === 'leave' && (
+        <LeavePortalPanel requesterType="student" studentId={student.id} />
       )}
 
       {/* TAB 5: VIDYACHAT DOUBTS & PEERS */}

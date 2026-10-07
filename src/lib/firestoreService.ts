@@ -35,7 +35,8 @@ import {
   ChatChannel,
   ChatMessage,
   AuditLogEntry,
-  Inquiry
+  Inquiry,
+  LeaveRequest
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -51,7 +52,8 @@ import {
   MOCK_STUDY_MATERIALS,
   MOCK_ANNOUNCEMENTS,
   MOCK_AUDIT_LOGS,
-  MOCK_INQUIRIES
+  MOCK_INQUIRIES,
+  MOCK_LEAVE_REQUESTS
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -692,6 +694,68 @@ export async function deleteInquiryFromFirestore(inquiryId: string): Promise<voi
     await deleteDoc(doc(db, 'inquiries', inquiryId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `inquiries/${inquiryId}`);
+  }
+}
+
+// ----------------------------------------------------
+// LEAVE REQUESTS (F3) — absence asks → review → excused attendance
+// ----------------------------------------------------
+
+/**
+ * Newest-first off the wire (requires the `leaveRequests` composite index in
+ * `firestore.indexes.json`), reversed to chronological — same shape as
+ * `subscribeToInquiries`.
+ */
+export function subscribeToLeaveRequests(onData: (requests: LeaveRequest[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_LEAVE_REQUESTS, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(
+          collection(db, 'leaveRequests'),
+          where('orgId', '==', orgId),
+          orderBy('createdAtMs', 'desc'),
+          limit(500)
+        )
+      : query(collection(db, 'leaveRequests'), orderBy('createdAtMs', 'desc'), limit(500));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as LeaveRequest).reverse());
+        } else {
+          onData(developmentFallback(MOCK_LEAVE_REQUESTS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time leave requests', error);
+        onData(developmentFallback(MOCK_LEAVE_REQUESTS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_LEAVE_REQUESTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start leaveRequests listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+export async function persistLeaveRequestToFirestore(request: LeaveRequest): Promise<void> {
+  try {
+    await setDoc(doc(db, 'leaveRequests', request.id), cleanFirestoreData(request));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `leaveRequests/${request.id}`);
+  }
+}
+
+export async function deleteLeaveRequestFromFirestore(requestId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'leaveRequests', requestId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `leaveRequests/${requestId}`);
   }
 }
 

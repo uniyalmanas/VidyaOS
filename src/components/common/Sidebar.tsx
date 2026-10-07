@@ -21,7 +21,8 @@ import {
   PanelLeft,
   X,
   History,
-  PhoneIncoming
+  PhoneIncoming,
+  CalendarDays
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -60,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapsed
 }) => {
-  const { students, batches, invoices, announcements, teachers, inquiries } = useApp();
+  const { students, batches, invoices, announcements, teachers, inquiries, leaveRequests } = useApp();
   const { currentUser } = useAuth();
 
   // Real-time custom resizable sidebar width state (persisted in localStorage)
@@ -149,6 +150,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const freshLeadsCount = inquiries.filter(i => i.status === 'new').length;
 
+  // F3 — how many absence asks are waiting at the desk.
+  const pendingLeaveCount = leaveRequests.filter(r => r.status === 'pending').length;
+
   const navGroups: NavGroup[] = [
     {
       title: 'CORE OPERATIONS',
@@ -179,6 +183,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'PEOPLE',
       items: [
         { id: 'inquiries', label: 'Inquiries', icon: PhoneIncoming, badge: freshLeadsCount > 0 ? freshLeadsCount : undefined, badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 font-bold' },
+        { id: 'leaves', label: 'Leaves', icon: CalendarDays, badge: pendingLeaveCount > 0 ? `${pendingLeaveCount} due` : undefined, badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 font-bold' },
         { id: 'teachers', label: 'Faculty', icon: UserCheck, badge: teachers.length },
         { id: 'parents', label: 'Parents', icon: HeartHandshake }
       ]

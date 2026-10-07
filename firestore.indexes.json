@@ -74,6 +74,14 @@
         { "fieldPath": "orgId", "order": "ASCENDING" },
         { "fieldPath": "createdAtMs", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "leaveRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "createdAtMs", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

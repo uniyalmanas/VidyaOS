@@ -474,6 +474,99 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // LEAVE REQUESTS (F3) — absence asks filed by families/faculty, reviewed
+    // ------------------------------------------------------------------------
+    match /leaveRequests/{leaveId} {
+      function leaveStudentDoc(sid) {
+        return get(/databases/$(database)/documents/students/$(sid)).data;
+      }
+
+      function leaveTeacherDoc(tid) {
+        return get(/databases/$(database)/documents/teachers/$(tid)).data;
+      }
+
+      // Any tenant member may view the leave board (front desk, faculty, families).
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // Filing. Staff/admin may file on anyone's behalf inside their centre —
+      // and because that branch short-circuits first, it never pays for the
+      // get() joins below (get() results are cached per evaluation anyway).
+      // Everyone else may only file for a record they actually own: the joins
+      // verify the claimed student/teacher belongs to this org AND links to
+      // this exact auth uid (student self, parent link, or faculty userId).
+      // A request can only be born 'pending' — approvals arrive via update.
+      allow create: if isSignedIn() &&
+        isTenantMember(request.resource.data.orgId) &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.requestedByUserId == request.auth.uid &&
+        (
+          isCenterStaffOrAdmin(request.resource.data.orgId)
+          ||
+          (
+            request.resource.data.requesterType == 'student' &&
+            request.resource.data.studentId is string &&
+            leaveStudentDoc(request.resource.data.studentId).orgId == request.resource.data.orgId &&
+            (
+              ('userId' in leaveStudentDoc(request.resource.data.studentId) &&
+               leaveStudentDoc(request.resource.data.studentId).userId == request.auth.uid)
+              ||
+              ('guardian' in leaveStudentDoc(request.resource.data.studentId) &&
+               'parentUserId' in leaveStudentDoc(request.resource.data.studentId).guardian &&
+               leaveStudentDoc(request.resource.data.studentId).guardian.parentUserId == request.auth.uid)
+            )
+          )
+          ||
+          (
+            request.resource.data.requesterType == 'teacher' &&
+            request.resource.data.teacherId is string &&
+            leaveTeacherDoc(request.resource.data.teacherId).orgId == request.resource.data.orgId &&
+            'userId' in leaveTeacherDoc(request.resource.data.teacherId) &&
+            leaveTeacherDoc(request.resource.data.teacherId).userId == request.auth.uid
+          )
+        );
+
+      // Decisions only travel one way: from pending to approved/rejected.
+      // The field lists are split so neither side can cross into the other —
+      // a filer can never flip status, and a reviewer can never rewrite the
+      // dates/reason they are deciding on. Identity, org and attribution
+      // fields are outside both lists, so they are immutable either way.
+      //
+      // NOTE (rules honesty): faculty review is allowed for any pending leave
+      // of their own centre. Scoping a teacher to their own batches cannot be
+      // expressed here — a Teacher doc is not keyed by auth uid, so rules
+      // cannot join reviewer → assigned batches; product code enforces it
+      // (`scopeLeaveRequestsForTeacher`), exactly like batch roster scoping.
+      allow update: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        resource.data.status == 'pending' &&
+        (
+          // (a) the filer refines their own request while it waits — status untouched
+          (
+            request.resource.data.requestedByUserId == request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['startDate', 'endDate', 'reason', 'category', 'updatedAt'])
+          )
+          ||
+          // (b) a reviewer decides: front desk/owner always, faculty for their
+          //     batches (product-side). The reviewer must be the signed-in actor.
+          (
+            (isCenterStaffOrAdmin(resource.data.orgId) || isTeacher()) &&
+            request.resource.data.status in ['approved', 'rejected'] &&
+            request.resource.data.reviewedByUserId == request.auth.uid &&
+            request.resource.data.reviewedAt is string &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'reviewedByUserId', 'reviewedByName', 'reviewedAt', 'reviewNote', 'updatedAt'])
+          )
+        );
+
+      // Removal stays at the front desk — families cannot withdraw through
+      // delete (they refine or live with a pending request instead).
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

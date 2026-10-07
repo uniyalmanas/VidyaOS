@@ -1,5 +1,5 @@
 /**
- * VidyaOS — Firestore rules verification (faculty batch enrollment #2 + audit log F1)
+ * VidyaOS — Firestore rules verification (batch enrollment #2 + audit F1 + inquiries F2 + leaves F3)
  *
  * Runs against the Auth + Firestore EMULATORS using the production
  * `firestore.rules`. Verifies:
@@ -18,6 +18,12 @@
  *   5. Staff/admin may write + read `auditLogs`; teachers cannot (read or
  *      write), an entry cannot claim another user as its actor, entries are
  *      immutable (no update/delete), and history is tenant-isolated.
+ *
+ *   Leave requests (F3):
+ *   6. Filing is own-record only (student self / parent link / faculty self),
+ *      staff file on anyone's behalf; requests are born pending, filers refine
+ *      while pending, reviewers decide exactly once with their own attribution,
+ *      deletion is desk-only, and the collection is tenant-isolated.
  *
  * Run: npx firebase emulators:exec --only auth,firestore --project vidyut-2bcb6 "npx tsx test-rules.ts"
  */
@@ -331,6 +337,9 @@ async function main(): Promise<void> {
     ...extra
   });
 
+  // Declared here so Suite 6 (leave reviews) can reuse the same desk account.
+  let staffUid = '';
+
   let suite5Step = 'staff sign-in';
   try {
     const staffCred = await createUserWithEmailAndPassword(
@@ -338,7 +347,7 @@ async function main(): Promise<void> {
       `rules-staff-${stamp}@phone.vidyaos.in`,
       PASSWORD
     );
-    const staffUid = staffCred.user.uid;
+    staffUid = staffCred.user.uid;
 
     suite5Step = 'provision staff profile';
     await setDoc(doc(admin.db, 'users', staffUid), {
@@ -412,6 +421,254 @@ async function main(): Promise<void> {
     check('inquiries are tenant-isolated on read', crossOrgReadDeniedInq);
   } catch (err) {
     console.error(`\nSuite 5 failed at step: "${suite5Step}"`);
+    throw err;
+  }
+
+  // -------------------------------------------------------------- leaves (F3)
+  console.log('\nSuite 6: Leave requests — own-record filing, pending-only decisions, tenant isolation');
+  let suite6Step = 'provision learner + guardian accounts';
+  try {
+    const studentUser = await makeClient('student');
+    const parentUser = await makeClient('parent');
+
+    const studentCred = await createUserWithEmailAndPassword(
+      studentUser.auth,
+      `rules-student-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+    const studentUid = studentCred.user.uid;
+    const parentCred = await createUserWithEmailAndPassword(
+      parentUser.auth,
+      `rules-parent-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+    const parentUid = parentCred.user.uid;
+
+    // The centre admin links both accounts to the admitted student, and
+    // provisions the faculty record the teacher's leave is filed against.
+    await setDoc(doc(admin.db, 'users', studentUid), {
+      id: studentUid,
+      uid: studentUid,
+      role: 'STUDENT',
+      orgId: ORG_ID,
+      name: 'Rules Student',
+      phone: '+91 9000000077'
+    });
+    await setDoc(doc(admin.db, 'users', parentUid), {
+      id: parentUid,
+      uid: parentUid,
+      role: 'PARENT',
+      orgId: ORG_ID,
+      name: 'Rules Parent',
+      phone: '+91 9000000088'
+    });
+    await updateDoc(doc(admin.db, 'students', 'stud-rules-1'), {
+      userId: studentUid,
+      guardian: {
+        fatherName: 'Rules Parent',
+        fatherPhone: '+91 9000000088',
+        parentUserId: parentUid
+      }
+    });
+    await setDoc(doc(admin.db, 'teachers', 'teach-rules-1'), {
+      id: 'teach-rules-1',
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      userId: teacherUid,
+      name: 'Rules Teacher',
+      phone: '+91 9000000033',
+      email: 'rules-teacher@example.com',
+      avatar: '',
+      qualification: 'M.Sc',
+      subjects: ['Mathematics'],
+      assignedBatchIds: [],
+      joiningDate: '2026-04-01',
+      status: 'active'
+    });
+    // A second student of the SAME org nobody is linked to — the "file for
+    // someone else" negative target.
+    await setDoc(doc(admin.db, 'students', 'stud-rules-2'), {
+      id: 'stud-rules-2',
+      orgId: ORG_ID,
+      name: 'Unlinked Student',
+      classGrade: 'Class 9',
+      phone: '+91 9000000091',
+      batchIds: []
+    });
+    check('learner, guardian and faculty records linked by the admin', true);
+
+    const leaveDoc = (id: string, uid: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      requesterType: 'student',
+      studentId: 'stud-rules-1',
+      requestedByUserId: uid,
+      requestedByName: 'Rules Student',
+      startDate: '2026-11-02',
+      endDate: '2026-11-03',
+      reason: 'Fever since last night — doctor has advised rest.',
+      category: 'sick',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      createdAtMs: Date.now(),
+      ...extra
+    });
+
+    suite6Step = 'student files own leave';
+    const leaveAId = `leave-a-${stamp}`;
+    const leaveARef = doc(studentUser.db, 'leaveRequests', leaveAId);
+    await setDoc(leaveARef, leaveDoc(leaveAId, studentUid));
+    check('a student may file leave for their own linked record', true);
+
+    suite6Step = 'student files for another student';
+    const crossStudentDenied = await expectDenied('student files leave for an unlinked student', () =>
+      setDoc(doc(studentUser.db, 'leaveRequests', `leave-x-${stamp}`),
+        leaveDoc(`leave-x-${stamp}`, studentUid, { studentId: 'stud-rules-2' }))
+    );
+    check('a student cannot file leave for somebody else', crossStudentDenied);
+
+    suite6Step = 'parent files linked child leave';
+    const leaveBId = `leave-b-${stamp}`;
+    const leaveBRef = doc(parentUser.db, 'leaveRequests', leaveBId);
+    await setDoc(leaveBRef, leaveDoc(leaveBId, parentUid, { requestedByName: 'Rules Parent' }));
+    check('a parent may file leave for their linked child', true);
+
+    suite6Step = 'teacher files own leave';
+    const leaveCId = `leave-c-${stamp}`;
+    await setDoc(doc(teacher.db, 'leaveRequests', leaveCId),
+      leaveDoc(leaveCId, teacherUid, {
+        requesterType: 'teacher',
+        teacherId: 'teach-rules-1',
+        requestedByName: 'Rules Teacher'
+      }));
+    check('faculty may file their own leave', true);
+
+    suite6Step = 'staff files on behalf';
+    const leaveDId = `leave-d-${stamp}`;
+    const leaveDRef = doc(staff.db, 'leaveRequests', leaveDId);
+    await setDoc(leaveDRef, leaveDoc(leaveDId, staffUid, { studentId: 'stud-rules-2', requestedByName: 'Rules Staff' }));
+    check('staff may file leave on a student\'s behalf (front desk)', true);
+
+    suite6Step = 'born-approved create';
+    const bornApprovedDenied = await expectDenied('a request is created already-approved', () =>
+      setDoc(doc(studentUser.db, 'leaveRequests', `leave-bad-${stamp}`),
+        leaveDoc(`leave-bad-${stamp}`, studentUid, { status: 'approved', reviewedByUserId: studentUid }))
+    );
+    check('a request can only be born pending', bornApprovedDenied);
+
+    suite6Step = 'teacher reads register';
+    let teacherLeaveRead = false;
+    try {
+      teacherLeaveRead = (await getDoc(leaveARef)).exists();
+    } catch {
+      teacherLeaveRead = false;
+    }
+    check('faculty can read the leave board (tenant member view)', teacherLeaveRead);
+
+    suite6Step = 'student refines pending request';
+    await updateDoc(leaveARef, {
+      startDate: '2026-11-03',
+      endDate: '2026-11-04',
+      reason: 'Still down with fever — rest extended by the doctor.',
+      updatedAt: new Date().toISOString()
+    });
+    check('the filer may refine their own request while it is pending', true);
+
+    suite6Step = 'student self-approves';
+    const selfApproveDenied = await expectDenied('student approves their own request', () =>
+      updateDoc(leaveARef, {
+        status: 'approved',
+        reviewedByUserId: studentUid,
+        reviewedAt: new Date().toISOString()
+      })
+    );
+    check('a student cannot approve their own request', selfApproveDenied);
+
+    suite6Step = 'teacher approves';
+    // The decision must run signed in as the REVIEWER: `leaveARef` is bound to
+    // the filer's client, and the rules require reviewedByUserId == auth.uid.
+    await updateDoc(doc(teacher.db, 'leaveRequests', leaveAId), {
+      status: 'approved',
+      reviewedByUserId: teacherUid,
+      reviewedByName: 'Rules Teacher',
+      reviewedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    check('faculty may approve a pending request', true);
+
+    suite6Step = 're-decide decided request';
+    const reDecideDenied = await expectDenied('teacher flips an approved request to rejected', () =>
+      updateDoc(doc(teacher.db, 'leaveRequests', leaveAId), {
+        status: 'rejected',
+        reviewedByUserId: teacherUid,
+        reviewedAt: new Date().toISOString()
+      })
+    );
+    check('a decided request cannot be re-decided', reDecideDenied);
+
+    suite6Step = 'reviewer alters dates';
+    const alterDatesDenied = await expectDenied('staff approves but rewrites the dates', () =>
+      updateDoc(doc(staff.db, 'leaveRequests', leaveBId), {
+        status: 'approved',
+        reviewedByUserId: staffUid,
+        reviewedAt: new Date().toISOString(),
+        startDate: '2026-11-09'
+      })
+    );
+    check('a reviewer cannot alter the dates they are deciding on', alterDatesDenied);
+
+    suite6Step = 'reviewer attribution spoof';
+    const reviewSpoofDenied = await expectDenied('staff attributes the approval to the admin', () =>
+      updateDoc(doc(staff.db, 'leaveRequests', leaveBId), {
+        status: 'approved',
+        reviewedByUserId: adminUid,
+        reviewedByName: 'Rules Admin',
+        reviewedAt: new Date().toISOString()
+      })
+    );
+    check('a decision cannot be attributed to somebody else', reviewSpoofDenied);
+
+    suite6Step = 'staff approves cleanly';
+    await updateDoc(doc(staff.db, 'leaveRequests', leaveBId), {
+      status: 'approved',
+      reviewedByUserId: staffUid,
+      reviewedByName: 'Rules Staff',
+      reviewedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    check('staff may approve a pending request with review fields only', true);
+
+    suite6Step = 'student deletes request';
+    const studentDeleteDenied = await expectDenied('student deletes a leave request', () =>
+      deleteDoc(leaveARef)
+    );
+    check('students cannot delete leave requests', studentDeleteDenied);
+
+    suite6Step = 'teacher deletes request';
+    const teacherDeleteDenied = await expectDenied('teacher deletes a leave request', () =>
+      deleteDoc(doc(teacher.db, 'leaveRequests', leaveCId))
+    );
+    check('faculty cannot delete leave requests', teacherDeleteDenied);
+
+    suite6Step = 'admin deletes request';
+    await deleteDoc(doc(admin.db, 'leaveRequests', leaveDId));
+    check('the centre admin may remove a stale request', true);
+
+    suite6Step = 'cross-org read';
+    const crossOrgLeaveReadDenied = await expectDenied('other-centre admin reads foreign leave', () =>
+      getDoc(doc(adminOther.db, 'leaveRequests', leaveAId))
+    );
+    check('leave register is tenant-isolated on read', crossOrgLeaveReadDenied);
+
+    suite6Step = 'cross-org write';
+    const crossOrgLeaveWriteDenied = await expectDenied('other-centre admin files into this org', () =>
+      setDoc(doc(adminOther.db, 'leaveRequests', `leave-foreign-${stamp}`),
+        leaveDoc(`leave-foreign-${stamp}`, otherUid))
+    );
+    check('leave register is tenant-isolated on write', crossOrgLeaveWriteDenied);
+  } catch (err) {
+    console.error(`\nSuite 6 failed at step: "${suite6Step}"`);
     throw err;
   }
 

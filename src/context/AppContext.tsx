@@ -25,7 +25,8 @@ import {
   ChatMessageTag,
   ChatMessageAttachment,
   AuditLogEntry,
-  Inquiry
+  Inquiry,
+  LeaveRequest
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -49,6 +50,12 @@ import { CommunicationProvider, useCommunication } from './slices/CommunicationC
 import { AuditProvider, useAuditLog } from './slices/AuditContext';
 import { RecordAuditInput } from '../lib/audit';
 import { InquiryProvider, useInquiries, NewInquiryInput } from './slices/InquiryContext';
+import {
+  LeaveProvider,
+  useLeaveRequests,
+  NewLeaveInput,
+  LeaveReviewDecision
+} from './slices/LeaveContext';
 
 // Export domain hooks for direct fine-grained consumption
 export { useStudents } from './slices/StudentContext';
@@ -58,6 +65,7 @@ export { useAcademics } from './slices/AcademicContext';
 export { useCommunication, useChat } from './slices/CommunicationContext';
 export { useAuditLog } from './slices/AuditContext';
 export { useInquiries } from './slices/InquiryContext';
+export { useLeaveRequests } from './slices/LeaveContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -97,6 +105,16 @@ export interface AppContextType {
   addInquiryNote: (inquiryId: string, text: string) => void;
   markInquiryConverted: (inquiryId: string, studentId: string, studentName: string) => void;
   deleteInquiry: (inquiryId: string) => void;
+
+  // Leave requests (F3) — absences filed → reviewed → excused into attendance
+  leaveRequests: LeaveRequest[];
+  submitLeaveRequest: (input: NewLeaveInput) => LeaveRequest | null;
+  updateLeaveRequest: (
+    leaveId: string,
+    updates: Partial<Pick<LeaveRequest, 'startDate' | 'endDate' | 'category' | 'reason'>>
+  ) => void;
+  reviewLeaveRequest: (leaveId: string, decision: LeaveReviewDecision, reviewNote?: string) => void;
+  deleteLeaveRequest: (leaveId: string) => void;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -303,7 +321,13 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
                 currentUser={props.currentUser}
                 isPlatformOwner={props.isPlatformOwner}
               >
-                <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                <LeaveProvider
+                  currentOrg={props.currentOrg}
+                  currentUser={props.currentUser}
+                  isPlatformOwner={props.isPlatformOwner}
+                >
+                  <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                </LeaveProvider>
               </InquiryProvider>
             </AuditProvider>
           </CommunicationProvider>
@@ -324,6 +348,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const commSlice = useCommunication();
   const auditSlice = useAuditLog();
   const inquirySlice = useInquiries();
+  const leaveSlice = useLeaveRequests();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -425,6 +450,11 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     addInquiryNote: inquirySlice.addInquiryNote,
     markInquiryConverted: inquirySlice.markInquiryConverted,
     deleteInquiry: inquirySlice.deleteInquiry,
+    leaveRequests: leaveSlice.leaveRequests,
+    submitLeaveRequest: leaveSlice.submitLeaveRequest,
+    updateLeaveRequest: leaveSlice.updateLeaveRequest,
+    reviewLeaveRequest: leaveSlice.reviewLeaveRequest,
+    deleteLeaveRequest: leaveSlice.deleteLeaveRequest,
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

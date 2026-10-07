@@ -34,6 +34,8 @@ import {
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
+import { TeacherLeaveBoard } from '../leaves/TeacherLeaveBoard';
 import { motion, AnimatePresence } from 'motion/react';
 import { easings } from '../../lib/motion';
 import { selectTeacherBatches, filterToBatches } from '../../lib/teacherScope';
@@ -117,6 +119,12 @@ export const TeacherPortal: React.FC = () => {
   );
 
   const myBatchIds = useMemo(() => new Set(myBatches.map(b => b.id)), [myBatches]);
+
+  // This faculty member's own Teacher record (for filing their own leave).
+  const myTeacherRecord = useMemo(
+    () => teachers.find(t => t.userId === currentUser.id),
+    [teachers, currentUser.id]
+  );
 
   // Tests and coursework are batch-scoped, so a teacher only ever sees the ones
   // belonging to their own batches — not every test in the institute.
@@ -767,6 +775,14 @@ export const TeacherPortal: React.FC = () => {
             })}
           </div>
         </ConsoleCard>
+      )}
+
+      {/* F3: own leave filing + scoped approvals for my batches */}
+      {activeTab === 'attendance' && (
+        <div className="space-y-6">
+          <LeavePortalPanel requesterType="teacher" teacherId={myTeacherRecord?.id} />
+          <TeacherLeaveBoard />
+        </div>
       )}
 
       {/* TAB 2: TEST MARKS */}

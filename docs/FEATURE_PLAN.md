@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 shipped ✅ · F3–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 shipped ✅ · F4–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -142,7 +142,7 @@ ok, teacher write denied.
 
 ---
 
-## F3 — Leave requests (students + teachers)
+## F3 — Leave requests (students + teachers) — ✅ SHIPPED (2026-10-07)
 
 **Simple words:** Student/parent (or teacher) submits "absent on X because sick"; the batch
 teacher / admin approves; approved leave becomes an **excused** attendance entry automatically.

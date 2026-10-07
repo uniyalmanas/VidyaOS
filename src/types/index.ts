@@ -319,7 +319,7 @@ export interface NotificationItem {
   userId: string;
   title: string;
   message: string;
-  type: 'attendance' | 'fee' | 'exam' | 'schedule' | 'announcement' | 'system';
+  type: 'attendance' | 'fee' | 'exam' | 'schedule' | 'announcement' | 'system' | 'leave';
   timestamp: string;
   read: boolean;
   linkTab?: string;
@@ -400,6 +400,47 @@ export interface Inquiry {
   updatedAt?: string;
   /** Set when this lead is converted into a student. */
   convertedStudentId?: string;
+}
+
+export type LeaveRequester = 'student' | 'teacher';
+export type LeaveStatus = 'pending' | 'approved' | 'rejected';
+export type LeaveCategory = 'sick' | 'family' | 'exam' | 'other';
+
+/**
+ * Leave request (F3) — a student/parent (or the faculty member themselves)
+ * asks for an absence; staff/admin (or the batch teacher) approves or
+ * rejects it. An approved student leave stamps `excused` attendance for
+ * each class day in the range (see `LeaveContext.reviewLeaveRequest`).
+ *
+ * Exactly one of `studentId` / `teacherId` is set, matching `requesterType`.
+ */
+export interface LeaveRequest {
+  id: string;
+  orgId: string;
+  branchId: string;
+  requesterType: LeaveRequester;
+  studentId?: string;
+  teacherId?: string;
+  /** Firebase Auth uid of the account that filed the request. */
+  requestedByUserId: string;
+  requestedByName: string;
+  /** YYYY-MM-DD inclusive start (India). */
+  startDate: string;
+  /** YYYY-MM-DD inclusive end (India). */
+  endDate: string;
+  reason: string;
+  category: LeaveCategory;
+  status: LeaveStatus;
+  reviewedByUserId?: string;
+  reviewedByName?: string;
+  /** ISO display string (UTC). */
+  reviewedAt?: string;
+  reviewNote?: string;
+  /** ISO display string (UTC). */
+  createdAt: string;
+  /** Sortable epoch-ms timestamp for the Firestore listener ordering. */
+  createdAtMs: number;
+  updatedAt?: string;
 }
 
 export interface AuthSession {

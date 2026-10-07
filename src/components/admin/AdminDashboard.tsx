@@ -66,6 +66,7 @@ import {
 import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { AuditTrailModule } from './AuditTrailModule';
 import { InquiriesModule } from './InquiriesModule';
+import { LeavesModule } from './LeavesModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -81,6 +82,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   materials: { label: 'Study Material & Library', breadcrumb: 'Materials', subtitle: 'Curated NCERT solutions, formula sheets, lecture notes, and chapter summaries' },
   teachers: { label: 'Faculty & Teachers Directory', breadcrumb: 'Teachers', subtitle: 'Instructor profiles, assigned subjects, contact details, and teaching schedules' },
   inquiries: { label: 'Admission Leads Pipeline', breadcrumb: 'Inquiries', subtitle: 'Walk-ins, calls & WhatsApp enquiries tracked from first hello to final admission' },
+  leaves: { label: 'Leave Requests & Absences', breadcrumb: 'Leaves', subtitle: 'Absence asks from students & faculty — review, decide, and keep the centre register' },
   parents: { label: 'Parents & Guardians Directory', breadcrumb: 'Parents', subtitle: 'Direct communication channels, child linkages, and fee receipt sharing' },
   announcements: { label: 'Announcements & Broadcast System', breadcrumb: 'Announcements', subtitle: 'Publish urgent notices, holiday schedules, and WhatsApp broadcast templates' },
   discussions: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
@@ -2737,6 +2739,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 16. ADMISSION LEADS PIPELINE (F2) — staff + admin desk function */}
       {currentModule === 'inquiries' && <InquiriesModule onConvert={handleConvertInquiry} />}
+
+      {/* 17. LEAVE REQUESTS & ABSENCES (F3) — staff + admin desk function */}
+      {currentModule === 'leaves' && <LeavesModule />}
 
       {/* 15. ANALYTICS & REPORTS */}
       {!isStaff && (currentModule === 'analytics' || currentModule === 'reports') && (

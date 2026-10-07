@@ -14,8 +14,10 @@ import {
   Announcement,
   SubscriptionPlan,
   AuditLogEntry,
-  Inquiry
+  Inquiry,
+  LeaveRequest
 } from '../types';
+import { getIndiaDateString } from '../lib/date';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
@@ -1297,5 +1299,72 @@ export const MOCK_INQUIRIES: Inquiry[] = [
     createdByName: 'Pooja Verma',
     createdAt: '2026-09-28T11:00:00.000Z',
     createdAtMs: new Date('2026-09-28T11:00:00.000Z').getTime()
+  }
+];
+
+/**
+ * DEV-only demo seed for leave requests (F3). Served directly as the
+ * demo-persona fallback by `subscribeToLeaveRequests` — never seeded into
+ * Firestore. Dates are computed relative to "today" so the board always shows
+ * a live upcoming request alongside a decided one.
+ */
+const leaveDayOffset = (offsetDays: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return getIndiaDateString(d);
+};
+
+export const MOCK_LEAVE_REQUESTS: LeaveRequest[] = [
+  {
+    id: 'leave-mock-1',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    requesterType: 'student',
+    studentId: 'stud-rahul-10',
+    requestedByUserId: 'user-parent-rajesh',
+    requestedByName: 'Rajesh Sharma',
+    startDate: leaveDayOffset(1),
+    endDate: leaveDayOffset(2),
+    reason: 'Fever since last night — doctor has advised rest for two days.',
+    category: 'sick',
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    createdAtMs: Date.now() - 30 * 60 * 1000
+  },
+  {
+    id: 'leave-mock-2',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    requesterType: 'student',
+    studentId: 'stud-priya-8',
+    requestedByUserId: 'user-parent-rajesh',
+    requestedByName: 'Rajesh Sharma',
+    startDate: leaveDayOffset(-6),
+    endDate: leaveDayOffset(-5),
+    reason: 'Family wedding out of town — both batch classes will be missed.',
+    category: 'family',
+    status: 'approved',
+    reviewedByUserId: 'user-apex-admin',
+    reviewedByName: 'Er. Manoj Verma',
+    reviewedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    reviewNote: 'Approved — attendance marked excused for the two days.',
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAtMs: Date.now() - 7 * 24 * 60 * 60 * 1000
+  },
+  {
+    id: 'leave-mock-3',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    requesterType: 'teacher',
+    teacherId: 'teach-anjali',
+    requestedByUserId: 'user-teacher-sharma',
+    requestedByName: 'Prof. Anjali Sharma',
+    startDate: leaveDayOffset(5),
+    endDate: leaveDayOffset(6),
+    reason: 'Paper presentation at the regional mathematics symposium.',
+    category: 'exam',
+    status: 'pending',
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    createdAtMs: Date.now() - 2 * 60 * 60 * 1000
   }
 ];

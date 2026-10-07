@@ -21,7 +21,25 @@ import {
   sortInquiriesForFollowUp,
   formatInquiryPhone
 } from './src/lib/inquiries';
-import { Inquiry } from './src/types';
+import {
+  expandLeaveDates,
+  leaveDaysCount,
+  validateLeaveRange,
+  formatLeaveRange,
+  countLeaveByStatus,
+  getLeaveDisplayName,
+  scopeLeaveRequestsForTeacher,
+  planExcusedAttendance,
+  hasApprovedLeaveCovering,
+  leaveTiming,
+  canEditLeaveRequest,
+  isLeaveReviewer,
+  canDeleteLeave,
+  searchLeaveRequests,
+  sortLeaveRequestsForReview,
+  MAX_LEAVE_DAYS
+} from './src/lib/leave';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord } from './src/types';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -523,6 +541,227 @@ assert(
 
 assert(formatInquiryPhone('+919812033445') === '+91 98120 33445', 'Phone formatter renders a +91 12-digit number the India way');
 assert(formatInquiryPhone('9988766554') === '+91 99887 66554', 'Phone formatter handles a bare 10-digit number');
+
+// -------------------------------------------------------------
+// Leave requests (F3) — pure helpers behind the absence workflow
+// -------------------------------------------------------------
+console.log('\n===== Leave requests (F3) =====');
+
+const makeLeave = (over: Partial<LeaveRequest>): LeaveRequest => ({
+  id: 'leave-x',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  requesterType: 'student',
+  studentId: 'stud-rahul-10',
+  requestedByUserId: 'user-parent-rajesh',
+  requestedByName: 'Rajesh Sharma',
+  startDate: '2026-10-12',
+  endDate: '2026-10-13',
+  reason: 'Fever since last night — doctor has advised rest.',
+  category: 'sick',
+  status: 'pending',
+  createdAt: '2026-10-07T09:00:00.000Z',
+  createdAtMs: 100,
+  ...over
+});
+
+// Range expansion & validation -------------------------------------------------
+assert(
+  JSON.stringify(expandLeaveDates('2026-10-05', '2026-10-07')) ===
+    JSON.stringify(['2026-10-05', '2026-10-06', '2026-10-07']),
+  'Range expansion is inclusive of both endpoints'
+);
+assert(expandLeaveDates('2026-10-07', '2026-10-05').length === 0, 'A reversed range expands to nothing');
+assert(expandLeaveDates('2026-10-05', 'not-a-date').length === 0, 'A malformed date expands to nothing');
+assert(leaveDaysCount({ startDate: '2026-10-12', endDate: '2026-10-12' }) === 1, 'A single-day leave counts 1 day');
+
+assert(validateLeaveRange('2026-10-12', '2026-10-13', 'Fever since last night.') === null, 'A valid request passes validation');
+assert(validateLeaveRange('2026-10-13', '2026-10-12', 'Fever since last night.') !== null, 'End before start is rejected');
+assert(validateLeaveRange('2026-10-12', '2026-10-13', 'ab') !== null, 'A stub reason under 3 characters is rejected');
+const overlong = validateLeaveRange('2026-01-01', '2026-03-01', 'A properly long reason for this test.');
+assert(overlong !== null && overlong.includes(String(MAX_LEAVE_DAYS)), `Requests beyond the ${MAX_LEAVE_DAYS}-day cap are rejected`);
+
+// Formatting & timing ----------------------------------------------------------
+assert(!formatLeaveRange('2026-10-12', '2026-10-12').includes(' – '), 'Same-day range formats as one date');
+assert(
+  formatLeaveRange('2026-09-30', '2026-10-02').includes(' – ') && formatLeaveRange('2026-09-30', '2026-10-02').includes('2026'),
+  'Cross-month range keeps both dates and the year'
+);
+assert(leaveTiming({ startDate: '2026-10-01', endDate: '2026-10-05' }, '2026-10-10') === 'past', 'A finished absence is timed as past');
+assert(leaveTiming({ startDate: '2026-10-11', endDate: '2026-10-15' }, '2026-10-10') === 'upcoming', 'A future absence is timed as upcoming');
+assert(leaveTiming({ startDate: '2026-10-10', endDate: '2026-10-10' }, '2026-10-10') === 'today', 'A leave starting and ending today is timed as today');
+assert(leaveTiming({ startDate: '2026-10-08', endDate: '2026-10-12' }, '2026-10-10') === 'ongoing', 'A leave spanning today is timed as ongoing');
+
+// Fixtures for the people side -------------------------------------------------
+const stuRahul: Student = {
+  id: 'stud-rahul-10', orgId: 'org-apex', branchId: 'branch-rajpur',
+  enrollmentNo: 'ENR-001', rollNo: 'R1', name: 'Rahul Sharma', gender: 'Male',
+  classGrade: 'Class 10', board: 'CBSE', schoolName: 'DAV Public School',
+  dateOfBirth: '2011-05-01', admissionDate: '2026-04-01', phone: '+91 98000 00001',
+  address: 'Rajpur', avatar: '', batchIds: ['batch-c10-math'],
+  guardian: { fatherName: 'Rajesh Sharma', fatherPhone: '+91 98000 00002', parentUserId: 'user-parent-rajesh' },
+  status: 'active'
+};
+const stuPriya: Student = {
+  ...stuRahul,
+  id: 'stud-priya-8', name: 'Priya Sharma', batchIds: ['batch-c12-phy'],
+  guardian: { ...stuRahul.guardian }
+};
+const tAnjali: Teacher = {
+  id: 'teach-anjali', orgId: 'org-apex', branchId: 'branch-rajpur',
+  userId: 'user-teacher-sharma', name: 'Prof. Anjali Sharma', phone: '+91 98000 00011',
+  email: 'anjali@example.com', avatar: '', qualification: 'M.Sc Mathematics',
+  subjects: ['Mathematics'], assignedBatchIds: ['batch-c10-math'],
+  joiningDate: '2024-04-01', status: 'active'
+};
+const tRohit: Teacher = {
+  ...tAnjali,
+  id: 'teach-rohit', userId: 'user-teacher-negi', name: 'Prof. Rohit Verma',
+  subjects: ['Physics'], assignedBatchIds: ['batch-c12-phy']
+};
+const batchMath: Batch = {
+  id: 'batch-c10-math', orgId: 'org-apex', branchId: 'branch-rajpur',
+  name: 'Class 10 · Mathematics A', subject: 'Mathematics', classGrade: 'Class 10',
+  teacherId: 'teach-anjali', classroom: 'Room 1', scheduleDays: ['Mon', 'Wed'],
+  timeSlot: '05:00 PM - 06:30 PM', capacity: 30, studentIds: ['stud-rahul-10'],
+  feeAmountMonthly: 1200, academicYear: '2026-27', status: 'active'
+};
+const batchPhysics: Batch = {
+  ...batchMath,
+  id: 'batch-c12-phy', name: 'Class 12 · Physics', subject: 'Physics',
+  teacherId: 'teach-rohit', scheduleDays: ['Tue', 'Thu'], studentIds: ['stud-priya-8']
+};
+
+// Display names & counts -------------------------------------------------------
+assert(getLeaveDisplayName(makeLeave({}), [stuRahul, stuPriya], [tAnjali, tRohit]) === 'Rahul Sharma', 'Student leave resolves the student display name');
+assert(
+  getLeaveDisplayName(makeLeave({ requesterType: 'teacher', studentId: undefined, teacherId: 'teach-anjali' }), [stuRahul], [tAnjali, tRohit]) === 'Prof. Anjali Sharma',
+  'Faculty leave resolves the teacher display name'
+);
+assert(getLeaveDisplayName(makeLeave({ studentId: 'stud-missing' }), [stuRahul], []) === 'Student', 'A missing record falls back to a safe label');
+
+const mixedLeaves = [
+  makeLeave({ id: 'm1', status: 'pending' }),
+  makeLeave({ id: 'm2', status: 'approved' }),
+  makeLeave({ id: 'm3', status: 'approved' }),
+  makeLeave({ id: 'm4', status: 'rejected' })
+];
+const mixedCounts = countLeaveByStatus(mixedLeaves);
+assert(
+  mixedCounts.pending === 1 && mixedCounts.approved === 2 && mixedCounts.rejected === 1,
+  'Status counters tally the register correctly'
+);
+
+// Filer / reviewer / deletion gates --------------------------------------------
+assert(canEditLeaveRequest(makeLeave({}), 'user-parent-rajesh'), 'The filer may refine their own pending request');
+assert(!canEditLeaveRequest(makeLeave({}), 'user-other'), 'Nobody else may refine a pending request');
+assert(!canEditLeaveRequest(makeLeave({ status: 'approved' }), 'user-parent-rajesh'), 'A decided request can no longer be refined');
+
+assert(isLeaveReviewer('CENTER_ADMIN') && isLeaveReviewer('STAFF') && isLeaveReviewer('TEACHER') && isLeaveReviewer('PLATFORM_OWNER'), 'Desk and faculty roles review leave');
+assert(!isLeaveReviewer('STUDENT') && !isLeaveReviewer('PARENT'), 'Students and parents never review leave');
+assert(canDeleteLeave('CENTER_ADMIN') && canDeleteLeave('STAFF') && canDeleteLeave('PLATFORM_OWNER'), 'The front desk may remove stale requests');
+assert(!canDeleteLeave('TEACHER') && !canDeleteLeave('STUDENT'), 'Faculty and students cannot delete requests');
+
+// Teacher scoping (#1 join reused by the F3 review board) ----------------------
+const leaveForRahul = makeLeave({ id: 'lv-rahul', studentId: 'stud-rahul-10' });
+const leaveForPriya = makeLeave({ id: 'lv-priya', studentId: 'stud-priya-8' });
+const leaveOfAnjali = makeLeave({ id: 'lv-anjali', requesterType: 'teacher', studentId: undefined, teacherId: 'teach-anjali', requestedByUserId: 'user-teacher-sharma' });
+const leaveOfRohit = makeLeave({ id: 'lv-rohit', requesterType: 'teacher', studentId: undefined, teacherId: 'teach-rohit', requestedByUserId: 'user-teacher-negi' });
+
+const anjaliScope = scopeLeaveRequestsForTeacher(
+  [leaveForRahul, leaveForPriya, leaveOfAnjali, leaveOfRohit],
+  [stuRahul, stuPriya],
+  [tAnjali, tRohit],
+  [batchMath, batchPhysics],
+  'user-teacher-sharma'
+);
+assert(
+  anjaliScope.some(r => r.id === 'lv-rahul') && anjaliScope.some(r => r.id === 'lv-anjali'),
+  "A teacher's board keeps their roster's requests and their own leave"
+);
+assert(
+  !anjaliScope.some(r => r.id === 'lv-priya') && !anjaliScope.some(r => r.id === 'lv-rohit'),
+  "A teacher's board drops other batches' requests and other faculty's leave"
+);
+assert(
+  scopeLeaveRequestsForTeacher([leaveForRahul], [stuRahul], [tAnjali], [batchMath], '').length === 0,
+  'Scoping fails closed without a user id'
+);
+
+// Excused-attendance planning ---------------------------------------------------
+// 5 Oct 2026 is a Monday, 11 Oct a Sunday; the batch classes Mon & Wed only.
+const recPresent: AttendanceRecord = {
+  id: 'att-present', orgId: 'org-apex', branchId: 'branch-rajpur',
+  batchId: 'batch-c10-math', studentId: 'stud-rahul-10', date: '2026-10-05',
+  status: 'present', markedByUserId: 'user-teacher-sharma', markedAt: '2026-10-05T12:00:00.000Z'
+};
+const recAbsent: AttendanceRecord = {
+  ...recPresent,
+  id: 'att-absent', date: '2026-10-07', status: 'absent'
+};
+const excusedPlan = planExcusedAttendance(
+  { requesterType: 'student', startDate: '2026-10-05', endDate: '2026-10-11' },
+  stuRahul,
+  [batchMath],
+  [recPresent, recAbsent]
+);
+assert(excusedPlan.length === 1, 'Approval plans exactly one excused cell for that week');
+assert(
+  excusedPlan[0].date === '2026-10-07' && excusedPlan[0].batchId === 'batch-c10-math',
+  "The absent mark on a class day is fixed, the teacher's present mark and non-class days are left alone"
+);
+assert(
+  planExcusedAttendance({ requesterType: 'student', startDate: '2026-10-06', endDate: '2026-10-06' }, stuRahul, [batchMath], []).length === 0,
+  'Non-class days without a record produce no writes'
+);
+assert(
+  planExcusedAttendance({ requesterType: 'student', startDate: '2026-10-05', endDate: '2026-10-07' }, stuPriya, [batchMath], []).length === 0,
+  'A student with no matching batch produces no writes'
+);
+assert(
+  planExcusedAttendance({ requesterType: 'teacher', startDate: '2026-10-05', endDate: '2026-10-07' }, stuRahul, [batchMath], []).length === 0,
+  'Teacher leave never stamps student attendance'
+);
+
+// Faculty status sweep helper ---------------------------------------------------
+assert(
+  hasApprovedLeaveCovering([leaveOfAnjali], 'teach-anjali', '2026-10-12') === false,
+  'A pending request never covers a date'
+);
+assert(
+  hasApprovedLeaveCovering(
+    [{ ...leaveOfAnjali, status: 'approved' }],
+    'teach-anjali',
+    '2026-10-12'
+  ),
+  'An approved range covers every day inside it'
+);
+assert(
+  hasApprovedLeaveCovering(
+    [{ ...leaveOfAnjali, status: 'approved' }],
+    'teach-anjali',
+    '2026-10-14'
+  ) === false,
+  'The day after an approved range is not covered'
+);
+
+// Search & board order ----------------------------------------------------------
+const named = (r: LeaveRequest) => (r.requesterType === 'student' ? 'Rahul Sharma' : 'Prof. Anjali Sharma');
+assert(searchLeaveRequests([makeLeave({})], 'fever', named).length === 1, 'Search matches the reason text');
+assert(searchLeaveRequests([makeLeave({})], 'sick', named).length === 1, 'Search matches the category label');
+assert(searchLeaveRequests([makeLeave({})], 'rahul', named).length === 1, 'Search matches the leave-taker name');
+assert(searchLeaveRequests([makeLeave({})], 'no-such-leave', named).length === 0, 'Unmatched leave search returns nothing');
+assert(searchLeaveRequests([makeLeave({}), makeLeave({ id: 'y' })], '  ', named).length === 2, 'Blank search returns the full register');
+
+const pendingSoonest = makeLeave({ id: 'ps', status: 'pending', startDate: '2026-10-08', createdAtMs: 9 });
+const pendingLater = makeLeave({ id: 'pl', status: 'pending', startDate: '2026-10-12', createdAtMs: 5 });
+const decidedOld = makeLeave({ id: 'do', status: 'approved', createdAtMs: 1 });
+const decidedNew = makeLeave({ id: 'dn', status: 'rejected', createdAtMs: 2 });
+const boardOrder = sortLeaveRequestsForReview([decidedOld, pendingLater, decidedNew, pendingSoonest]);
+assert(
+  boardOrder.map(r => r.id).join(',') === 'ps,pl,dn,do',
+  'Board shows pending first (soonest absence on top), decided newest-first below'
+);
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);
