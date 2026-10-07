@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import {
   LayoutDashboard,
   BookOpen,
@@ -12,6 +13,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useRouter } from '../../context/RouterContext';
 import { UserRole } from '../../types';
+import { tSpring } from '../../lib/motion';
 
 interface MobileBottomNavProps {
   onOpenMenu: () => void;
@@ -97,16 +99,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) 
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-[#1C1C1E]/90 backdrop-blur-2xl border-t border-black/[0.08] dark:border-white/[0.1] px-2 py-1.5 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-[#1C1C1E]/85 backdrop-blur-2xl border-t border-black/[0.08] dark:border-white/[0.1] px-2 py-1.5 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.4)]"
       aria-label="Mobile Navigation"
     >
-      <div className="flex items-center justify-around">
+      <div className="flex items-center justify-around gap-1.5">
         {navItems.map(item => {
           const Icon = item.icon;
           const isActive = !item.isMenuTrigger && currentActive === item.id;
 
           return (
-            <button
+            <motion.button
               key={item.id}
               onClick={() => {
                 if (item.isMenuTrigger) {
@@ -130,9 +132,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) 
                   }
                 }
               }}
-              className={`flex flex-col items-center justify-center py-1.5 px-3 min-w-[56px] min-h-[44px] rounded-xl transition-all duration-150 relative cursor-pointer active:scale-95 touch-target ${
+              whileTap={{ scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className={`flex flex-col items-center justify-center py-1.5 px-2 min-w-[52px] min-h-[46px] rounded-2xl transition-[color,background-color,box-shadow] duration-150 relative cursor-pointer touch-target ${
                 isActive
-                  ? 'text-[#FFA000] dark:text-[#FFCA28] bg-amber-500/10 dark:bg-amber-500/15'
+                  ? 'text-[#0071E3] dark:text-[#5AC8FA] bg-[#EAF4FF] dark:bg-[#122B44] shadow-[inset_0_0_0_1px_rgba(0,113,227,0.12)]'
                   : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7]'
               }`}
             >
@@ -149,16 +153,21 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ onOpenMenu }) 
                 )}
               </div>
               <span
-                className={`text-[10px] mt-0.5 tracking-tight font-apple-text ${
-                  isActive ? 'font-bold' : 'font-medium'
+                className={`text-[10px] mt-0.5 tracking-[-0.02em] font-apple-text ${
+                  isActive ? 'font-semibold' : 'font-medium'
                 }`}
               >
                 {item.label}
               </span>
               {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#FFA000] mt-0.5 shadow-[0_0_6px_#FFA000]" />
+                <motion.span
+                  layoutId="mobileNavIndicator"
+                  transition={tSpring}
+                  className="w-1.5 h-1.5 rounded-full bg-[#0071E3] mt-0.5 shadow-[0_0_6px_#0071E3]"
+                  aria-hidden="true"
+                />
               )}
-            </button>
+            </motion.button>
           );
         })}
       </div>

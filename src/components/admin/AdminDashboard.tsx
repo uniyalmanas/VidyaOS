@@ -47,7 +47,7 @@ import {
   EyeOff,
   KeyRound
 } from 'lucide-react';
-import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User } from '../../types';
+import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
@@ -61,6 +61,8 @@ import {
   Column
 } from '../ui';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { getIndiaDateString } from '../../lib/date';
+import { motion, AnimatePresence } from 'motion/react';
 
 const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle: string }> = {
   overview: { label: 'Coaching & Education Center Overview', breadcrumb: 'Overview', subtitle: "Daily operations, today's schedule, fee collections, and key center performance metrics" },
@@ -91,17 +93,24 @@ export const AdminDashboard: React.FC = () => {
     batches,
     attendanceRecords,
     invoices,
+    pendingPaymentSubmissions,
     exams,
     examResults,
     timetableSlots,
     announcements,
     addStudent,
+    deleteStudent,
     addBatch,
+    updateBatch,
     addTeacher,
     updateTeacher,
+    deleteTeacher,
+    deduplicateTeachers,
     markAttendance,
     markBatchAllPresent,
     recordPayment,
+    verifyPayment,
+    rejectPayment,
     createInvoice,
     createExam,
     createAnnouncement,
@@ -121,7 +130,7 @@ export const AdminDashboard: React.FC = () => {
   } = useApp();
 
   const { navigate } = useRouter();
-  const { currentUser, registerUserCredentials } = useAuth();
+  const { currentUser, registerUserCredentials, linkStudentToParent } = useAuth();
   const isStaff = currentUser?.role === 'STAFF';
   const STAFF_RESTRICTED_MODULES = ['teachers', 'analytics', 'reports', 'settings', 'subscription'];
 
@@ -152,7 +161,7 @@ export const AdminDashboard: React.FC = () => {
   const [teacherName, setTeacherName] = useState<string>('');
   const [teacherEmail, setTeacherEmail] = useState<string>('');
   const [teacherPhone, setTeacherPhone] = useState<string>('');
-  const [teacherPassword, setTeacherPassword] = useState<string>('teacher123');
+  const [teacherPassword, setTeacherPassword] = useState<string>('');
   const [showTeacherPassword, setShowTeacherPassword] = useState<boolean>(false);
   const [teacherQualification, setTeacherQualification] = useState<string>('B.Tech / M.Sc');
   const [teacherSubject, setTeacherSubject] = useState<string>('Mathematics');
@@ -173,6 +182,40 @@ export const AdminDashboard: React.FC = () => {
   const [collectAmount, setCollectAmount] = useState<number>(2000);
   const [collectMethod, setCollectMethod] = useState<'Cash' | 'UPI' | 'NetBanking'>('UPI');
   const [collectUtr, setCollectUtr] = useState<string>('');
+
+  // Vacate / Remove confirmation states
+  const [teacherToVacate, setTeacherToVacate] = useState<Teacher | null>(null);
+  const [studentToVacate, setStudentToVacate] = useState<Student | null>(null);
+
+  const handleConfirmVacateTeacher = () => {
+    if (!teacherToVacate) return;
+    const t = teacherToVacate;
+    batches.forEach(b => {
+      if (b.teacherId === t.id) {
+        updateBatch(b.id, { teacherId: '' });
+      }
+    });
+    deleteTeacher(t.id);
+    showToast(`Faculty member "${t.name}" has been vacated and unassigned from active batches.`, 'success');
+    setTeacherToVacate(null);
+  };
+
+  const handleConfirmVacateStudent = () => {
+    if (!studentToVacate) return;
+    const s = studentToVacate;
+    deleteStudent(s.id);
+    showToast(`Student "${s.name}" has been vacated and removed from institute roster.`, 'success');
+    setStudentToVacate(null);
+  };
+
+  const handleCleanDuplicates = () => {
+    const res = deduplicateTeachers();
+    if (res.removedCount > 0) {
+      showToast(`Cleaned up ${res.removedCount} duplicate faculty record(s). Merged into ${res.mergedCount} active faculty.`, 'success');
+    } else {
+      showToast('No duplicate faculty records found in your database. All records are unique.', 'info');
+    }
+  };
 
   const handleUploadMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,7 +256,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Attendance state
-  const [attDate, setAttDate] = useState<string>('2026-09-28');
+  const [attDate, setAttDate] = useState<string>(() => getIndiaDateString());
   const [attBatchId, setAttBatchId] = useState<string>(batches[0]?.id || '');
 
   useEffect(() => {
@@ -230,6 +273,15 @@ export const AdminDashboard: React.FC = () => {
   const [stPhone, setStPhone] = useState<string>('');
   const [stFather, setStFather] = useState<string>('');
   const [stBatchIds, setStBatchIds] = useState<string[]>(batches[0]?.id ? [batches[0].id] : []);
+  // Student identity + optional login credentials. Logins are keyed on the 10-digit
+  // mobile number, so the student needs a number of their own — reusing the
+  // parent's would make both Firebase accounts collide.
+  const [stStudentPhone, setStStudentPhone] = useState<string>('');
+  const [stGender, setStGender] = useState<'' | 'Male' | 'Female' | 'Other'>('');
+  const [stStudentPassword, setStStudentPassword] = useState<string>('');
+  const [stParentPassword, setStParentPassword] = useState<string>('');
+  const [showAdmissionPasswords, setShowAdmissionPasswords] = useState<boolean>(false);
+  const [isAdmitting, setIsAdmitting] = useState<boolean>(false);
 
   // New batch form state
   const [batchName, setBatchName] = useState<string>('');
@@ -362,9 +414,8 @@ export const AdminDashboard: React.FC = () => {
   const totalCollectedFees = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const totalNetFees = invoices.reduce((sum, inv) => sum + inv.netAmount, 0);
   const totalPendingFees = totalNetFees - totalCollectedFees;
-  const pendingInvoicesCount = invoices.filter(i => i.status === 'pending' || i.status === 'partially_paid' || i.status === 'overdue').length;
-
-  const todayAttendance = attendanceRecords.filter(a => a.date === '2026-09-28');
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayAttendance = attendanceRecords.filter(a => a.date === todayStr || a.date === attDate);
   const todayPresent = todayAttendance.filter(a => a.status === 'present' || a.status === 'late').length;
   const todayAttendancePct = todayAttendance.length > 0 ? Math.round((todayPresent / todayAttendance.length) * 100) : 0;
 
@@ -383,35 +434,139 @@ export const AdminDashboard: React.FC = () => {
     return matchesSearch && matchesBatch;
   });
 
-  const handleCreateStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stName.trim()) return;
-
-    addStudent({
-      branchId: currentOrg.branches[0]?.id || 'branch-1',
-      rollNo: `10-${String(students.length + 1).padStart(2, '0')}`,
-      name: stName,
-      gender: 'Male',
-      classGrade: stClass,
-      board: stBoard,
-      schoolName: stSchool,
-      dateOfBirth: '2011-04-15',
-      admissionDate: new Date().toISOString().split('T')[0],
-      phone: stPhone,
-      address: 'Dehradun City',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      batchIds: stBatchIds,
-      guardian: {
-        fatherName: stFather || `${stName}'s Father`,
-        fatherPhone: stPhone,
-        parentUserId: 'user-parent-rajesh'
-      },
-      status: 'active'
-    });
-
-    setShowAddStudentModal(false);
+  const resetStudentForm = () => {
     setStName('');
     setStFather('');
+    setStSchool('');
+    setStPhone('');
+    setStStudentPhone('');
+    setStGender('');
+    setStStudentPassword('');
+    setStParentPassword('');
+    setStBatchIds(batches[0]?.id ? [batches[0].id] : []);
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stName.trim() || !stGender) return;
+
+    const studentDigits = stStudentPhone.replace(/[^0-9]/g, '').slice(-10);
+    const parentDigits = stPhone.replace(/[^0-9]/g, '').slice(-10);
+    const studentPassword = stStudentPassword.trim();
+    const parentPassword = stParentPassword.trim();
+    const guardianName = stFather.trim();
+
+    if (studentPassword && studentDigits.length !== 10) {
+      showToast('Enter a 10-digit student mobile number to create a student login.', 'error');
+      return;
+    }
+    if (parentPassword && parentDigits.length !== 10) {
+      showToast('Enter a 10-digit parent mobile number to create a parent login.', 'error');
+      return;
+    }
+    if (parentPassword && !guardianName) {
+      showToast('Enter the guardian name before creating a parent login.', 'error');
+      return;
+    }
+    if (studentDigits && parentDigits && studentDigits === parentDigits) {
+      showToast('Student and parent mobile numbers must differ — login accounts are keyed on mobile number.', 'error');
+      return;
+    }
+
+    setIsAdmitting(true);
+    try {
+      // Step 1: provision Firebase Auth accounts. Done before the student record so
+      // the guardian link can be written in a single pass afterwards.
+      //
+      // The two accounts are treated independently: if the parent login fails, the
+      // admission still goes ahead. Aborting here would strand an Auth account with
+      // no student record behind it, and that mobile number would then be taken by
+      // an account nobody can use.
+      let studentAuthUid: string | undefined;
+      let parentAuthUid: string | undefined;
+      let parentLoginError: string | undefined;
+      const describeCredError = (credErr: unknown) => {
+        const msg = credErr instanceof Error ? credErr.message : String(credErr);
+        if (msg.includes('8 characters')) return 'Login passwords must be at least 8 characters long.';
+        if (msg.includes('10-digit')) return 'Please enter a valid 10-digit mobile number.';
+        return `Could not create login: ${msg}`;
+      };
+
+      if (studentPassword) {
+        try {
+          studentAuthUid = await registerUserCredentials(
+            studentDigits, studentPassword, 'STUDENT', stName.trim(), '', currentOrg.id
+          );
+        } catch (credErr: unknown) {
+          // Nothing has been written yet, so it is safe to stop here.
+          showToast(describeCredError(credErr), 'error');
+          return;
+        }
+      }
+      if (parentPassword) {
+        try {
+          parentAuthUid = await registerUserCredentials(
+            parentDigits, parentPassword, 'PARENT', guardianName, '', currentOrg.id
+          );
+        } catch (credErr: unknown) {
+          parentLoginError = describeCredError(credErr);
+        }
+      }
+
+      // Step 2: create the student record. Fields the admission form does not collect
+      // stay empty rather than being filled with placeholder people/places.
+      const orgStudentCount = students.filter(s => s.orgId === currentOrg.id).length;
+      const newStudent = addStudent({
+        branchId: currentOrg.branches[0]?.id || 'branch-1',
+        rollNo: `${stClass.replace('Class ', '').trim()}-${String(orgStudentCount + 1).padStart(2, '0')}`,
+        name: stName.trim(),
+        gender: stGender,
+        classGrade: stClass,
+        board: stBoard,
+        schoolName: stSchool.trim(),
+        dateOfBirth: '',
+        admissionDate: new Date().toISOString().split('T')[0],
+        phone: studentDigits ? `+91 ${studentDigits}` : stPhone,
+        address: '',
+        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(stName.trim())}`,
+        batchIds: stBatchIds,
+        userId: studentAuthUid,
+        guardian: {
+          fatherName: guardianName || `${stName.trim()}'s Father`,
+          fatherPhone: stPhone,
+          parentUserId: parentAuthUid || ''
+        },
+        status: 'active'
+      });
+
+      // Step 3: backfill the parent profile with this child's id.
+      if (parentAuthUid) {
+        try {
+          await linkStudentToParent(parentAuthUid, newStudent.id);
+        } catch (linkErr) {
+          console.warn('Parent/child link could not be saved:', linkErr);
+          showToast('Student admitted, but the parent portal link failed to save — the parent will see an empty dashboard.', 'warning');
+        }
+      }
+
+      setShowAddStudentModal(false);
+      resetStudentForm();
+      if (parentLoginError) {
+        showToast(
+          `✓ "${newStudent.name}" admitted, but the parent login was not created — ${parentLoginError}`,
+          'warning'
+        );
+      } else {
+        showToast(
+          studentAuthUid
+            ? `✓ "${newStudent.name}" admitted with a student login.`
+            : `✓ "${newStudent.name}" admitted.`,
+          'success'
+        );
+      }
+    } finally {
+      setIsAdmitting(false);
+    }
   };
 
   const handleCreateBatch = (e: React.FormEvent) => {
@@ -442,14 +597,40 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!teacherName.trim()) return;
 
-    const cleanDigits = teacherPhone.replace(/[^0-9]/g, '').slice(-10) || '9876500000';
-    const assignedPassword = (teacherPassword || 'teacher123').trim();
-    const assignedEmail = teacherEmail.trim() || `${teacherName.toLowerCase().replace(/\s+/g, '.')}@${currentOrg.slug}.in`;
+    const cleanDigits = teacherPhone.replace(/[^0-9]/g, '').slice(-10);
+    if (!cleanDigits || cleanDigits.length < 10) {
+      showToast('Please enter a valid 10-digit mobile number', 'error');
+      return;
+    }
 
-    // 1. Provision Firebase Auth account & Firestore user profile first to obtain primary UID
-    let authUid = `user-${Date.now()}`;
+    // Check if faculty with this mobile number already exists in current coaching center
+    const existingTeacher = teachers.find(t =>
+      t.orgId === currentOrg.id &&
+      t.phone.replace(/[^0-9]/g, '').slice(-10) === cleanDigits
+    );
+
+    if (existingTeacher) {
+      showToast(`A faculty member with mobile +91 ${cleanDigits} already exists (${existingTeacher.name}).`, 'info');
+      setShowAddTeacherModal(false);
+      setTeacherName('');
+      setTeacherPhone('');
+      setTeacherEmail('');
+      return;
+    }
+
+    const assignedPassword = teacherPassword.trim();
+    if (assignedPassword.length < 8) {
+      showToast('Faculty password must be at least 8 characters long.', 'error');
+      return;
+    }
+    const assignedEmail = teacherEmail.trim() || `${teacherName.toLowerCase().replace(/\s+/g, '.')}@${currentOrg.slug || currentOrg.id}.in`;
+
+    // Step 1: Provision Firebase Auth account + Firestore user profile.
+    // registerUserCredentials is atomic: if the Firestore write fails after Auth
+    // account creation, it throws an error so we don't have orphan records.
+    let authUid: string;
     try {
-      const createdUserId = await registerUserCredentials(
+      authUid = await registerUserCredentials(
         cleanDigits,
         assignedPassword,
         'TEACHER',
@@ -457,14 +638,23 @@ export const AdminDashboard: React.FC = () => {
         assignedEmail,
         currentOrg.id
       );
-      if (createdUserId) {
-        authUid = createdUserId;
+    } catch (credErr: any) {
+      const errMsg = credErr instanceof Error ? credErr.message : String(credErr);
+      // Provide specific, actionable error messages
+      if (errMsg.includes('mobile number already exists')) {
+        showToast(`An authentication account with mobile +91 ${cleanDigits} already exists. If this teacher was previously registered, they can log in directly. Otherwise, ask them to reset their password.`, 'error');
+      } else if (errMsg.includes('10-digit')) {
+        showToast('Please enter a valid 10-digit mobile number for the faculty member.', 'error');
+      } else if (errMsg.includes('8 characters')) {
+        showToast('The faculty password must be at least 8 characters long.', 'error');
+      } else {
+        showToast(`Could not create faculty account: ${errMsg}`, 'error');
       }
-    } catch (credErr) {
-      console.warn('Teacher credentials registration note:', credErr);
+      return;
     }
 
-    // 2. Create teacher document referencing Firebase Auth UID as primary identity (no password stored)
+    // Step 2: Create teacher profile document in the teachers collection.
+    // This references the Firebase Auth UID — no password is ever stored here.
     addTeacher({
       branchId: currentOrg.branches[0]?.id || 'branch-1',
       userId: authUid,
@@ -474,7 +664,7 @@ export const AdminDashboard: React.FC = () => {
       qualification: teacherQualification.trim() || 'Graduate / Subject Specialist',
       subjects: teacherSubject.split(',').map(s => s.trim()).filter(Boolean),
       salary: teacherSalary || 35000,
-      assignedBatchIds: batches[0]?.id ? [batches[0].id] : [],
+      assignedBatchIds: [], // Admin assigns batches separately to avoid unintended assignments
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(teacherName)}`,
       status: 'active'
     });
@@ -483,8 +673,8 @@ export const AdminDashboard: React.FC = () => {
     setTeacherName('');
     setTeacherEmail('');
     setTeacherPhone('');
-    setTeacherPassword('teacher123');
-    showToast(`Faculty ${teacherName} added! Immediate sign-in available via Mobile (+91 ${cleanDigits}) & Password.`, 'success');
+    setTeacherPassword('');
+    showToast(`✓ Faculty "${teacherName}" added! They can sign in via Mobile (+91 ${cleanDigits}) & Password.`, 'success');
   };
 
   // Dynamic Academic & Center Analytics Calculations
@@ -506,20 +696,38 @@ export const AdminDashboard: React.FC = () => {
     return totalMax > 0 ? Math.round((totalEnrolled / totalMax) * 100) : 0;
   }, [batches]);
 
-  const handleConfirmFeeCollection = (e: React.FormEvent) => {
+  const handleConfirmFeeCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedInvoiceToCollect) return;
 
-    recordPayment(selectedInvoiceToCollect, {
-      amount: Number(collectAmount),
-      paymentMethod: collectMethod,
-      transactionRef: collectUtr || `OFFLINE/${Date.now().toString().slice(-6)}`
-    });
-
-    setShowCollectFeeModal(false);
+    const transactionRef = collectUtr.trim();
+    if (collectMethod === 'UPI' && !/^\d{12}$/.test(transactionRef)) {
+      showToast('Enter the 12-digit UPI UTR before confirming this payment.', 'error');
+      return;
+    }
     const inv = invoices.find(i => i.id === selectedInvoiceToCollect);
-    if (inv) {
-      setActiveReceiptInvoice(inv);
+    if (!inv) {
+      showToast('The selected invoice could not be found.', 'error');
+      return;
+    }
+
+    try {
+      const payment = await recordPayment(selectedInvoiceToCollect, {
+        amount: Number(collectAmount),
+        paymentMethod: collectMethod,
+        transactionRef: transactionRef || `CASH-${Date.now()}`
+      });
+      const paidAmount = inv.paidAmount + payment.amount;
+      setActiveReceiptInvoice({
+        ...inv,
+        paidAmount,
+        status: paidAmount >= inv.netAmount ? 'paid' : 'partially_paid',
+        payments: [...(inv.payments || []), payment]
+      });
+      setShowCollectFeeModal(false);
+      showToast('Payment recorded and receipt generated.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not record this payment.', 'error');
     }
   };
 
@@ -630,6 +838,7 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-black/[0.06] dark:border-white/[0.08] bg-[radial-gradient(circle_at_top_left,_rgba(120,120,128,0.07),_transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.78),rgba(242,242,244,0.96))] dark:bg-[radial-gradient(circle_at_top_left,_rgba(174,174,178,0.06),_transparent_30%),linear-gradient(180deg,rgba(28,28,30,0.98),rgba(17,17,19,0.96))] p-3 sm:p-4">
       {/* 1. Google Cloud / Firebase Standard Page Header */}
       <PageHeader
         breadcrumbs={
@@ -680,13 +889,14 @@ export const AdminDashboard: React.FC = () => {
           ) : (
             <StatusChip
               label={`${currentOrg.planId === 'starter' ? 'STARTER BATCH' : currentOrg.planId === 'growth' ? 'GROWTH ACADEMY' : 'MULTI-BRANCH PRO'} · ${currentOrg.city}, ${currentOrg.state}`}
-              variant="warning"
+              variant="info"
               size="xs"
             />
           )
         }
         actions={headerActions}
       />
+      </div>
 
       {/* Access Restriction Screen for Front Desk Staff */}
       {isStaff && STAFF_RESTRICTED_MODULES.includes(currentModule) && (
@@ -727,14 +937,24 @@ export const AdminDashboard: React.FC = () => {
         </ConsoleCard>
       )}
 
+      {/* Animated module region: keyed by active tab so switching modules
+          plays a quick fade-up instead of a hard content swap. Modals live
+          outside this wrapper so they are not remounted on tab change. */}
+      <motion.div
+        key={currentModule}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: [0.25, 1, 0.5, 1] }}
+      >
       {/* 2. OVERVIEW MODULE */}
       {currentModule === 'overview' && (
         <div className="space-y-6">
           {/* Operational Hub: Aaj Ka Kaam (Apple HIG Glass / Tactile Operational Banner) */}
-          <div className="bg-white dark:bg-[#1C1C1E] border-l-4 border-l-amber-500 border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="relative overflow-hidden rounded-[26px] border border-[#0071E3]/20 dark:border-[#2997FF]/20 bg-[linear-gradient(135deg,rgba(225,239,255,0.72),rgba(255,255,255,0.96),rgba(242,247,255,0.82))] dark:bg-[linear-gradient(135deg,rgba(24,34,48,0.98),rgba(24,24,24,0.9),rgba(20,20,20,0.92))] border-l-4 border-l-[#0071E3] dark:border-l-[#2997FF] p-4 sm:p-5 shadow-[0_12px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_12px_30px_rgba(0,0,0,0.35)] space-y-4">
+            <div className="absolute inset-y-0 right-0 w-32 bg-[radial-gradient(circle_at_center,_rgba(120,120,128,0.08),_transparent_65%)]"></div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 relative z-10">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-500 dark:text-amber-400 flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-[#0071E3]/10 text-[#0071E3] dark:bg-[#2997FF]/15 dark:text-[#2997FF] flex items-center justify-center flex-shrink-0">
                   <Zap className="w-4 h-4 fill-current stroke-[2.5]" />
                 </div>
                 <div>
@@ -742,7 +962,7 @@ export const AdminDashboard: React.FC = () => {
                     <h3 className="font-apple-display font-bold text-sm sm:text-base text-slate-900 dark:text-white">
                       Daily Action Center · Aaj Ka Kaam
                     </h3>
-                    <StatusChip label="PRIORITY" variant="warning" size="xs" />
+                    <StatusChip label="PRIORITY" variant="info" size="xs" />
                   </div>
                   <p className="text-xs text-slate-500 dark:text-neutral-400">
                     Immediate attendance and pending fee recoveries for {currentOrg.name}
@@ -817,7 +1037,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="bg-black/[0.02] dark:bg-[#2C2C2E]/60 p-4 rounded-xl border border-black/[0.08] dark:border-white/[0.08] flex flex-col justify-between space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#0071E3] dark:text-[#2997FF]">
                       Monthly Fee Recovery
                     </span>
                     <h4 className="font-bold font-apple-display text-sm text-slate-900 dark:text-white mt-0.5 tabular-nums">
@@ -835,7 +1055,7 @@ export const AdminDashboard: React.FC = () => {
                         : `${pendingInvoices.length} parents with unpaid fee balances`}
                     </p>
                   </div>
-                  <CreditCard className="w-4 h-4 text-amber-500" />
+                  <CreditCard className="w-4 h-4 text-[#0071E3] dark:text-[#2997FF]" />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
@@ -920,7 +1140,7 @@ export const AdminDashboard: React.FC = () => {
             <MetricCard
               label="Pending Fee Dues"
               value={`₹${(totalPendingFees ?? 0).toLocaleString('en-IN')}`}
-              subtext={`${pendingInvoicesCount} pending collections`}
+              subtext={`${pendingInvoices.length} pending collections`}
               accentColor="#FFA000"
               icon={<CreditCard className="w-4 h-4" />}
               actionText="Review & collect invoices"
@@ -1212,8 +1432,13 @@ export const AdminDashboard: React.FC = () => {
                   />
                   <div>
                     <div className="font-bold text-[#202124] dark:text-[#E8EAED] text-sm">{s.name}</div>
-                    <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
-                      Roll: {s.rollNo} · <span className="font-mono">{s.enrollmentNo}</span>
+                    <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] flex items-center gap-1.5 flex-wrap">
+                      <span>Roll: {s.rollNo}</span>
+                      <span>·</span>
+                      <span className="font-mono">{s.enrollmentNo}</span>
+                      <span className="font-mono text-[9px] text-[#1A73E8] dark:text-[#8AB4F8] bg-[#E8F0FE] dark:bg-[#1E3A5F] px-1 py-0.5 rounded border border-[#1A73E8]/20 dark:border-[#8AB4F8]/20">
+                        UID: {s.userId || s.id}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1282,6 +1507,13 @@ export const AdminDashboard: React.FC = () => {
               align: 'right',
               render: (s) => (
                 <div className="flex items-center justify-end space-x-1.5">
+                  <ConsoleButton
+                    variant="danger"
+                    size="xs"
+                    icon={<Trash2 className="w-3 h-3 text-[#D93025]" />}
+                    onClick={() => setStudentToVacate(s)}
+                    title="Vacate Student"
+                  />
                   <ConsoleButton
                     variant="secondary"
                     size="xs"
@@ -1602,7 +1834,70 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 6. FEE & PAYMENT MANAGEMENT */}
       {currentModule === 'fees' && (
-        <DataTable
+            <div className="space-y-4">
+            {pendingPaymentSubmissions.some(submission => submission.status === 'pending_verification') && (
+              <ConsoleCard
+                title="UPI Reports Awaiting Verification"
+                subtitle="Check each transfer in your bank or UPI account before settling it."
+                icon={<ShieldCheck className="w-4 h-4" />}
+              >
+                <div className="divide-y divide-[#DADCE0] dark:divide-[#3C4043]">
+                  {pendingPaymentSubmissions
+                    .filter(submission => submission.status === 'pending_verification')
+                    .map(submission => {
+                      const student = students.find(item => item.id === submission.studentId);
+                      const invoice = invoices.find(item => item.id === submission.invoiceId);
+                      return (
+                        <div key={submission.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="min-w-0 text-xs">
+                            <div className="font-bold text-[#202124] dark:text-[#E8EAED]">
+                              {student?.name || 'Student'} · ₹{submission.amount.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[#5F6368] dark:text-[#9AA0A6]">
+                              {invoice?.invoiceNo || submission.invoiceId} · UTR <span className="font-mono">{submission.transactionRef}</span>
+                            </div>
+                            <div className="text-[#5F6368] dark:text-[#9AA0A6]">
+                              Submitted by {submission.submittedByName} · {new Date(submission.submittedAt).toLocaleString('en-IN')}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <ConsoleButton
+                              variant="primary"
+                              size="xs"
+                              onClick={async () => {
+                                if (!window.confirm('Confirm you have matched this UTR and amount in the center bank/UPI account.')) return;
+                                try {
+                                  await verifyPayment(submission.id);
+                                  showToast('UPI transfer verified and invoice settled.', 'success');
+                                } catch (error) {
+                                  showToast(error instanceof Error ? error.message : 'Could not verify payment.', 'error');
+                                }
+                              }}
+                            >
+                              Verify & Settle
+                            </ConsoleButton>
+                            <ConsoleButton
+                              variant="secondary"
+                              size="xs"
+                              onClick={async () => {
+                                try {
+                                  await rejectPayment(submission.id);
+                                  showToast('Payment report rejected.', 'warning');
+                                } catch (error) {
+                                  showToast(error instanceof Error ? error.message : 'Could not reject payment.', 'error');
+                                }
+                              }}
+                            >
+                              Reject
+                            </ConsoleButton>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </ConsoleCard>
+            )}
+            <DataTable
           columns={[
             {
               key: 'invoiceNo',
@@ -1657,13 +1952,18 @@ export const AdminDashboard: React.FC = () => {
               key: 'status',
               header: 'Status',
               sortable: true,
-              render: (inv) => (
-                <StatusChip
-                  label={inv.status.replace('_', ' ')}
-                  variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'error' : 'warning'}
-                  size="xs"
-                />
-              )
+              render: (inv) => {
+                const reportedPending = pendingPaymentSubmissions.some(
+                  submission => submission.invoiceId === inv.id && submission.status === 'pending_verification'
+                );
+                return (
+                  <StatusChip
+                    label={reportedPending ? 'verification pending' : inv.status.replace('_', ' ')}
+                    variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'error' : 'warning'}
+                    size="xs"
+                  />
+                );
+              }
             },
             {
               key: 'actions',
@@ -1676,14 +1976,16 @@ export const AdminDashboard: React.FC = () => {
 
                 return (
                   <div className="flex items-center justify-end space-x-1.5">
-                    <ConsoleButton
-                      variant="secondary"
-                      size="xs"
-                      icon={<FileText className="w-3 h-3" />}
-                      onClick={() => setActiveReceiptInvoice(inv)}
-                    >
-                      Receipt
-                    </ConsoleButton>
+                    {(inv.paidAmount ?? 0) > 0 && (
+                      <ConsoleButton
+                        variant="secondary"
+                        size="xs"
+                        icon={<FileText className="w-3 h-3" />}
+                        onClick={() => setActiveReceiptInvoice(inv)}
+                      >
+                        Receipt
+                      </ConsoleButton>
+                    )}
 
                     {!isPaid && (
                       <>
@@ -1738,6 +2040,7 @@ export const AdminDashboard: React.FC = () => {
             </ConsoleButton>
           }
         />
+        </div>
       )}
 
       {/* 7. EXAMS & RESULTS */}
@@ -2038,14 +2341,25 @@ export const AdminDashboard: React.FC = () => {
           title="Faculty & Teachers Directory"
           subtitle="Instructor profiles, assigned subjects, contact details, and teaching schedules"
           action={
-            <ConsoleButton
-              variant="primary"
-              size="sm"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => setShowAddTeacherModal(true)}
-            >
-              Add Faculty
-            </ConsoleButton>
+            <div className="flex items-center gap-2">
+              <ConsoleButton
+                variant="secondary"
+                size="sm"
+                icon={<Sparkles className="w-3.5 h-3.5 text-[#FFA000]" />}
+                onClick={handleCleanDuplicates}
+                title="Merge duplicate faculty profiles & clean up redundant records"
+              >
+                Clean Up Duplicates
+              </ConsoleButton>
+              <ConsoleButton
+                variant="primary"
+                size="sm"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => setShowAddTeacherModal(true)}
+              >
+                Add Faculty
+              </ConsoleButton>
+            </div>
           }
         >
           {teachers.length === 0 ? (
@@ -2074,16 +2388,21 @@ export const AdminDashboard: React.FC = () => {
                   className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-3 text-xs flex flex-col justify-between"
                 >
                   <div className="space-y-3">
-                    <div className="flex items-center space-x-3">
-                      <img
-                        src={t.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(t.name)}`}
-                        alt={t.name}
-                        className="w-10 h-10 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
-                      />
-                      <div>
-                        <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">{t.name}</div>
-                        <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">{t.qualification}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center space-x-3">
+                        <img
+                          src={t.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(t.name)}`}
+                          alt={t.name}
+                          className="w-10 h-10 rounded-full object-cover border border-[#DADCE0] dark:border-[#3C4043]"
+                        />
+                        <div>
+                          <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">{t.name}</div>
+                          <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">{t.qualification}</div>
+                        </div>
                       </div>
+                      <span className="font-mono text-[9px] text-[#1A73E8] dark:text-[#8AB4F8] bg-[#E8F0FE] dark:bg-[#1E3A5F] px-1.5 py-0.5 rounded border border-[#1A73E8]/20 dark:border-[#8AB4F8]/20 whitespace-nowrap">
+                        UID: {t.userId || t.id}
+                      </span>
                     </div>
 
                     <div className="space-y-1 text-[#5F6368] dark:text-[#9AA0A6] pt-2 border-t border-[#DADCE0]/60 dark:border-[#3C4043]">
@@ -2093,7 +2412,15 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-[#DADCE0]/60 dark:border-[#3C4043] flex items-center justify-end">
+                  <div className="pt-2 border-t border-[#DADCE0]/60 dark:border-[#3C4043] flex items-center justify-between gap-2">
+                    <ConsoleButton
+                      variant="danger"
+                      size="xs"
+                      icon={<Trash2 className="w-3 h-3 text-[#D93025]" />}
+                      onClick={() => setTeacherToVacate(t)}
+                    >
+                      Vacate Faculty
+                    </ConsoleButton>
                     <ConsoleButton
                       variant="secondary"
                       size="xs"
@@ -2113,7 +2440,7 @@ export const AdminDashboard: React.FC = () => {
                         setEditingPerson(teacherUser);
                       }}
                     >
-                      Edit Faculty Profile
+                      Edit Profile
                     </ConsoleButton>
                   </div>
                 </div>
@@ -2176,7 +2503,11 @@ export const AdminDashboard: React.FC = () => {
                     icon={<UserCheck className="w-3 h-3 text-[#1A73E8]" />}
                     onClick={() => {
                       const parentUser: User = {
-                        id: `parent-${s.id}`,
+                        // The parent's real Firebase Auth UID when a login exists,
+                        // empty otherwise. EditProfileModal skips the Firestore user
+                        // write when there is no account, so a stale placeholder id
+                        // here would just create an orphaned `users/` document.
+                        id: s.guardian.parentUserId || '',
                         name: s.guardian.fatherName,
                         email: `parent.${s.rollNo.toLowerCase()}@example.com`,
                         phone: s.guardian.fatherPhone,
@@ -2677,22 +3008,15 @@ export const AdminDashboard: React.FC = () => {
                   <StatusChip label="LIMITED ACCESS" variant="info" size="xs" />
                 </div>
                 <p className="text-[#5F6368] dark:text-blue-300/80 leading-relaxed text-[11px]">
-                  Your front desk staff can manage admissions, collect payments via dynamic desk UPI QR, print fee receipts, mark daily batch attendance, and send WhatsApp notifications. Financial profit/loss, faculty management, and system settings remain strictly protected.
+                  Do not share a default password. Create each staff member&apos;s account with a unique password before granting front desk access. Financial profit/loss, faculty management, and system settings remain strictly protected.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3 bg-white dark:bg-[#282A2C] rounded-xl border border-[#DADCE0] dark:border-[#3C4043] space-y-1">
                   <span className="text-[10px] uppercase font-bold text-[#5F6368] dark:text-[#9AA0A6]">Staff Mobile / Login</span>
                   <div className="font-mono font-bold text-sm text-[#202124] dark:text-[#E8EAED]">
                     {currentOrg.id === 'org-apex' ? '+91 98765 43299' : `+91 ${currentOrg.phone.replace(/[^0-9]/g, '').slice(0, 9)}9`}
-                  </div>
-                </div>
-
-                <div className="p-3 bg-white dark:bg-[#282A2C] rounded-xl border border-[#DADCE0] dark:border-[#3C4043] space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-[#5F6368] dark:text-[#9AA0A6]">Default Password</span>
-                  <div className="font-mono font-bold text-sm text-[#202124] dark:text-[#E8EAED]">
-                    staff123
                   </div>
                 </div>
 
@@ -2866,10 +3190,25 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
+      </motion.div>
+
       {/* MODAL 1: Add Student */}
+      <AnimatePresence>
       {showAddStudentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-lg rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-lg rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
             <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
               Admit New Student
             </h3>
@@ -2917,6 +3256,33 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Gender</label>
+                  <select
+                    required
+                    value={stGender}
+                    onChange={e => setStGender(e.target.value as 'Male' | 'Female' | 'Other')}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  >
+                    <option value="">Select</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Student Mobile (+91)</label>
+                  <input
+                    type="text"
+                    placeholder="Own number — required for a login"
+                    value={stStudentPhone}
+                    onChange={e => setStStudentPhone(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
                   <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Father / Guardian Name</label>
                   <input
                     type="text"
@@ -2940,6 +3306,43 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              <div className="border border-dashed border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5F6368] dark:text-[#9AA0A6] font-medium">Login credentials (optional)</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdmissionPasswords(v => !v)}
+                    className="text-[11px] text-[#1A73E8] hover:underline cursor-pointer font-medium"
+                  >
+                    {showAdmissionPasswords ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Student Login Password</label>
+                    <input
+                      type={showAdmissionPasswords ? 'text' : 'password'}
+                      minLength={8}
+                      placeholder="Blank = no student login"
+                      value={stStudentPassword}
+                      onChange={e => setStStudentPassword(e.target.value)}
+                      className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Parent Login Password</label>
+                    <input
+                      type={showAdmissionPasswords ? 'text' : 'password'}
+                      minLength={8}
+                      placeholder="Blank = no parent login"
+                      value={stParentPassword}
+                      onChange={e => setStParentPassword(e.target.value)}
+                      className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Initial Batch Assignment</label>
                 <select
@@ -2957,26 +3360,46 @@ export const AdminDashboard: React.FC = () => {
                 <ConsoleButton
                   type="button"
                   variant="ghost"
-                  onClick={() => setShowAddStudentModal(false)}
+                  onClick={() => {
+                    // Clear the typed passwords along with the rest of the form so a
+                    // dismissed dialog does not keep credentials in memory.
+                    resetStudentForm();
+                    setShowAddStudentModal(false);
+                  }}
                 >
                   Cancel
                 </ConsoleButton>
                 <ConsoleButton
                   type="submit"
                   variant="primary"
+                  disabled={isAdmitting}
                 >
-                  Admit Student
+                  {isAdmitting ? 'Creating logins…' : 'Admit Student'}
                 </ConsoleButton>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* MODAL 2: Create Batch */}
+      <AnimatePresence>
       {showAddBatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
             <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
               Create New Coaching Batch
             </h3>
@@ -3066,14 +3489,28 @@ export const AdminDashboard: React.FC = () => {
                 </ConsoleButton>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* MODAL 2.5: Add Faculty / Teacher */}
+      <AnimatePresence>
       {showAddTeacherModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
             <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
               Add Faculty Member
             </h3>
@@ -3122,7 +3559,7 @@ export const AdminDashboard: React.FC = () => {
                     <span>Faculty Login Password *</span>
                   </label>
                   <span className="text-[10px] text-amber-700 dark:text-amber-300 font-mono font-semibold">
-                    Default: teacher123
+                    No default password
                   </span>
                 </div>
                 <div className="relative">
@@ -3131,7 +3568,8 @@ export const AdminDashboard: React.FC = () => {
                     required
                     value={teacherPassword}
                     onChange={e => setTeacherPassword(e.target.value)}
-                    placeholder="Enter password (min 6 characters)"
+                    minLength={8}
+                    placeholder="Enter a unique password (min 8 characters)"
                     className="w-full border border-amber-500/40 bg-white dark:bg-[#1E1F20] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2 font-mono pr-9 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40"
                   />
                   <button
@@ -3198,14 +3636,28 @@ export const AdminDashboard: React.FC = () => {
                 </ConsoleButton>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* MODAL 3: Collect Fee */}
+      <AnimatePresence>
       {showCollectFeeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
             <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
               Record Fee Collection
             </h3>
@@ -3279,14 +3731,28 @@ export const AdminDashboard: React.FC = () => {
                 </ConsoleButton>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* MODAL 4: Broadcast Notice */}
+      <AnimatePresence>
       {showNewNoticeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
             <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
               Broadcast Notice
             </h3>
@@ -3344,14 +3810,28 @@ export const AdminDashboard: React.FC = () => {
                 </ConsoleButton>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* MODAL 5: Upload Study Material (Firebase Cloud Storage) */}
+      <AnimatePresence>
       {showUploadMaterialModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4">
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
             <div className="flex items-center justify-between">
               <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED] flex items-center gap-2">
                 <Upload className="w-4 h-4 text-[#FFA000]" />
@@ -3439,7 +3919,11 @@ export const AdminDashboard: React.FC = () => {
                 </select>
               </div>
 
-              <div>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 30, delay: 0.05 }}
+              >
                 <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
                   Choose File (PDF, DOCX, ZIP, MP4)
                 </label>
@@ -3455,7 +3939,7 @@ export const AdminDashboard: React.FC = () => {
                 <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-1">
                   Uploaded securely to Google Firebase Cloud Storage bucket. Max recommended: 25MB.
                 </p>
-              </div>
+              </motion.div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
                 <ConsoleButton
@@ -3477,9 +3961,162 @@ export const AdminDashboard: React.FC = () => {
                 </ConsoleButton>
               </div>
             </form>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
+
+      {/* MODAL: Vacate Faculty Confirmation */}
+      <AnimatePresence>
+      {teacherToVacate && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <div className="flex items-center space-x-3 text-[#D93025]">
+              <div className="p-2.5 rounded-full bg-red-50 dark:bg-red-950/40">
+                <Trash2 className="w-6 h-6 text-[#D93025]" />
+              </div>
+              <div>
+                <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+                  Vacate Faculty Member
+                </h3>
+                <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                  Immediate role termination & removal
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">Faculty Name:</span>
+                <strong className="text-[#202124] dark:text-[#E8EAED]">{teacherToVacate.name}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">Mobile / Phone:</span>
+                <span className="font-mono text-[#202124] dark:text-[#E8EAED]">{teacherToVacate.phone}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">User ID (UID):</span>
+                <span className="font-mono text-[#1A73E8] dark:text-[#8AB4F8]">{teacherToVacate.userId || teacherToVacate.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">Active Batches:</span>
+                <span className="font-semibold text-[#D93025]">{teacherToVacate.assignedBatchIds.length} batch(es) to be unassigned</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed">
+              Are you sure you want to vacate <strong>{teacherToVacate.name}</strong>? This action will permanently remove this faculty record, release them from active classroom batches, and mark their institute profile as vacated.
+            </p>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
+              <ConsoleButton
+                type="button"
+                variant="ghost"
+                onClick={() => setTeacherToVacate(null)}
+              >
+                Cancel
+              </ConsoleButton>
+              <ConsoleButton
+                type="button"
+                variant="danger"
+                onClick={handleConfirmVacateTeacher}
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+              >
+                Confirm & Vacate Faculty
+              </ConsoleButton>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      {/* MODAL: Vacate Student Confirmation */}
+      <AnimatePresence>
+      {studentToVacate && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <div className="flex items-center space-x-3 text-[#D93025]">
+              <div className="p-2.5 rounded-full bg-red-50 dark:bg-red-950/40">
+                <Trash2 className="w-6 h-6 text-[#D93025]" />
+              </div>
+              <div>
+                <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+                  Vacate Student
+                </h3>
+                <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                  Disenroll student from center
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">Student Name:</span>
+                <strong className="text-[#202124] dark:text-[#E8EAED]">{studentToVacate.name}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">Enrollment No:</span>
+                <span className="font-mono text-[#202124] dark:text-[#E8EAED]">{studentToVacate.enrollmentNo}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">User ID (UID):</span>
+                <span className="font-mono text-[#1A73E8] dark:text-[#8AB4F8]">{studentToVacate.userId || studentToVacate.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5F6368] dark:text-[#9AA0A6]">Class / Grade:</span>
+                <span className="font-medium text-[#202124] dark:text-[#E8EAED]">{studentToVacate.classGrade} ({studentToVacate.board})</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed">
+              Are you sure you want to vacate <strong>{studentToVacate.name}</strong>? This action will remove the student from active rosters and unenroll them from assigned batches.
+            </p>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
+              <ConsoleButton
+                type="button"
+                variant="ghost"
+                onClick={() => setStudentToVacate(null)}
+              >
+                Cancel
+              </ConsoleButton>
+              <ConsoleButton
+                type="button"
+                variant="danger"
+                onClick={handleConfirmVacateStudent}
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+              >
+                Confirm & Vacate Student
+              </ConsoleButton>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
 
       {/* Bulk Student CSV / Excel Import Modal */}
       <BulkStudentImportModal

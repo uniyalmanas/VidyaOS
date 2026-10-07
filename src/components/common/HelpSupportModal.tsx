@@ -26,6 +26,25 @@ import {
   RefreshCw,
   BookOpen
 } from 'lucide-react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
+
+/** Modal shell: spring pop-in cascading header → tab bar → body → footer. */
+const helpPanelVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { ...tSpring, delayChildren: 0.05, staggerChildren: 0.06 }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    y: 6,
+    transition: { duration: 0.16, ease: easings.inOut }
+  }
+};
 
 interface FaqItem {
   id: string;
@@ -174,8 +193,6 @@ export const HelpSupportModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedTicket, setSubmittedTicket] = useState<{ id: string; subject: string; timestamp: string } | null>(null);
 
-  if (!showHelpModal) return null;
-
   const filteredFaqs = FAQS.filter(f =>
     f.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
     f.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -211,18 +228,29 @@ export const HelpSupportModal: React.FC = () => {
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="help-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
-    >
-      <div
-        style={{ backgroundColor: resolvedTheme === 'dark' ? '#1E1F20' : '#ffffff' }}
-        className="w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl border border-[#DADCE0] dark:border-[#3C4043] flex flex-col overflow-hidden text-[#202124] dark:text-[#E8EAED]"
-      >
-        {/* Modal Header */}
-        <div className="p-4 sm:p-6 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-transparent to-blue-500/10">
+    <AnimatePresence>
+      {showHelpModal && (
+        <motion.div
+          key="help-support-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="help-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: easings.outQuart }}
+        >
+          <motion.div
+            variants={helpPanelVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            style={{ backgroundColor: resolvedTheme === 'dark' ? '#1E1F20' : '#ffffff' }}
+            className="w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl border border-[#DADCE0] dark:border-[#3C4043] flex flex-col overflow-hidden text-[#202124] dark:text-[#E8EAED]"
+          >
+            {/* Modal Header */}
+            <motion.div variants={fadeUp} className="p-4 sm:p-6 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-transparent to-blue-500/10">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 rounded-2xl bg-gradient-to-br from-[#FFA000] to-[#E65100] text-slate-950 shadow-sm">
               <HelpCircle className="w-6 h-6 stroke-[2.5]" />
@@ -249,10 +277,10 @@ export const HelpSupportModal: React.FC = () => {
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+            </motion.div>
 
-        {/* Navigation Tabs Bar */}
-        <div className="px-4 sm:px-6 pt-3 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between gap-2 overflow-x-auto bg-[#F8F9FA] dark:bg-[#18191B]">
+            {/* Navigation Tabs Bar */}
+            <motion.div variants={fadeUp} className="px-4 sm:px-6 pt-3 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between gap-2 overflow-x-auto bg-[#F8F9FA] dark:bg-[#18191B]">
           <div className="flex space-x-1 sm:space-x-2">
             <button
               onClick={() => { setActiveTab('faqs'); setSubmittedTicket(null); }}
@@ -309,10 +337,16 @@ export const HelpSupportModal: React.FC = () => {
             </button>
           </div>
 
-        </div>
+            </motion.div>
 
-        {/* Modal Body Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
+            {/* Modal Body Container */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, ease: easings.outQuart }}
+              >
           {/* TAB 1: FAQS */}
           {activeTab === 'faqs' && (
             <div className="space-y-4">
@@ -368,7 +402,12 @@ export const HelpSupportModal: React.FC = () => {
               {/* Accordion List */}
               <div className="space-y-2.5 pt-1">
                 {filteredFaqs.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500 space-y-2">
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.24, ease: easings.outQuart }}
+                    className="p-8 text-center text-slate-500 space-y-2"
+                  >
                     <p className="text-xs">No questions matched "{searchQuery}".</p>
                     <button
                       onClick={() => setSearchQuery('')}
@@ -376,7 +415,7 @@ export const HelpSupportModal: React.FC = () => {
                     >
                       Clear search filter
                     </button>
-                  </div>
+                  </motion.div>
                 ) : (
                   filteredFaqs.map(faq => {
                     const isExpanded = expandedFaq === faq.id;
@@ -403,7 +442,12 @@ export const HelpSupportModal: React.FC = () => {
                         </button>
 
                         {isExpanded && (
-                          <div className="px-4 pb-4 pt-1 text-xs text-[#5F6368] dark:text-[#C4C7C5] leading-relaxed border-t border-slate-100 dark:border-[#3C4043] space-y-2 bg-[#F8F9FA]/50 dark:bg-[#202124]/50">
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.24, ease: easings.outQuart }}
+                            className="px-4 pb-4 pt-1 text-xs text-[#5F6368] dark:text-[#C4C7C5] leading-relaxed border-t border-slate-100 dark:border-[#3C4043] space-y-2 bg-[#F8F9FA]/50 dark:bg-[#202124]/50"
+                          >
                             <p>{faq.answer}</p>
                             {faq.relatedModule && (
                               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#1A73E8] dark:text-[#8AB4F8]">
@@ -411,7 +455,7 @@ export const HelpSupportModal: React.FC = () => {
                                 <span>Related Module: {faq.relatedModule}</span>
                               </div>
                             )}
-                          </div>
+                          </motion.div>
                         )}
                       </div>
                     );
@@ -426,7 +470,12 @@ export const HelpSupportModal: React.FC = () => {
             <div className="space-y-5">
               {/* Selected Tutorial Video Simulation Modal / Banner */}
               {selectedTutorial && (
-                <div className="p-4 sm:p-5 rounded-2xl border-2 border-[#FFA000] bg-white dark:bg-[#282A2D] shadow-md space-y-3 animate-in fade-in">
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.26, ease: easings.outQuart }}
+                  className="p-4 sm:p-5 rounded-2xl border-2 border-[#FFA000] bg-white dark:bg-[#282A2D] shadow-md space-y-3"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-[#FFA000]/20 text-[#E65100] dark:text-[#FFD54F]">
@@ -493,7 +542,7 @@ export const HelpSupportModal: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* Grid of Tutorial Cards */}
@@ -546,7 +595,12 @@ export const HelpSupportModal: React.FC = () => {
           {activeTab === 'report' && (
             <div className="max-w-2xl mx-auto space-y-4">
               {submittedTicket ? (
-                <div className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center space-y-3 animate-in fade-in">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.28, ease: easings.outQuart }}
+                  className="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center space-y-3"
+                >
                   <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
@@ -569,7 +623,7 @@ export const HelpSupportModal: React.FC = () => {
                   >
                     Submit Another Report
                   </button>
-                </div>
+                </motion.div>
               ) : (
                 <form onSubmit={handleSubmitIssue} className="space-y-4 bg-white dark:bg-[#282A2D] p-5 sm:p-6 rounded-3xl border border-[#DADCE0] dark:border-[#3C4043] shadow-xs">
                   <div className="space-y-1">
@@ -669,7 +723,7 @@ export const HelpSupportModal: React.FC = () => {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="px-5 py-2.5 bg-gradient-to-r from-[#D93025] to-[#B31412] hover:brightness-110 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                      className="px-5 py-2.5 bg-gradient-to-r from-[#D93025] to-[#B31412] hover:brightness-110 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm hover:shadow-[var(--fb-glow-primary)] cursor-pointer disabled:opacity-50 disabled:hover:shadow-sm"
                     >
                       {isSubmitting ? (
                         <>
@@ -780,35 +834,38 @@ export const HelpSupportModal: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+              </motion.div>
+            </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between text-xs bg-[#F8F9FA] dark:bg-[#18191B]">
-          <div className="flex items-center space-x-2 text-[#5F6368] dark:text-[#9AA0A6]">
-            <span>VidyaOS v2.4</span>
-            <span>·</span>
-            <span>Tenancy: {currentOrg.name}</span>
-          </div>
+            {/* Modal Footer */}
+            <motion.div variants={fadeUp} className="p-4 border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between text-xs bg-[#F8F9FA] dark:bg-[#18191B]">
+              <div className="flex items-center space-x-2 text-[#5F6368] dark:text-[#9AA0A6]">
+                <span>VidyaOS v2.4</span>
+                <span>·</span>
+                <span>Tenancy: {currentOrg.name}</span>
+              </div>
 
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowHelpModal(false)}
-              className="px-4 py-2 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] hover:bg-slate-100 dark:hover:bg-[#282A2C] font-semibold transition cursor-pointer"
-            >
-              Close
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('report');
-                setSubmittedTicket(null);
-              }}
-              className="px-4 py-2 bg-gradient-to-r from-[#FFA000] to-[#E65100] text-slate-950 font-bold rounded-xl hover:brightness-105 transition cursor-pointer"
-            >
-              Report an Issue
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="px-4 py-2 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] hover:bg-slate-100 dark:hover:bg-[#282A2C] font-semibold transition cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('report');
+                    setSubmittedTicket(null);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-[#FFA000] to-[#E65100] text-slate-950 font-bold rounded-xl hover:brightness-105 transition hover:shadow-[var(--fb-glow-primary)] cursor-pointer"
+                >
+                  Report an Issue
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

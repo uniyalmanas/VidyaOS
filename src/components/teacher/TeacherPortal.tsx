@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useApp } from '../../context/AppContext';
+import { getIndiaDateString } from '../../lib/date';
 import {
   Calendar,
   CheckCircle,
@@ -23,10 +24,14 @@ import {
   PageHeader,
   ConsoleCard,
   ConsoleButton,
-  StatusChip
+  StatusChip,
+  Reveal,
+  CountUp
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { motion } from 'motion/react';
+import { easings } from '../../lib/motion';
 
 export const TeacherPortal: React.FC = () => {
   const { currentPath, navigate } = useRouter();
@@ -39,6 +44,7 @@ export const TeacherPortal: React.FC = () => {
     markAttendance,
     markBatchAllPresent,
     exams,
+    examResults,
     saveExamResults,
     assignments,
     createAssignment,
@@ -72,29 +78,44 @@ export const TeacherPortal: React.FC = () => {
       setActiveTab('overview');
     }
   }, [currentPath]);
-  const [selectedBatchId, setSelectedBatchId] = useState<string>('batch-c10-math');
-  const [attendanceDate, setAttendanceDate] = useState<string>('2026-09-28');
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
+  const [attendanceDate, setAttendanceDate] = useState<string>(() => getIndiaDateString());
   const [savedSuccessMsg, setSavedSuccessMsg] = useState<string>('');
 
-  // Marks entry state
-  const [selectedExamId, setSelectedExamId] = useState<string>('exam-c10-math-diag');
-  const [marksState, setMarksState] = useState<{ [studentId: string]: number }>({
-    'stud-rahul-10': 44,
-    'stud-aarav-10': 47,
-    'stud-sneha-10': 39
-  });
+  // Marks entry state. Deliberately starts empty and is seeded from saved results
+  // for the selected exam — see the effect below.
+  const [selectedExamId, setSelectedExamId] = useState<string>('');
+  const [marksState, setMarksState] = useState<{ [studentId: string]: number | undefined }>({});
 
   // Homework modal
   const [showHomeworkModal, setShowHomeworkModal] = useState<boolean>(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState<boolean>(false);
   const [hwTitle, setHwTitle] = useState<string>('');
   const [hwSubject, setHwSubject] = useState<string>('Mathematics');
-  const [hwDueDate, setHwDueDate] = useState<string>('2026-10-05');
+  const [hwDueDate, setHwDueDate] = useState<string>(() => getIndiaDateString());
   const [hwDesc, setHwDesc] = useState<string>('');
 
   const activeBatch = batches.find(b => b.id === selectedBatchId) || batches[0];
   const batchStudents = students.filter(s => activeBatch?.studentIds.includes(s.id));
   const activeExam = exams.find(e => e.id === selectedExamId) || exams[0];
+
+  // Marks are per-exam. Seed the editor from the results already saved for the
+  // selected exam, and re-seed whenever that exam changes. `saveExamResults`
+  // REPLACES every result for an exam, so writing back an editor that did not
+  // contain the existing scores would silently delete them — and marks typed for
+  // one test would otherwise carry over into the next.
+  useEffect(() => {
+    const examId = activeExam?.id;
+    if (!examId) {
+      setMarksState({});
+      return;
+    }
+    const seeded: { [studentId: string]: number | undefined } = {};
+    for (const r of examResults) {
+      if (r.examId === examId) seeded[r.studentId] = r.marksObtained;
+    }
+    setMarksState(seeded);
+  }, [activeExam?.id, examResults]);
 
   const handleStatusChange = (studentId: string, status: AttendanceStatus) => {
     markAttendance({
@@ -119,17 +140,31 @@ export const TeacherPortal: React.FC = () => {
   };
 
   const handleMarkAllPresent = () => {
+    if (!activeBatch) return;
     markBatchAllPresent(activeBatch.id, attendanceDate);
     setSavedSuccessMsg('All students marked present for today.');
     setTimeout(() => setSavedSuccessMsg(''), 2500);
   };
 
   const handleSaveMarks = () => {
-    const marksData = Object.entries(marksState).map(([studentId, marks]) => ({
-      studentId,
-      marksObtained: Number(marks) || 0,
-      remarks: 'Graded by subject faculty'
-    }));
+    if (!activeExam) return;
+
+    // Only rows that actually hold a score. Results already saved for this exam
+    // were seeded into `marksState` above, so nothing previously recorded is
+    // dropped by the replace-all write in `saveExamResults`.
+    const marksData = Object.entries(marksState)
+      .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+      .map(([studentId, marks]) => ({
+        studentId,
+        marksObtained: Number(marks) || 0,
+        remarks: 'Graded by subject faculty'
+      }));
+
+    if (marksData.length === 0) {
+      setSavedSuccessMsg('Enter at least one mark before saving.');
+      setTimeout(() => setSavedSuccessMsg(''), 2500);
+      return;
+    }
 
     saveExamResults(activeExam.id, marksData);
     setSavedSuccessMsg('Exam marks evaluated & percentile ranks generated.');
@@ -138,7 +173,7 @@ export const TeacherPortal: React.FC = () => {
 
   const handleCreateHw = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hwTitle.trim()) return;
+    if (!hwTitle.trim() || !activeBatch) return;
 
     createAssignment({
       branchId: activeBatch.branchId,
@@ -218,10 +253,15 @@ export const TeacherPortal: React.FC = () => {
       />
 
       {savedSuccessMsg && (
-        <div className="p-3 bg-[#E6F4EA] border border-[#CEEAD6] text-[#137333] dark:bg-emerald-950/40 dark:text-[#81C995] text-xs font-medium rounded-xl flex items-center gap-2">
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, ease: easings.outQuart }}
+          className="p-3 bg-[#E6F4EA] border border-[#CEEAD6] text-[#137333] dark:bg-emerald-950/40 dark:text-[#81C995] text-xs font-medium rounded-xl flex items-center gap-2"
+        >
           <CheckCircle className="w-4 h-4 text-[#188038]" />
           <span>{savedSuccessMsg}</span>
-        </div>
+        </motion.div>
       )}
 
       {/* Sub Tabs */}
@@ -260,10 +300,17 @@ export const TeacherPortal: React.FC = () => {
       </div>
 
       {/* OVERVIEW: FACULTY CONSOLE HOME */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: easings.outQuart }}
+        className="space-y-6"
+      >
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Quick Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Reveal className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 shadow-2xs">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider font-apple-text">Assigned Batches</span>
@@ -272,7 +319,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                {batches.length}
+                <CountUp value={batches.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Active teaching sections</p>
             </div>
@@ -285,7 +332,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                {students.length}
+                <CountUp value={students.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Enrolled under coaching</p>
             </div>
@@ -298,7 +345,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                {assignments.length}
+                <CountUp value={assignments.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Homework assignments</p>
             </div>
@@ -311,18 +358,18 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                {exams.length}
+                <CountUp value={exams.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Scheduled tests</p>
             </div>
-          </div>
+          </Reveal>
 
           {/* Quick-Launch Feature Cards */}
           <div>
             <h2 className="text-sm font-bold font-apple-text text-[#1D1D1F] dark:text-[#F5F5F7] mb-3">
               Faculty Workspaces & Actions
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Reveal className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Action 1: Attendance */}
               <div
                 onClick={() => {
@@ -442,7 +489,7 @@ export const TeacherPortal: React.FC = () => {
                   <span>Institute Slack Channels →</span>
                 </div>
               </div>
-            </div>
+            </Reveal>
           </div>
 
           {/* Assigned Batches List */}
@@ -510,7 +557,7 @@ export const TeacherPortal: React.FC = () => {
           action={
             <div className="flex flex-wrap items-center gap-2">
               <select
-                value={selectedBatchId}
+                value={activeBatch?.id || ''}
                 onChange={e => setSelectedBatchId(e.target.value)}
                 className="bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] min-h-[38px] font-apple-text cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
               >
@@ -596,14 +643,22 @@ export const TeacherPortal: React.FC = () => {
       )}
 
       {/* TAB 2: TEST MARKS */}
-      {activeTab === 'marks' && (
+      {activeTab === 'marks' && !activeExam && (
+        <ConsoleCard title="Test Marks" subtitle="Recorded scores auto-calculate batch percentiles and report cards">
+          <p className="py-8 text-center text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+            No tests have been created for this institute yet. Once a test is scheduled,
+            its mark sheet appears here.
+          </p>
+        </ConsoleCard>
+      )}
+      {activeTab === 'marks' && activeExam && (
         <ConsoleCard
           title="Enter Diagnostic Exam Marks"
           subtitle="Recorded scores auto-calculate batch percentiles and report cards"
           action={
             <div className="flex items-center space-x-2">
               <select
-                value={selectedExamId}
+                value={activeExam?.id || ''}
                 onChange={e => setSelectedExamId(e.target.value)}
                 className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#202124] dark:text-[#E8EAED]"
               >
@@ -627,7 +682,9 @@ export const TeacherPortal: React.FC = () => {
         >
           <div className="divide-y divide-[#DADCE0]/60 dark:divide-[#3C4043]">
             {batchStudents.map(student => {
-              const currentVal = marksState[student.id] ?? 40;
+              // Blank until a score is entered. It used to default to 40, so an
+              // untouched sheet looked graded and one click saved fabricated marks.
+              const currentVal = marksState[student.id] ?? '';
 
               return (
                 <div key={student.id} className="py-3 flex items-center justify-between text-xs gap-3">
@@ -650,8 +707,11 @@ export const TeacherPortal: React.FC = () => {
                       min={0}
                       value={currentVal}
                       onChange={e => {
-                        const val = Number(e.target.value);
-                        setMarksState(prev => ({ ...prev, [student.id]: val }));
+                        const raw = e.target.value;
+                        setMarksState(prev => ({
+                          ...prev,
+                          [student.id]: raw === '' ? undefined : Number(raw)
+                        }));
                       }}
                       className="w-16 px-2.5 py-1 text-center font-mono font-bold text-xs rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20] text-[#202124] dark:text-[#E8EAED]"
                     />
@@ -704,6 +764,7 @@ export const TeacherPortal: React.FC = () => {
       {activeTab === 'discussions' && (
         <InstituteMessenger className="mt-2" />
       )}
+      </motion.div>
 
       {/* Homework Creation Modal */}
       {showHomeworkModal && (

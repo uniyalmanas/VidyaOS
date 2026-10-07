@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { User, UserRole, AuthSession, Organization } from '../types';
 import { MOCK_USERS, MOCK_ORGANIZATIONS } from '../data/mockData';
 import {
@@ -12,6 +12,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   updateProfile,
+  updatePassword,
   doc,
   getDoc,
   setDoc,
@@ -33,11 +34,20 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   session: AuthSession | null;
   isAuthenticated: boolean;
-  loginWithGoogle: (requestedRole?: UserRole) => Promise<{ success: boolean; error?: string; user?: User }>;
+  loginWithGoogle: (requestedRole?: UserRole, registrationMode?: boolean) => Promise<{ success: boolean; error?: string; user?: User }>;
   loginWithPhonePassword: (phone: string, password: string, requestedRole?: UserRole) => Promise<{ success: boolean; error?: string; user?: User }>;
   signupWithPhonePassword: (name: string, phone: string, password: string, role: UserRole, orgId?: string) => Promise<{ success: boolean; error?: string; user?: User }>;
-  updateUserPassword: (phone: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  registerUserCredentials: (phone: string, password: string, role: UserRole, name: string, email: string, orgId: string, userId?: string) => Promise<string>;
+  /**
+   * Changes the password of the **currently signed-in** account only.
+   * Firebase Auth exposes no client-side API for setting another account's
+   * password — that requires the Admin SDK on a trusted server — so this
+   * deliberately takes no target identifier. The previous `phone` parameter was
+   * accepted and then ignored, which meant editing somebody else's profile
+   * silently overwrote the signed-in admin's own password.
+   */
+  updateOwnPassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  registerUserCredentials: (phone: string, password: string, role: UserRole, name: string, email: string, orgId: string) => Promise<string>;
+  linkStudentToParent: (parentUid: string, studentId: string) => Promise<void>;
   loginWithPhoneOtp: (phone: string, otp: string, orgId?: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   sendPhoneOtp: (phone: string) => Promise<{ success: boolean; otp?: string; message?: string }>;
   loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
@@ -65,16 +75,46 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const SESSION_STORAGE_KEY = 'vidyaos_auth_session';
 const SESSION_DURATION_HOURS = 24 * 7; // 7 days session
 
+// Login methods that sit on top of a real Firebase Auth user. The remaining
+// methods (demo personas, DEV-only OTP) have no Firebase Auth record behind them,
+// so `onAuthStateChanged` reporting null says nothing about whether they are valid.
+const FIREBASE_BACKED_LOGIN_METHODS: AuthSession['loginMethod'][] = [
+  'phone_password',
+  'email_password',
+  'google_oauth'
+];
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Load session from storage
   const [session, setSession] = useState<AuthSession | null>(() => {
     try {
       const stored = localStorage.getItem(SESSION_STORAGE_KEY);
       if (stored) {
-        const parsed: AuthSession = JSON.parse(stored);
-        if (parsed.expiresAt > Date.now()) {
-          return parsed;
+        const parsed = JSON.parse(stored) as AuthSession & { token?: string };
+        // Fail closed on anything structurally incomplete rather than restoring a
+        // session we cannot reason about.
+        if (!parsed?.user || !parsed.loginMethod || typeof parsed.expiresAt !== 'number') {
+          return null;
         }
+        // Demo sessions (demo_preset) are dev-only; all others persist across reloads.
+        if (!import.meta.env.DEV && parsed.loginMethod === 'demo_preset') {
+          return null;
+        }
+        // Rebuilt field-by-field so an ID token written by an older build is
+        // dropped here instead of being carried forward by the sync effect below.
+        //
+        // An expired session is deliberately still returned. Discarding it would
+        // let the auth listener below re-issue a completely fresh 7-day window on
+        // the next reload, so the deadline would never actually be reached.
+        // `currentUser` stays null while expired and the timer effect underneath
+        // signs the user out of both the app and Firebase Auth.
+        return {
+          user: parsed.user,
+          orgId: parsed.orgId,
+          createdAt: parsed.createdAt,
+          expiresAt: parsed.expiresAt,
+          loginMethod: parsed.loginMethod
+        };
       }
     } catch (e) {
       console.warn('Failed to parse auth session from localStorage', e);
@@ -82,13 +122,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
-  const currentUser = useMemo(() => session?.user || null, [session]);
-  const isAuthenticated = useMemo(() => !!currentUser && !!session && session.expiresAt > Date.now(), [currentUser, session]);
+  // Stays null once the session is past `expiresAt`, even though the expired
+  // session object itself is kept so the timer effect below can dispose of it.
+  const currentUser = useMemo(
+    () => (session && session.expiresAt > Date.now() ? session.user : null),
+    [session]
+  );
 
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [pendingOtpPhone, setPendingOtpPhone] = useState<string | null>(null);
   const [activeOtpDemoCode, setActiveOtpDemoCode] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+
+  // Re-derived whenever Firebase Auth resolves or revokes its user, so the flag
+  // tracks live auth state instead of the value frozen when the session was set.
+  const isAuthenticated = useMemo(
+    () => !!currentUser && !!session && session.expiresAt > Date.now(),
+    [currentUser, session, firebaseUser]
+  );
+
+  // Latest session for the long-lived auth listener below. The listener must not
+  // depend on `session` directly — that would resubscribe (and refire) on every
+  // session change.
+  const sessionRef = useRef<AuthSession | null>(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  // Enforce the declared session lifetime. `expiresAt` used to be written on every
+  // login but only ever read at mount, so a tab left open past its expiry stayed
+  // signed in indefinitely.
+  useEffect(() => {
+    if (!session) return;
+    const remaining = session.expiresAt - Date.now();
+    if (remaining <= 0) {
+      setSession(null);
+      setFirebaseUser(null);
+      setShowLoginModal(true);
+      signOut(auth).catch(() => undefined);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setSession(null);
+      setFirebaseUser(null);
+      setShowLoginModal(true);
+      signOut(auth).catch(() => undefined);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [session]);
 
   // Helper to extract clean 10-digit phone
   const cleanPhone = (phone: string): string => {
@@ -96,10 +177,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return digits.length > 10 ? digits.slice(-10) : digits;
   };
 
+  const DEMO_USER_CREDENTIALS: Record<string, string> = {
+    'user-apex-admin': 'admin123',
+    'user-apex-staff': 'staff123',
+    'user-teacher-sharma': 'teacher123',
+    'user-parent-rajesh': 'parent123',
+    'user-stud-rahul': 'student123',
+    'user-platform-owner': 'owner123'
+  };
+
+  const findDemoUserForPhone = (phone: string, password: string, requestedRole?: UserRole): User | null => {
+    if (!import.meta.env.DEV) return null;
+
+    const digits = cleanPhone(phone);
+    if (!digits) return null;
+
+    const candidates = MOCK_USERS.filter(user => {
+      const userDigits = cleanPhone(user.phone || '');
+      return userDigits === digits || userDigits.endsWith(digits) || digits.endsWith(userDigits);
+    });
+
+    const match = candidates.find(user => {
+      const requiredPassword = DEMO_USER_CREDENTIALS[user.id];
+      if (!requiredPassword) return false;
+      if (requiredPassword !== password.trim()) return false;
+      if (requestedRole && user.role !== requestedRole) return false;
+      return true;
+    }) || candidates.find(user => {
+      const requiredPassword = DEMO_USER_CREDENTIALS[user.id];
+      return !!requiredPassword && requiredPassword === password.trim();
+    });
+
+    return match || null;
+  };
+
   // Helper to dynamically find a user's registered organization by email or phone
   const findOrganizationForUser = async (
     email?: string | null,
-    phone?: string | null
+    phone?: string | null,
+    uid?: string
   ): Promise<Organization | null> => {
     const cleanEmail = email?.toLowerCase().trim();
     const cleanPhoneDigits = phone ? phone.replace(/[^0-9]/g, '').slice(-10) : null;
@@ -111,6 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const orgs: Organization[] = JSON.parse(storedOrgs);
         const match = orgs.find(o => {
           if (o.id === 'org-apex') return false; // Never auto-match custom user to demo Apex
+          if (!import.meta.env.DEV && (!uid || o.ownerUid !== uid)) return false;
           if (cleanEmail && o.email?.toLowerCase().trim() === cleanEmail) return true;
           if (cleanPhoneDigits && o.phone?.replace(/[^0-9]/g, '').slice(-10) === cleanPhoneDigits) return true;
           return false;
@@ -119,14 +236,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (_) {}
 
-    // 2. Check in Firestore organizations collection
+    // 2. Query only organizations matching the authenticated account's contact details.
     try {
-      const orgsSnap = await getDocs(collection(db, 'organizations'));
-      for (const d of orgsSnap.docs) {
-        const o = d.data() as Organization;
-        if (o.id === 'org-apex') continue;
-        if (cleanEmail && o.email?.toLowerCase().trim() === cleanEmail) return o;
-        if (cleanPhoneDigits && o.phone?.replace(/[^0-9]/g, '').slice(-10) === cleanPhoneDigits) return o;
+      if (cleanEmail) {
+        const emailSnapshot = await getDocs(query(
+          collection(db, 'organizations'),
+          where('email', '==', cleanEmail),
+          limit(1)
+        ));
+        const match = emailSnapshot.docs
+          .map(document => document.data() as Organization)
+          .find(org => org.id !== 'org-apex' && (import.meta.env.DEV || (!!uid && org.ownerUid === uid)));
+        if (match) return match;
+      }
+      if (cleanPhoneDigits) {
+        const phoneSnapshot = await getDocs(query(
+          collection(db, 'organizations'),
+          where('phone', 'in', [`+91 ${cleanPhoneDigits}`, cleanPhoneDigits]),
+          limit(10)
+        ));
+        const match = phoneSnapshot.docs
+          .map(document => document.data() as Organization)
+          .find(org => org.id !== 'org-apex' && (import.meta.env.DEV || (!!uid && org.ownerUid === uid)));
+        if (match) return match;
       }
     } catch (err) {
       console.warn('Firestore orgs lookup warning:', err);
@@ -151,8 +283,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const snap = await getDoc(userDocRef);
           if (snap.exists()) {
             const data = snap.data();
+            const validRoles: UserRole[] = ['PLATFORM_OWNER', 'CENTER_ADMIN', 'STAFF', 'TEACHER', 'PARENT', 'STUDENT'];
+            if (!validRoles.includes(data.role) || typeof data.orgId !== 'string' || !data.orgId) {
+              setSession(null);
+              return;
+            }
             const role = (data.role as UserRole) || 'TEACHER';
-            const orgId = data.orgId || 'org-apex';
+            const orgId = data.orgId;
             const displayName = data.name || data.displayName || fbUser.displayName || (role === 'TEACHER' ? 'Faculty Member' : 'VidyaOS User');
 
             const cachedAvatar = localStorage.getItem(`vidyaos_avatar_${fbUser.uid}`);
@@ -169,21 +306,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               subjects: data.subjects
             };
 
-            let userToken = 'offline-token';
-            try {
-              userToken = await fbUser.getIdToken();
-            } catch (_) {}
+            // Re-deriving a session for the account we are already signed in as
+            // must not restart the clock — otherwise every page load would hand
+            // out a brand new 7-day window and the lifetime would never run out.
+            const previous = sessionRef.current;
+            const continuing = previous && previous.user.id === fbUser.uid ? previous : null;
+            const issuedAt = continuing ? continuing.createdAt : Date.now();
 
             const newSession: AuthSession = {
-              token: userToken,
               user: resolvedUser,
               orgId,
-              createdAt: Date.now(),
-              expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+              createdAt: issuedAt,
+              expiresAt: continuing
+                ? continuing.expiresAt
+                : issuedAt + SESSION_DURATION_HOURS * 60 * 60 * 1000,
               loginMethod: fbUser.email?.endsWith('@phone.vidyaos.in') ? 'phone_password' : 'google_oauth'
             };
             setSession(newSession);
             localStorage.setItem('vidyaos_current_org_id', orgId);
+            return;
+          }
+
+          if (!import.meta.env.DEV) {
+            setSession(null);
             return;
           }
 
@@ -192,16 +337,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           let displayName = fbUser.displayName || 'Google User';
 
           // Check if this Google account owns a registered organization
-          const userOrg = await findOrganizationForUser(fbUser.email, fbUser.phoneNumber);
+          const userOrg = await findOrganizationForUser(fbUser.email, fbUser.phoneNumber, fbUser.uid);
           if (userOrg) {
             orgId = userOrg.id;
             role = 'CENTER_ADMIN';
           } else if (!orgId || (orgId === 'org-apex' && fbUser.email?.toLowerCase() !== 'admin@apexacademy.in')) {
-            if (fbUser.email?.toLowerCase() === 'kunal@vidyaos.in') {
-              orgId = 'system';
-              role = 'PLATFORM_OWNER';
-            } else {
-              const activeStoredOrgId = localStorage.getItem('vidyaos_current_org_id');
+            {
+              const activeStoredOrgId = import.meta.env.DEV ? localStorage.getItem('vidyaos_current_org_id') : null;
               if (activeStoredOrgId && activeStoredOrgId !== 'org-apex') {
                 orgId = activeStoredOrgId;
               } else {
@@ -210,6 +352,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const autoName = fbUser.displayName ? `${fbUser.displayName}'s Academy` : 'My Coaching Institute';
                 const autoOrg: Organization = {
                   id: autoOrgId,
+                  ownerUid: fbUser.uid,
                   name: autoName,
                   slug: autoName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
                   tagline: 'Premier Coaching & Tuition Center',
@@ -282,13 +425,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             orgId
           };
 
-          let userToken = 'offline-token';
-          try {
-            userToken = await fbUser.getIdToken();
-          } catch (_) {}
-
           const newSession: AuthSession = {
-            token: userToken,
             user: resolvedUser,
             orgId,
             createdAt: Date.now(),
@@ -299,6 +436,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('vidyaos_current_org_id', orgId);
         } catch (err: any) {
           console.warn('Firestore user profile sync unavailable or offline; operating in offline-first mode:', err?.message || err);
+          if (!import.meta.env.DEV) {
+            setSession(null);
+            return;
+          }
           const savedOrgId = localStorage.getItem('vidyaos_current_org_id') || 'org-apex';
           const fallbackName = fbUser.displayName || 'VidyaOS User';
           const fallbackUser: User = {
@@ -310,13 +451,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: 'CENTER_ADMIN',
             orgId: savedOrgId
           };
-          let token = 'offline-token';
-          try {
-            token = await fbUser.getIdToken();
-          } catch (_) {}
-
           const fallbackSession: AuthSession = {
-            token,
             user: fallbackUser,
             orgId: savedOrgId,
             createdAt: Date.now(),
@@ -325,176 +460,220 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setSession(fallbackSession);
         }
+      } else {
+        // Firebase Auth is the source of truth for real logins. When it reports no
+        // user (token revoked, signed out in another tab, account deleted) any
+        // session it created is stale and must be torn down — previously the
+        // session was left behind and the app stayed signed in to a dead account.
+        const stale = sessionRef.current;
+        if (stale && FIREBASE_BACKED_LOGIN_METHODS.includes(stale.loginMethod)) {
+          setSession(null);
+          setShowLoginModal(true);
+        }
       }
     });
     return () => unsubscribe();
   }, []);
 
   // Firebase Google Sign-In
-  const loginWithGoogle = async (requestedRole?: UserRole): Promise<{ success: boolean; error?: string; user?: User }> => {
+  const loginWithGoogle = async (requestedRole?: UserRole, registrationMode = false): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
-      googleProvider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, googleProvider);
       const fbUser = result.user;
       setFirebaseUser(fbUser);
 
-      // Check if this Google account already owns an organization registered in VidyaOS
-      const userOrg = await findOrganizationForUser(fbUser.email, fbUser.phoneNumber);
+      const baseUser: User = {
+        id: fbUser.uid,
+        name: fbUser.displayName || 'VidyaOS User',
+        email: fbUser.email || '',
+        phone: fbUser.phoneNumber || '',
+        avatar: fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fbUser.displayName || 'User')}`,
+        role: requestedRole || 'CENTER_ADMIN',
+        orgId: localStorage.getItem('vidyaos_current_org_id') || 'org-apex'
+      };
 
-      // Fetch or provision user record from Firestore
-      const userDocRef = doc(db, 'users', fbUser.uid);
-      const snap = await getDoc(userDocRef);
-      let role: UserRole = requestedRole || 'CENTER_ADMIN';
-      let orgId: string = '';
-      let displayName = fbUser.displayName || 'Google User';
+      const immediateSession: AuthSession = {
+        user: baseUser,
+        orgId: baseUser.orgId,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+        loginMethod: 'google_oauth'
+      };
+      setSession(immediateSession);
+      localStorage.setItem('vidyaos_current_org_id', baseUser.orgId);
+      setShowLoginModal(false);
 
-      if (snap.exists()) {
-        const data = snap.data();
-        if (requestedRole) role = requestedRole;
-        else if (data.role) role = data.role as UserRole;
-        if (data.displayName) displayName = data.displayName;
-        orgId = data.orgId;
-      }
+      // Run the heavier organization/profile lookups in the background so the user does
+      // not sit on a spinner while Firestore sync/network checks finish.
+      void (async () => {
+        try {
+          const userOrg = await findOrganizationForUser(fbUser.email, fbUser.phoneNumber);
+          const userDocRef = doc(db, 'users', fbUser.uid);
+          const snap = await getDoc(userDocRef);
 
-      // If user owns a registered coaching center, ALWAYS bind to their own center!
-      if (userOrg) {
-        orgId = userOrg.id;
-        role = 'CENTER_ADMIN';
-      } else if (!orgId || (orgId === 'org-apex' && fbUser.email?.toLowerCase() !== 'admin@apexacademy.in')) {
-        // Real user email should NEVER be assigned to Apex Coaching Academy!
-        if (fbUser.email?.toLowerCase() === 'kunal@vidyaos.in' || requestedRole === 'PLATFORM_OWNER') {
-          orgId = 'system';
-          role = 'PLATFORM_OWNER';
-        } else {
-          // Provision a brand new dedicated coaching center for this Gmail user
-          const autoOrgId = `org-${Date.now()}`;
-          const autoName = fbUser.displayName ? `${fbUser.displayName}'s Academy` : 'My Coaching Institute';
-          const newOrg: Organization = {
-            id: autoOrgId,
-            name: autoName,
-            slug: autoName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-            tagline: 'Premier Coaching & Tuition Center',
-            logoText: (fbUser.displayName || 'ACAD').slice(0, 4).toUpperCase(),
-            ownerName: fbUser.displayName || 'Center Director',
-            phone: fbUser.phoneNumber || '+91 99999 00000',
-            email: fbUser.email || '',
-            address: 'Main Campus',
-            city: 'Delhi',
-            state: 'Delhi NCR',
-            upiId: `${(fbUser.email || 'center').split('@')[0].replace(/[^a-z0-9]/g, '')}@okaxis`,
-            upiMerchantName: autoName.toUpperCase(),
-            planId: 'growth',
-            subscriptionStatus: 'trial',
-            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            currentCycleEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            createdAt: new Date().toISOString().split('T')[0],
-            maxStudents: 300,
-            maxBranches: 1,
-            branches: [
-              {
-                id: `branch-${Date.now()}`,
-                orgId: autoOrgId,
-                name: 'Main Campus',
-                city: 'Delhi',
-                address: 'Main Campus',
-                phone: fbUser.phoneNumber || '+91 99999 00000',
-                isMain: true
+          if (!import.meta.env.DEV) {
+            const validRoles: UserRole[] = ['PLATFORM_OWNER', 'CENTER_ADMIN', 'STAFF', 'TEACHER', 'PARENT', 'STUDENT'];
+            if (snap.exists()) {
+              const data = snap.data();
+              if (registrationMode) {
+                setSession(null);
+                return;
               }
-            ]
+              if (!validRoles.includes(data.role) || typeof data.orgId !== 'string' || !data.orgId) {
+                await signOut(auth);
+                setFirebaseUser(null);
+                setSession(null);
+                return;
+              }
+              const resolvedUser: User = {
+                id: fbUser.uid,
+                name: data.name || data.displayName || fbUser.displayName || 'VidyaOS User',
+                email: fbUser.email || '',
+                phone: data.phone || fbUser.phoneNumber || '',
+                avatar: data.avatar || fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(data.name || fbUser.displayName || 'User')}`,
+                role: data.role,
+                orgId: data.orgId,
+                branchId: data.branchId,
+                linkedStudentIds: data.linkedStudentIds,
+                subjects: data.subjects
+              };
+              const nextSession: AuthSession = {
+                user: resolvedUser,
+                orgId: resolvedUser.orgId,
+                createdAt: Date.now(),
+                expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+                loginMethod: 'google_oauth'
+              };
+              setSession(nextSession);
+              localStorage.setItem('vidyaos_current_org_id', resolvedUser.orgId);
+              return;
+            }
+
+            if (!registrationMode) {
+              await signOut(auth);
+              setFirebaseUser(null);
+              setSession(null);
+              return;
+            }
+          }
+
+          let role: UserRole = requestedRole || 'CENTER_ADMIN';
+          let orgId: string = '';
+          let displayName = fbUser.displayName || 'Google User';
+
+          if (snap.exists()) {
+            const data = snap.data();
+            if (requestedRole) role = requestedRole;
+            else if (data.role) role = data.role as UserRole;
+            if (data.displayName) displayName = data.displayName;
+            orgId = data.orgId;
+          }
+
+          if (userOrg) {
+            orgId = userOrg.id;
+            role = 'CENTER_ADMIN';
+          } else if (!orgId || (orgId === 'org-apex' && fbUser.email?.toLowerCase() !== 'admin@apexacademy.in')) {
+            if (fbUser.email?.toLowerCase() === 'kunal@vidyaos.in' || requestedRole === 'PLATFORM_OWNER') {
+              orgId = 'system';
+              role = 'PLATFORM_OWNER';
+            } else {
+              const autoOrgId = `org-${Date.now()}`;
+              const autoName = fbUser.displayName ? `${fbUser.displayName}'s Academy` : 'My Coaching Institute';
+              const newOrg: Organization = {
+                id: autoOrgId,
+                ownerUid: fbUser.uid,
+                name: autoName,
+                slug: autoName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+                tagline: 'Premier Coaching & Tuition Center',
+                logoText: (fbUser.displayName || 'ACAD').slice(0, 4).toUpperCase(),
+                ownerName: fbUser.displayName || 'Center Director',
+                phone: fbUser.phoneNumber || '+91 99999 00000',
+                email: fbUser.email || '',
+                address: 'Main Campus',
+                city: 'Delhi',
+                state: 'Delhi NCR',
+                upiId: `${(fbUser.email || 'center').split('@')[0].replace(/[^a-z0-9]/g, '')}@okaxis`,
+                upiMerchantName: autoName.toUpperCase(),
+                planId: 'growth',
+                subscriptionStatus: 'trial',
+                trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                currentCycleEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                createdAt: new Date().toISOString().split('T')[0],
+                maxStudents: 300,
+                maxBranches: 1,
+                branches: [{
+                  id: `branch-${Date.now()}`,
+                  orgId: autoOrgId,
+                  name: 'Main Campus',
+                  city: 'Delhi',
+                  address: 'Main Campus',
+                  phone: fbUser.phoneNumber || '+91 99999 00000',
+                  isMain: true
+                }]
+              };
+
+              try {
+                await setDoc(doc(db, 'organizations', autoOrgId), newOrg);
+              } catch (orgErr) {
+                console.warn('Could not sync auto-org to Firestore (offline/adblocked):', orgErr);
+              }
+
+              try {
+                const stored = localStorage.getItem('vidyaos_orgs');
+                const currentList = stored ? JSON.parse(stored) : [];
+                localStorage.setItem('vidyaos_orgs', JSON.stringify([...currentList.filter((o: any) => o.id !== autoOrgId), newOrg]));
+              } catch (_) {}
+
+              orgId = autoOrgId;
+              role = 'CENTER_ADMIN';
+            }
+          }
+
+          try {
+            await setDoc(userDocRef, {
+              uid: fbUser.uid,
+              email: fbUser.email,
+              displayName,
+              name: displayName,
+              role,
+              orgId,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (writeErr) {
+            console.warn('Could not sync user profile to Firestore (offline/restricted):', writeErr);
+          }
+
+          const resolvedUser: User = {
+            id: fbUser.uid,
+            name: displayName,
+            email: fbUser.email || '',
+            phone: fbUser.phoneNumber || '+91 98765 43210',
+            avatar: fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
+            role,
+            orgId
           };
 
-          try {
-            await setDoc(doc(db, 'organizations', autoOrgId), newOrg);
-          } catch (orgErr) {
-            console.warn('Could not sync new org to Firestore (offline/restricted):', orgErr);
-          }
-          try {
-            const stored = localStorage.getItem('vidyaos_orgs');
-            const currentList = stored ? JSON.parse(stored) : [];
-            localStorage.setItem('vidyaos_orgs', JSON.stringify([...currentList.filter((o: any) => o.id !== autoOrgId), newOrg]));
-          } catch (_) {}
+          const nextSession: AuthSession = {
+            user: resolvedUser,
+            orgId,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+            loginMethod: 'google_oauth'
+          };
 
-          orgId = autoOrgId;
-          role = 'CENTER_ADMIN';
+          setSession(nextSession);
+          localStorage.setItem('vidyaos_current_org_id', orgId);
+        } catch (err) {
+          console.warn('Google auth background sync failed, keeping the user signed in locally:', err);
         }
-      }
+      })();
 
-      try {
-        await setDoc(userDocRef, {
-          uid: fbUser.uid,
-          email: fbUser.email,
-          displayName,
-          role,
-          orgId,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (userErr) {
-        console.warn('Could not sync user to Firestore (offline/restricted):', userErr);
-      }
-
-      const resolvedUser: User = {
-        id: fbUser.uid,
-        name: displayName,
-        email: fbUser.email || '',
-        phone: fbUser.phoneNumber || '+91 98765 43210',
-        avatar: fbUser.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
-        role,
-        orgId
-      };
-
-      const newSession: AuthSession = {
-        token: await fbUser.getIdToken(),
-        user: resolvedUser,
-        orgId,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
-        loginMethod: 'google_oauth'
-      };
-
-      setSession(newSession);
-      localStorage.setItem('vidyaos_current_org_id', orgId);
-      setShowLoginModal(false);
-      return { success: true, user: resolvedUser };
+      return { success: true, user: baseUser };
     } catch (err: any) {
-      console.warn('Firebase Google Sign-In encountered error/unconfigured provider:', err?.code, err?.message);
-      
-      // If user intentionally closed popup, return clean message
-      if (err?.code === 'auth/popup-closed-by-user') {
-        return { success: false, error: 'Google sign-in popup was closed before completion. Click the button to try again or use Instant Access.' };
-      }
-      
-      // Check for unconfigured provider, popup blocked/closed, or unauthorized domain
-      const targetRole = requestedRole || 'CENTER_ADMIN';
-      const cleanEmail = auth.currentUser?.email || 'google.user@vidyaos.in';
-      const userOrg = await findOrganizationForUser(cleanEmail);
-      const targetOrgId = userOrg ? userOrg.id : (targetRole === 'PLATFORM_OWNER' ? 'system' : `org-${Date.now()}`);
-
-      const fallbackUser: User = {
-        id: `google-user-${Date.now()}`,
-        name: auth.currentUser?.displayName || 'Google Authenticated User',
-        email: cleanEmail,
-        phone: '+91 98765 43210',
-        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanEmail)}`,
-        role: targetRole,
-        orgId: targetOrgId
-      };
-
-      const newSession: AuthSession = {
-        token: `vos_tk_google_${Date.now()}`,
-        user: fallbackUser,
-        orgId: fallbackUser.orgId,
-        createdAt: Date.now(),
-        expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
-        loginMethod: 'google_oauth'
-      };
-
-      setSession(newSession);
-      localStorage.setItem('vidyaos_current_org_id', targetOrgId);
-      setShowLoginModal(false);
-      return { 
-        success: true,
-        user: fallbackUser,
-        error: undefined
+      console.warn('Google sign-in failed:', err?.message || err);
+      return {
+        success: false,
+        error: err?.message || 'Google sign-in failed. Please try again.'
       };
     }
   };
@@ -534,6 +713,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Fetch user profile from Firestore users/{uid}
       const userDocRef = doc(db, 'users', fbUser.uid);
       const snap = await getDoc(userDocRef);
+
+      if (!import.meta.env.DEV) {
+        const data = snap.exists() ? snap.data() : null;
+        const validRoles: UserRole[] = ['PLATFORM_OWNER', 'CENTER_ADMIN', 'STAFF', 'TEACHER', 'PARENT', 'STUDENT'];
+        if (!data || !validRoles.includes(data.role) || typeof data.orgId !== 'string' || !data.orgId || typeof data.name !== 'string' || !data.name) {
+          await signOut(auth);
+          setFirebaseUser(null);
+          return { success: false, error: 'Your account profile is not provisioned correctly. Please contact your coaching center administrator.' };
+        }
+      }
+
       let role: UserRole = requestedRole || 'TEACHER';
       let orgId: string = '';
       let name: string = fbUser.displayName || '';
@@ -628,7 +818,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (_) {}
 
       const newSession: AuthSession = {
-        token: await fbUser.getIdToken(),
         user: resolvedUser,
         orgId,
         createdAt: Date.now(),
@@ -643,33 +832,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (fbErr: any) {
       console.warn('Firebase signIn notice:', fbErr?.code);
 
-      // Check whether this mobile number exists in Firestore users or teachers
-      // to give the user a precise, helpful error message
-      let phoneExists = false;
-      try {
-        const uSnap = await getDocs(query(collection(db, 'users'), where('phone', 'in', [`+91 ${clean}`, clean]), limit(1)));
-        if (!uSnap.empty) {
-          phoneExists = true;
-        } else {
-          const tSnap = await getDocs(query(collection(db, 'teachers'), where('phone', 'in', [`+91 ${clean}`, clean]), limit(1)));
-          if (!tSnap.empty) {
-            phoneExists = true;
-          }
-        }
-      } catch (_) {}
-
       const errCode = fbErr?.code;
-      if (errCode === 'auth/wrong-password' || (errCode === 'auth/invalid-credential' && phoneExists)) {
-        return { success: false, error: 'Incorrect password for this mobile number. Please try again.' };
+
+      // In DEV mode, check demo users first (allows testing without Firebase setup)
+      if (import.meta.env.DEV) {
+        const demoUser = findDemoUserForPhone(clean, cleanPass, requestedRole);
+        if (demoUser) {
+          const newSession: AuthSession = {
+            user: demoUser,
+            orgId: demoUser.orgId,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000,
+            loginMethod: 'demo_preset'
+          };
+
+          setSession(newSession);
+          localStorage.setItem('vidyaos_current_org_id', demoUser.orgId);
+          setShowLoginModal(false);
+          return { success: true, user: demoUser };
+        }
       }
-      if (errCode === 'auth/user-not-found' || !phoneExists) {
+
+      // Firebase v10+ returns 'auth/invalid-credential' for both wrong-password and
+      // user-not-found (to prevent user enumeration). We check Firestore to disambiguate,
+      // but ONLY if the auth error is ambiguous — not just to generate better messages.
+      // NOTE: If this Firestore query fails (RLS/network), we fall through to a generic
+      // message rather than falsely claiming "no account found".
+      if (errCode === 'auth/wrong-password') {
+        return { success: false, error: 'Incorrect password. Please try again or contact your institute admin.' };
+      }
+
+      if (errCode === 'auth/user-not-found') {
         return {
           success: false,
-          error: `No account found for mobile number +91 ${clean}. Please verify the number or contact your coaching institute admin to register you.`
+          error: `No login account found for +91 ${clean}. Please contact your coaching institute admin to create your account.`
         };
       }
+
+      if (errCode === 'auth/invalid-credential') {
+        // Ambiguous error in Firebase v10+ — check Firestore to disambiguate
+        let phoneExistsInFirestore = false;
+        try {
+          const uSnap = await getDocs(query(collection(db, 'users'), where('phone', 'in', [`+91 ${clean}`, clean]), limit(1)));
+          if (!uSnap.empty) {
+            phoneExistsInFirestore = true;
+          } else {
+            const tSnap = await getDocs(query(collection(db, 'teachers'), where('phone', 'in', [`+91 ${clean}`, clean]), limit(1)));
+            if (!tSnap.empty) phoneExistsInFirestore = true;
+          }
+        } catch (_) {
+          // Firestore lookup failed (network/RLS) — assume profile exists, show password error
+          phoneExistsInFirestore = true;
+        }
+
+        if (phoneExistsInFirestore) {
+          return { success: false, error: 'Incorrect password. Please try again or contact your institute admin.' };
+        } else {
+          return {
+            success: false,
+            error: `No login account found for +91 ${clean}. Please contact your coaching institute admin to create your account.`
+          };
+        }
+      }
+
       if (errCode === 'auth/too-many-requests') {
-        return { success: false, error: 'Access temporarily blocked due to too many failed attempts. Please try again later.' };
+        return { success: false, error: 'Too many failed attempts. Access is temporarily blocked. Please try again in a few minutes.' };
       }
 
       return {
@@ -686,13 +913,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password: string,
     role: UserRole,
     orgId?: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; user?: User }> => {
     const clean = cleanPhone(phone);
+    if (role !== 'CENTER_ADMIN') {
+      return { success: false, error: 'Student, parent, staff, and teacher accounts must be invited by a center administrator.' };
+    }
+    if (!orgId) {
+      return { success: false, error: 'Register a coaching center before creating its administrator account.' };
+    }
     if (!name.trim()) return { success: false, error: 'Full name is required.' };
     if (!clean || clean.length < 10) return { success: false, error: 'Please enter a valid 10-digit mobile number.' };
-    if (!password || password.length < 6) return { success: false, error: 'Password must be at least 6 characters long.' };
+    if (!password || password.length < 8) return { success: false, error: 'Password must be at least 8 characters long.' };
 
-    const resolvedOrgId = orgId || 'org-apex';
+    const resolvedOrgId = orgId;
     const virtualEmail = `${clean}@phone.vidyaos.in`;
 
     try {
@@ -712,7 +945,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      const uid = fbUser ? fbUser.uid : `user-${role.toLowerCase()}-${clean}`;
+      if (!fbUser) throw new Error('Firebase authentication did not return a user account.');
+      const uid = fbUser.uid;
 
       const newUser: User = {
         id: uid,
@@ -724,15 +958,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name.trim())}`
       };
 
-      // 2. Save user profile to Firestore (WITHOUT cleartext password)
-      await setDoc(doc(db, 'users', uid), {
-        ...newUser,
-        createdAt: new Date().toISOString()
-      }, { merge: true });
-
-      // 3. Establish active session
+      // The organization must first be created with this UID as owner. The
+      // administrator profile is then safely created by updateUserProfile.
       const newSession: AuthSession = {
-        token: fbUser ? await fbUser.getIdToken() : `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         user: newUser,
         orgId: resolvedOrgId,
         createdAt: Date.now(),
@@ -742,7 +970,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setSession(newSession);
       setShowLoginModal(false);
-      return { success: true };
+      return { success: true, user: newUser };
     } catch (err: any) {
       console.warn('Firebase signup error:', err);
       let errorMsg = err?.message || 'Failed to create user account.';
@@ -753,21 +981,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 3. Update password (avoid storing in public credentials)
-  const updateUserPassword = async (phone: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
-    if (!newPassword || newPassword.length < 6) {
-      return { success: false, error: 'Password must be at least 6 characters long.' };
+  // 3. Update password for the currently authenticated user
+  // Changes the password of the account that is currently signed in. See the
+  // declaration above for why no target account is accepted.
+  const updateOwnPassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    if (!newPassword || newPassword.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters long.' };
     }
 
     try {
-      if (auth.currentUser) {
-        // If current user is signed in with email/pass, update password via Firebase Auth
-        // Or update session state
+      if (!auth.currentUser) {
+        return { success: false, error: 'No active authentication session. Please log in again.' };
       }
 
+      // updatePassword is a static import from firebase/auth
+      await updatePassword(auth.currentUser, newPassword);
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to update password.' };
+      // auth/requires-recent-login means the user needs to re-authenticate first
+      if (err?.code === 'auth/requires-recent-login') {
+        return {
+          success: false,
+          error: 'For security, please log out and log in again before changing your password.'
+        };
+      }
+      return { success: false, error: err?.message || 'Failed to update password.' };
     }
   };
 
@@ -778,26 +1016,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: UserRole,
     name: string,
     email: string,
-    orgId: string,
-    userId?: string
+    orgId: string
   ): Promise<string> => {
     const clean = cleanPhone(phone);
-    if (!clean) return userId || '';
-    const cleanPass = (password || 'teacher123').trim();
+    if (!clean || clean.length !== 10) throw new Error('A valid 10-digit mobile number is required.');
+    const cleanPass = password.trim();
+    if (cleanPass.length < 8) throw new Error('Password must be at least 8 characters long.');
     const virtualEmail = `${clean}@phone.vidyaos.in`;
-    let finalUserId = userId || `user-${Date.now()}`;
+    const roleNoun = role === 'STUDENT' ? 'student' : role === 'PARENT' ? 'parent' : 'faculty';
+    const RoleNoun = roleNoun.charAt(0).toUpperCase() + roleNoun.slice(1);
 
-    // 1. Create real Firebase Auth account in background using isolated secondary app instance
-    try {
-      const fbResult = await createSecondaryUser(virtualEmail, cleanPass, name);
-      if (fbResult?.uid) {
-        finalUserId = fbResult.uid;
+    // Step 1: Create real Firebase Auth account in background using isolated secondary app instance.
+    // This does NOT log out the current admin session.
+    const fbResult = await createSecondaryUser(virtualEmail, cleanPass, name);
+    if (!fbResult.success || !fbResult.uid) {
+      // Provide a user-friendly message for the most common case
+      const errMsg = fbResult.error || `Could not create the ${roleNoun} authentication account.`;
+      if (errMsg.includes('different password')) {
+        throw new Error(`An account with mobile number +91 ${clean} already exists with a different password. Ask the ${roleNoun} to reset their password, or use a different mobile number.`);
       }
-    } catch (fbErr: any) {
-      console.warn('createSecondaryUser notice:', fbErr);
+      throw new Error(errMsg);
     }
+    const finalUserId = fbResult.uid;
 
-    // 2. Persist user profile to Firestore users collection WITHOUT storing any plaintext password
+    // Step 2: Persist user profile to Firestore users collection WITHOUT storing any plaintext password.
+    // This MUST succeed for the account holder to be able to log in — throw if it
+    // fails so the caller can display a proper error rather than leaving an orphan
+    // Auth account.
     try {
       await setDoc(doc(db, 'users', finalUserId), {
         id: finalUserId,
@@ -810,15 +1055,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
         createdAt: new Date().toISOString()
       }, { merge: true });
-    } catch (e) {
-      console.warn('Firestore setDoc users error:', e);
+    } catch (firestoreErr: any) {
+      // The Firestore write failed. The Firebase Auth account was already created above.
+      // Log the issue for debugging; the auth account will be usable once the profile is fixed.
+      console.error(`${RoleNoun} profile creation failed for UID ${finalUserId}:`, firestoreErr);
+      throw new Error(
+        `The authentication account was created but the ${roleNoun} profile could not be saved. ` +
+        `Please try again — the system will link to the existing account. ` +
+        `(Error: ${firestoreErr?.code || firestoreErr?.message || 'Firestore write failed'})`
+      );
     }
 
     return finalUserId;
   };
 
+  // Attach a student to a parent's profile. The parent portal resolves its children
+  // from `users/{uid}.linkedStudentIds`, so without this the parent account exists
+  // but opens an empty dashboard.
+  const linkStudentToParent = async (parentUid: string, studentId: string): Promise<void> => {
+    const parentRef = doc(db, 'users', parentUid);
+    const snap = await getDoc(parentRef);
+    const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+    const existing = Array.isArray(data?.linkedStudentIds) ? (data!.linkedStudentIds as string[]) : [];
+    if (existing.includes(studentId)) return;
+    await setDoc(parentRef, { linkedStudentIds: [...existing, studentId] }, { merge: true });
+  };
+
   // Generate and send simulated Indian SMS OTP
   const sendPhoneOtp = async (phone: string): Promise<{ success: boolean; otp?: string; message?: string }> => {
+    if (!import.meta.env.DEV) {
+      return { success: false, message: 'SMS verification is not configured yet. Use your registered phone and password.' };
+    }
     const cleanPhone = phone.trim();
     if (!cleanPhone || cleanPhone.length < 10) {
       return { success: false, message: 'Please enter a valid 10-digit mobile number' };
@@ -838,6 +1105,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Login via Phone + OTP (Preferred in India)
   const loginWithPhoneOtp = async (phone: string, otp: string, orgId?: string): Promise<{ success: boolean; error?: string }> => {
+    if (!import.meta.env.DEV) {
+      return { success: false, error: 'SMS verification is not configured yet. Use your registered phone and password.' };
+    }
     const cleanDigits = phone.replace(/[^0-9]/g, '');
 
     // Require active generated OTP code (reject static bypasses)
@@ -867,7 +1137,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const newSession: AuthSession = {
-      token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       user: matchingUser,
       orgId: matchingUser.orgId,
       createdAt: Date.now(),
@@ -898,7 +1167,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Fetch or provision user record from Firestore
       const userDocRef = doc(db, 'users', fbUser.uid);
       const snap = await getDoc(userDocRef);
-      const userOrg = await findOrganizationForUser(cleanEmail);
+      if (!import.meta.env.DEV) {
+        const data = snap.exists() ? snap.data() : null;
+        const validRoles: UserRole[] = ['PLATFORM_OWNER', 'CENTER_ADMIN', 'STAFF', 'TEACHER', 'PARENT', 'STUDENT'];
+        if (!data || !validRoles.includes(data.role) || typeof data.orgId !== 'string' || !data.orgId) {
+          await signOut(auth);
+          setFirebaseUser(null);
+          return { success: false, error: 'Your account profile is not provisioned correctly. Please contact your coaching center administrator.' };
+        }
+      }
+      const userOrg = import.meta.env.DEV ? await findOrganizationForUser(cleanEmail, null, fbUser.uid) : null;
       let role: UserRole = 'CENTER_ADMIN';
       let orgId = userOrg ? userOrg.id : '';
       let displayName = fbUser.displayName || cleanEmail.split('@')[0];
@@ -934,7 +1212,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       const newSession: AuthSession = {
-        token: await fbUser.getIdToken(),
         user: resolvedUser,
         orgId,
         createdAt: Date.now(),
@@ -951,9 +1228,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Check if credentials match a local demo account for frictionless developer testing
       const matchingMock = MOCK_USERS.find(u => u.email.toLowerCase() === cleanEmail.toLowerCase());
-      if (matchingMock && (password === 'password123' || password === 'admin' || password.length >= 4)) {
+      if (import.meta.env.DEV && matchingMock && (password === 'password123' || password === 'admin' || password.length >= 4)) {
         const newSession: AuthSession = {
-          token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           user: matchingMock,
           orgId: matchingMock.orgId,
           createdAt: Date.now(),
@@ -966,7 +1242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const errorCode = fbErr?.code;
-      if (errorCode === 'auth/configuration-not-found' || fbErr?.message?.includes('configuration-not-found')) {
+      if (import.meta.env.DEV && (errorCode === 'auth/configuration-not-found' || fbErr?.message?.includes('configuration-not-found'))) {
         // Firebase Auth is not yet toggled on in Firebase Console for this project.
         // Fallback gracefully so developer/user is never locked out of testing.
         const matchingMock = MOCK_USERS.find(u => u.email.toLowerCase() === cleanEmail.toLowerCase());
@@ -981,7 +1257,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         const newSession: AuthSession = {
-          token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           user: resolvedUser,
           orgId: resolvedUser.orgId,
           createdAt: Date.now(),
@@ -1013,8 +1288,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     orgId: string = 'org-apex'
   ): Promise<{ success: boolean; error?: string }> => {
     const cleanEmail = email.trim();
-    if (!cleanEmail || password.length < 6) {
-      return { success: false, error: 'Password must be at least 6 characters long.' };
+    if (!cleanEmail || password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters long.' };
+    }
+    if (!import.meta.env.DEV) {
+      return {
+        success: false,
+        error: 'To create a coaching center admin account, please use the "Register Your Institute" form on the sign-in page. This ensures your coaching center is set up correctly with all required settings.'
+      };
     }
 
     try {
@@ -1047,7 +1328,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       const newSession: AuthSession = {
-        token: await fbUser.getIdToken(),
         user: resolvedUser,
         orgId,
         createdAt: Date.now(),
@@ -1060,7 +1340,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     } catch (err: any) {
       console.error('Firebase registration error:', err);
-      if (err?.code === 'auth/configuration-not-found' || err?.message?.includes('configuration-not-found')) {
+      if (import.meta.env.DEV && (err?.code === 'auth/configuration-not-found' || err?.message?.includes('configuration-not-found'))) {
         // Firebase Auth is not yet toggled on in Firebase Console.
         // Fall back to Firestore document creation + local session so user can continue seamlessly.
         const localUid = `user-${Date.now()}`;
@@ -1086,7 +1366,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         const newSession: AuthSession = {
-          token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
           user: resolvedUser,
           orgId,
           createdAt: Date.now(),
@@ -1119,11 +1398,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Fast Demo Persona Login (Instant Evaluation)
   const loginAsDemoUser = (userId: string) => {
+    if (!import.meta.env.DEV) return;
     const user = MOCK_USERS.find(u => u.id === userId);
     if (!user) return;
 
     const newSession: AuthSession = {
-      token: `vos_tk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       user,
       orgId: user.orgId,
       createdAt: Date.now(),
@@ -1137,6 +1416,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout & terminate session
   const logout = async () => {
+    const signedInUid = session?.user.id;
     try {
       await signOut(auth);
     } catch (e) {
@@ -1144,6 +1424,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setFirebaseUser(null);
     setSession(null);
+    // Clear the account-scoped caches as well — otherwise the next person to use
+    // this browser starts out pointed at the previous user's organization.
+    // `vidyaos_orgs` holds the whole organization registry (names, contact
+    // details), so it goes too: login re-resolves the org from Firestore and the
+    // next session repopulates the cache.
+    try {
+      localStorage.removeItem('vidyaos_current_org_id');
+      localStorage.removeItem('vidyaos_orgs');
+      if (signedInUid) localStorage.removeItem(`vidyaos_avatar_${signedInUid}`);
+    } catch (e) {
+      console.warn('Failed to clear cached auth state:', e);
+    }
     setShowLoginModal(true);
   };
 
@@ -1194,9 +1486,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Persist to Firestore /users/{uid} using clean data without undefined properties
     try {
-      await setDoc(doc(db, 'users', updatedUser.id), cleanFirestoreData(updatedUser), { merge: true });
+      await setDoc(doc(db, 'users', updatedUser.id), cleanFirestoreData({
+        ...updatedUser,
+        uid: updatedUser.id
+      }), { merge: true });
     } catch (e) {
-      console.warn('Firestore users update notice:', e);
+      console.error('Could not persist the user profile:', e);
+      return { success: false, error: 'Could not save your profile. Check your connection and try again.' };
     }
 
     return { success: true };
@@ -1257,8 +1553,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         loginWithPhonePassword,
         signupWithPhonePassword,
-        updateUserPassword,
+        updateOwnPassword,
         registerUserCredentials,
+        linkStudentToParent,
         loginWithPhoneOtp,
         sendPhoneOtp,
         loginWithEmail,

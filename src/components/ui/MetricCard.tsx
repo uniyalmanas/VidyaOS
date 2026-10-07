@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, ArrowRight } from 'lucide-react';
+import { CountUp } from './CountUp';
 
 export interface MetricCardProps {
   label: string;
@@ -17,6 +18,29 @@ export interface MetricCardProps {
   className?: string;
 }
 
+/**
+ * Splits a display value like "₹4.8 Cr", "1,240" or "99.8%" into
+ * prefix / numeric / suffix so the number can animate on mount.
+ * Returns null when the value isn't animatable (e.g. "On track").
+ */
+function parseCountable(value: string | number): {
+  prefix: string;
+  amount: number;
+  suffix: string;
+  decimals: number;
+} | null {
+  if (typeof value === 'number') {
+    return { prefix: '', amount: value, suffix: '', decimals: Number.isInteger(value) ? 0 : 1 };
+  }
+  const match = value.match(/^([^0-9-]*)(-?[\d][\d,]*(?:\.\d+)?)(.*)$/);
+  if (!match) return null;
+  const [, prefix, rawNumber, suffix] = match;
+  const numeric = parseFloat(rawNumber.replace(/,/g, ''));
+  if (!isFinite(numeric)) return null;
+  const decimals = rawNumber.includes('.') ? rawNumber.split('.')[1].length : 0;
+  return { prefix, amount: numeric, suffix, decimals };
+}
+
 export const MetricCard: React.FC<MetricCardProps> = ({
   label,
   value,
@@ -25,19 +49,20 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   icon,
   badge,
   onClick,
-  accentColor = '#FFA000',
+  accentColor = '#4F46E5',
   actionText,
   className = ''
 }) => {
-  const Component = onClick ? 'button' : 'div';
+  const Component: React.ElementType = onClick ? 'button' : 'div';
+  const countable = parseCountable(value);
 
   return (
     <Component
       onClick={onClick}
-      className={`bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 flex flex-col justify-between text-left transition-all duration-200 relative overflow-hidden group shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] ${
+      className={`group bg-white/95 dark:bg-[#1C1C1E]/95 border border-black/[0.06] dark:border-white/[0.08] rounded-2xl p-3.5 sm:p-4.5 lg:p-5 flex flex-col justify-between text-left relative overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.35)] hover-lift ${
         onClick
-          ? 'hover:border-black/[0.16] dark:hover:border-white/[0.2] hover:shadow-md active:scale-[0.99] cursor-pointer'
-          : ''
+          ? 'hover:border-[var(--fb-primary-border)] hover:shadow-[0_8px_24px_-6px_rgba(79,70,229,0.25)] cursor-pointer'
+          : 'transition-[border-color,box-shadow] duration-200'
       } ${className}`}
     >
       {/* Subtle Top Accent Line */}
@@ -48,13 +73,13 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
       <div className="space-y-3">
         {/* Top Header */}
-        <div className="flex items-center justify-between text-xs text-[#86868B]">
-          <span className="font-semibold font-apple-text uppercase tracking-wider text-[11px]">
+        <div className="flex items-center justify-between gap-2 text-xs text-[#86868B]">
+          <span className="font-semibold font-apple-text uppercase tracking-[0.12em] text-[9px] sm:text-[10px] leading-none truncate">
             {label}
           </span>
           {icon ? (
             <div
-              className="p-1.5 rounded-xl transition-transform duration-200 group-hover:scale-105"
+              className="p-1.5 rounded-xl transition-transform duration-200 group-hover:scale-105 shrink-0"
               style={{
                 backgroundColor: `${accentColor}18`,
                 color: accentColor
@@ -68,16 +93,26 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         </div>
 
         {/* Primary Metric Number */}
-        <div className="text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tracking-tight tabular-nums">
-          {value}
+        <div className="text-lg sm:text-2xl lg:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tracking-[-0.05em] tabular-nums leading-none">
+          {countable ? (
+            <CountUp
+              value={countable.amount}
+              decimals={countable.decimals}
+              prefix={countable.prefix}
+              suffix={countable.suffix}
+              duration={1.1}
+            />
+          ) : (
+            value
+          )}
         </div>
 
         {/* Subtext & Trend */}
         {(subtext || trend) && (
-          <div className="flex items-center space-x-2 text-xs text-[#86868B] font-apple-text">
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-xs text-[#86868B] font-apple-text">
             {trend && (
               <span
-                className={`font-semibold flex items-center text-[11px] px-1.5 py-0.5 rounded-md ${
+                className={`font-semibold flex items-center px-1.5 py-0.5 rounded-md ${
                   trend.isPositive
                     ? 'bg-[#E6F4EA] text-[#188038] dark:bg-emerald-950/40 dark:text-[#81C995]'
                     : 'bg-[#FCE8E6] text-[#D93025] dark:bg-rose-950/40 dark:text-[#F28B82]'

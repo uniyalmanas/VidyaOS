@@ -14,6 +14,7 @@ import {
   Award,
   ChevronRight
 } from 'lucide-react';
+import { auth } from '../../lib/firebase';
 
 interface GroundedSource {
   title: string;
@@ -78,9 +79,17 @@ export const SearchGroundingModal: React.FC<SearchGroundingModalProps> = ({ isOp
     setQuery(searchQuery);
 
     try {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        throw new Error('Sign in with your VidyaOS account to use grounded search.');
+      }
+      const idToken = await firebaseUser.getIdToken();
       const res = await fetch('/api/search-grounding', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`
+        },
         body: JSON.stringify({ query: searchQuery }),
       });
 

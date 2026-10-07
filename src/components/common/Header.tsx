@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -31,14 +32,15 @@ import {
   ExternalLink,
   CheckCircle2,
   UserCheck,
-  PanelLeft,
-  DownloadCloud
+  DownloadCloud,
+  Lock
 } from 'lucide-react';
 import { UserRole } from '../../types';
 import { VidyaLogo } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { usePwaInstall } from '../../hooks/usePwaInstall';
 import { PwaInstallModal } from './PwaInstallModal';
+import { dropdownIn, fadeUp, staggerContainerFast, tSpring } from '../../lib/motion';
 
 interface HeaderProps {
   sidebarOpen?: boolean;
@@ -69,7 +71,8 @@ export const Header: React.FC<HeaderProps> = ({
     batches,
     invoices,
     teachers,
-    announcements
+    announcements,
+    showToast
   } = useApp();
 
   const {
@@ -172,28 +175,10 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="bg-white/90 dark:bg-[#000000]/90 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] sticky top-0 z-40 h-14 transition-colors duration-150 select-none">
-      <div className="h-full px-2 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
+    <header className="bg-white/85 dark:bg-[#141416]/85 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] sticky top-0 z-40 h-16 sm:h-14 transition-colors duration-150 select-none">
+      <div className="h-full px-2.5 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full">
         {/* Left Section: Sidebar Toggle & Brand (Flex-shrinkable so right profile never gets pushed out) */}
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-shrink">
-          {/* Sidebar Open Button (shown only when sidebar is closed, allowing user to reopen it) */}
-          {setSidebarOpen && !sidebarOpen && (currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF' || currentUser.role === 'PLATFORM_OWNER') && (
-            <div className="relative group flex-shrink-0">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-1.5 sm:p-2 rounded-xl text-[#1D1D1F] dark:text-[#F5F5F7] bg-black/[0.04] dark:bg-white/[0.06] hover:bg-black/[0.08] dark:hover:bg-white/[0.1] border border-black/[0.06] dark:border-white/[0.08] shadow-2xs transition-all duration-200 cursor-pointer flex items-center justify-center"
-                aria-label="Open sidebar"
-                title="Open sidebar"
-              >
-                <PanelLeft className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:scale-105" />
-              </button>
-              {/* Tooltip */}
-              <div className="hidden sm:block absolute left-0 top-full mt-1 px-2.5 py-1 bg-slate-900 text-white text-[11px] font-medium rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50">
-                Open sidebar
-              </div>
-            </div>
-          )}
-
           {/* Mobile Drawer Hamburger for other roles if applicable */}
           {setSidebarOpen && currentUser.role !== 'CENTER_ADMIN' && currentUser.role !== 'STAFF' && currentUser.role !== 'PLATFORM_OWNER' && (
             <button
@@ -253,8 +238,16 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {/* Firebase Project Switcher Dropdown (Super Admin only) */}
+              <AnimatePresence>
               {showOrgDropdown && (
-                <div className="absolute left-0 mt-2 w-72 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-2 z-50 animate-in fade-in slide-in-from-top-1">
+                <motion.div
+                  key="org-dropdown"
+                  variants={dropdownIn}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  className="absolute left-0 mt-2 w-72 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-2 z-50"
+                >
                   <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#86868B]">
                     Active Centers ({organizations.length})
                   </div>
@@ -268,13 +261,22 @@ export const Header: React.FC<HeaderProps> = ({
                             setCurrentOrgId(org.id);
                             setShowOrgDropdown(false);
                           }}
-                          className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition cursor-pointer ${
+                          className={`relative w-full flex items-center justify-between p-2 rounded-xl text-left transition cursor-pointer ${
                             isSelected
-                              ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold'
+                              ? 'text-[#E65100] dark:text-[#FFCA28] font-bold'
                               : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7]'
                           }`}
                         >
-                          <div className="truncate">
+                          {/* Sliding selected-row indicator */}
+                          {isSelected && (
+                            <motion.span
+                              layoutId="org-switcher-active"
+                              transition={tSpring}
+                              className="absolute inset-0 rounded-xl bg-[#FFF8E1] dark:bg-[#FFA000]/15"
+                              aria-hidden="true"
+                            />
+                          )}
+                          <div className="truncate relative">
                             <div className="text-xs font-semibold font-apple-text leading-tight">
                               {org.name}
                             </div>
@@ -282,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({
                               {org.city} · {org.branches.length} Branch · {org.planId.toUpperCase()}
                             </div>
                           </div>
-                          {isSelected && <Check className="w-4 h-4 text-[#FFA000] flex-shrink-0 ml-2" />}
+                          {isSelected && <Check className="relative w-4 h-4 text-[#FFA000] flex-shrink-0 ml-2" />}
                         </button>
                       );
                     })}
@@ -302,8 +304,9 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )}
+              </AnimatePresence>
             </div>
           ) : (
             <div className="flex items-center space-x-2 px-2.5 py-1 rounded-xl border border-black/[0.08] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.06] text-left shadow-2xs select-none">
@@ -342,18 +345,28 @@ export const Header: React.FC<HeaderProps> = ({
               className="w-full bg-transparent text-xs text-[#1D1D1F] dark:text-[#F5F5F7] placeholder-[#86868B] focus:outline-none font-apple-text"
             />
             {searchQuery && (
-              <button
+              <motion.button
                 onClick={() => setSearchQuery('')}
-                className="p-0.5 rounded-full hover:bg-black/10 text-slate-500"
+                whileTap={{ scale: 0.9 }}
+                className="p-0.5 rounded-full hover:bg-black/10 text-slate-500 cursor-pointer"
+                aria-label="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
-              </button>
+              </motion.button>
             )}
           </div>
 
           {/* Omnibox Search Results Dropdown */}
+          <AnimatePresence>
           {searchFocused && searchResults && (
-            <div className="absolute top-10 left-0 right-0 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-2 z-50 max-h-80 overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1">
+            <motion.div
+              key="omnibox-results"
+              variants={dropdownIn}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="absolute top-10 left-0 right-0 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-2 z-50 max-h-80 overflow-y-auto custom-scrollbar"
+            >
               {!searchResults.hasResults ? (
                 <div className="py-6 text-center text-xs text-[#86868B]">
                   No matching records found for "{searchQuery}".
@@ -427,8 +440,9 @@ export const Header: React.FC<HeaderProps> = ({
                   )}
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
 
         {/* Right Section: Utility actions, Notifications, Help & Profile */}
@@ -437,21 +451,27 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Install App Quick Action (Desktop & Tablet only to conserve mobile space) */}
           {!pwaState.isInstalled && (
-            <button
+            <motion.button
               onClick={() => setShowPwaModal(true)}
-              className="hidden md:inline-flex px-2 py-1 rounded-lg text-[#FFA000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition focus:outline-none cursor-pointer items-center gap-1.5 shadow-2xs active:scale-95 flex-shrink-0"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="hidden md:inline-flex px-2 py-1 rounded-lg text-[#FFA000] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-[color,background-color,border-color,box-shadow] focus:outline-none cursor-pointer items-center gap-1.5 shadow-2xs flex-shrink-0"
               title="Install VidyaOS App on Android, iOS, or Laptop"
               aria-label="Install VidyaOS App"
             >
               <DownloadCloud className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
               <span className="text-xs font-semibold">Install App</span>
-            </button>
+            </motion.button>
           )}
 
           {/* Theme Quick Toggle */}
-          <button
+          <motion.button
             onClick={toggleTheme}
-            className="p-2 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition focus:outline-none cursor-pointer flex-shrink-0"
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            className="p-2 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-[color,background-color,box-shadow] focus:outline-none cursor-pointer flex-shrink-0"
             title={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             aria-label="Toggle dark/light theme"
           >
@@ -460,23 +480,29 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <Moon className="w-4 h-4 text-[#0071E3]" />
             )}
-          </button>
+          </motion.button>
 
           {/* Help & Support Button (hidden on narrow screens to prevent crowding) */}
-          <button
+          <motion.button
             onClick={() => setShowHelpModal(true)}
-            className="hidden sm:inline-flex p-2 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition focus:outline-none cursor-pointer flex-shrink-0"
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            className="hidden sm:inline-flex p-2 rounded-full text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-[color,background-color,box-shadow] focus:outline-none cursor-pointer flex-shrink-0"
             title="Help & Documentation"
             aria-label="Help & Documentation"
           >
             <HelpCircle className="w-4 h-4" />
-          </button>
+          </motion.button>
 
           {/* Notifications Center */}
           <div ref={notifDropdownRef} className="relative flex-shrink-0">
-            <button
+            <motion.button
               onClick={() => setShowNotifDropdown(!showNotifDropdown)}
-              className="p-1.5 sm:p-2 rounded-xl text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition relative focus:outline-none cursor-pointer"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="p-1.5 sm:p-2 rounded-xl text-[#86868B] dark:text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-[color,background-color,box-shadow] relative focus:outline-none cursor-pointer"
               title="Notifications"
               aria-label="Notifications"
             >
@@ -484,20 +510,32 @@ export const Header: React.FC<HeaderProps> = ({
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#FF3B30] ring-2 ring-white dark:ring-[#1C1C1E]" />
               )}
-            </button>
+            </motion.button>
 
+            <AnimatePresence>
             {showNotifDropdown && (
-              <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-1.5rem)] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-3 z-50 animate-in fade-in slide-in-from-top-1">
+              <motion.div
+                key="notifications-dropdown"
+                variants={dropdownIn}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-1.5rem)] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-3 z-50"
+              >
                 <div className="flex items-center justify-between pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
                   <span className="text-xs font-bold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">Notifications</span>
                   <span className="text-[10px] text-[#0071E3] dark:text-[#2997FF] font-semibold cursor-pointer hover:underline">
                     Mark all read
                   </span>
                 </div>
-                <div className="divide-y divide-black/[0.04] dark:divide-white/[0.06] max-h-64 overflow-y-auto mt-1 custom-scrollbar">
+                <motion.div
+                  variants={staggerContainerFast}
+                  className="divide-y divide-black/[0.04] dark:divide-white/[0.06] max-h-64 overflow-y-auto mt-1 custom-scrollbar"
+                >
                   {notifications.map(n => (
-                    <div
+                    <motion.div
                       key={n.id}
+                      variants={fadeUp}
                       onClick={() => {
                         if (n.linkTab) {
                           setActiveTab(n.linkTab);
@@ -507,27 +545,31 @@ export const Header: React.FC<HeaderProps> = ({
                         }
                         setShowNotifDropdown(false);
                       }}
-                      className="py-2.5 px-2 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] rounded-xl cursor-pointer transition text-xs space-y-0.5"
+                      className="py-2.5 px-2 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] rounded-xl cursor-pointer transition-[color,background-color,border-color] text-xs space-y-0.5"
                     >
                       <div className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] flex items-center justify-between">
                         <span>{n.title}</span>
                         <span className="text-[10px] text-[#86868B] font-normal font-apple-text">{n.timestamp}</span>
                       </div>
                       <p className="text-[11px] text-[#86868B] line-clamp-2">{n.message}</p>
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
 
           <div className="h-4 w-px bg-black/[0.08] dark:bg-white/[0.12] mx-0.5" />
 
           {/* User Account Avatar & Dropdown (Always visible and accessible) */}
           <div ref={userDropdownRef} className="relative flex-shrink-0">
-            <button
+            <motion.button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="flex items-center space-x-1.5 p-0.5 rounded-full hover:ring-2 hover:ring-[#FFA000]/40 transition cursor-pointer"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="flex items-center space-x-1.5 p-0.5 rounded-full hover:ring-2 hover:ring-[#FFA000]/40 transition-[color,background-color,box-shadow] cursor-pointer"
               title={`${currentUser.name} (${currentUser.role})`}
               aria-label="User Account Menu"
             >
@@ -536,10 +578,18 @@ export const Header: React.FC<HeaderProps> = ({
                 alt={currentUser.name}
                 className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border-2 border-[#FFA000]/50 dark:border-[#FFA000]/60 shadow-2xs"
               />
-            </button>
+            </motion.button>
 
+            <AnimatePresence>
             {showUserDropdown && (
-              <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-3 z-50 animate-in fade-in slide-in-from-top-1 text-left">
+              <motion.div
+                key="user-dropdown"
+                variants={dropdownIn}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] p-3 z-50 text-left"
+              >
                 {/* Account Header */}
                 <div className="flex items-center space-x-3 pb-3 border-b border-black/[0.06] dark:border-white/[0.08]">
                   <img
@@ -588,28 +638,50 @@ export const Header: React.FC<HeaderProps> = ({
                       ...(currentUser.role === 'PLATFORM_OWNER'
                         ? [{ role: 'PLATFORM_OWNER', label: 'SaaS Super Admin', path: '/owner' }]
                         : [])
-                    ].map(r => (
-                      <button
-                        key={r.role}
-                        onClick={() => {
-                          switchRole(r.role as UserRole);
-                          if (r.role === 'CENTER_ADMIN') {
-                            navigate(`/admin/${currentOrg.id}`);
-                          } else {
-                            navigate(r.path);
-                          }
-                          setShowUserDropdown(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between ${
-                          currentUser.role === r.role
-                            ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold'
-                            : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7]'
-                        }`}
-                      >
-                        <span className="font-apple-text">{r.label}</span>
-                        {currentUser.role === r.role && <Check className="w-3.5 h-3.5 text-[#FFA000]" />}
-                      </button>
-                    ))}
+                    ].map(r => {
+                      const isCurrent = currentUser.role === r.role;
+                      // A production session only ever holds one role, so the other
+                      // portals belong to different accounts. `switchRole` used to be
+                      // called regardless and quietly did nothing — while still
+                      // clobbering `activeTab` — which read as broken impersonation
+                      // instead of a permission check. Demo persona hopping exists
+                      // only in DEV.
+                      const canEnter = isCurrent || import.meta.env.DEV;
+                      return (
+                        <button
+                          key={r.role}
+                          aria-disabled={!canEnter}
+                          onClick={() => {
+                            if (!canEnter) {
+                              showToast(
+                                `Your account is signed in as ${currentUser.role.replace('_', ' ')}. Sign in with the account that owns the ${r.label} to open it.`,
+                                'info'
+                              );
+                              setShowUserDropdown(false);
+                              return;
+                            }
+                            switchRole(r.role as UserRole);
+                            if (r.role === 'CENTER_ADMIN') {
+                              navigate(`/admin/${currentOrg.id}`);
+                            } else {
+                              navigate(r.path);
+                            }
+                            setShowUserDropdown(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center justify-between ${
+                            isCurrent
+                              ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold'
+                              : `hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7]${canEnter ? '' : ' opacity-55'}`
+                          }`}
+                        >
+                          <span className="font-apple-text flex items-center gap-1.5">
+                            {!canEnter && <Lock className="w-3 h-3" />}
+                            {r.label}
+                          </span>
+                          {isCurrent && <Check className="w-3.5 h-3.5 text-[#FFA000]" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -649,8 +721,9 @@ export const Header: React.FC<HeaderProps> = ({
                     <span>Sign Out</span>
                   </button>
                 </div>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
         </div>
       </div>

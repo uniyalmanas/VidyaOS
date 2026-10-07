@@ -17,13 +17,30 @@ import {
   Copy,
   Check
 } from 'lucide-react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { easings, tSpring, fadeUp } from '../../lib/motion';
+
+/** Modal shell: spring pop-in cascading header → sidebar + chapter → footer. */
+const archPanelVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { ...tSpring, delayChildren: 0.05, staggerChildren: 0.06 }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    y: 6,
+    transition: { duration: 0.16, ease: easings.inOut }
+  }
+};
 
 export const ArchitectureModal: React.FC = () => {
   const { showArchitectureModal, setShowArchitectureModal } = useApp();
   const [activeSection, setActiveSection] = useState<string>('arch-overview');
   const [copied, setCopied] = useState<boolean>(false);
-
-  if (!showArchitectureModal) return null;
 
   const sections = [
     { id: 'arch-overview', label: '1. Product Architecture', icon: Layers },
@@ -46,10 +63,25 @@ export const ArchitectureModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 md:p-6 overflow-hidden">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-6xl h-[92vh] rounded-2xl shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-900/50">
+    <AnimatePresence>
+      {showArchitectureModal && (
+        <motion.div
+          key="architecture-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 md:p-6 overflow-hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: easings.outQuart }}
+        >
+          <motion.div
+            variants={archPanelVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="bg-white dark:bg-slate-900 w-full max-w-6xl h-[92vh] rounded-2xl shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800 overflow-hidden"
+          >
+            {/* Header */}
+            <motion.div variants={fadeUp} className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-900/50">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600/40 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
               <Layers className="w-5 h-5" />
@@ -80,12 +112,12 @@ export const ArchitectureModal: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
-        </div>
+            </motion.div>
 
-        {/* Content body with sidebar */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Navigation Sidebar */}
-          <div className="w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 p-3 overflow-y-auto space-y-1">
+            {/* Content body with sidebar */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* Navigation Sidebar */}
+              <motion.div variants={fadeUp} className="w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 p-3 overflow-y-auto space-y-1">
             <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 py-2">
               Architectural Chapters
             </div>
@@ -93,8 +125,10 @@ export const ArchitectureModal: React.FC = () => {
               const Icon = s.icon;
               const isActive = activeSection === s.id;
               return (
-                <button
+                <motion.button
                   key={s.id}
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
                   onClick={() => setActiveSection(s.id)}
                   className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-left text-xs font-medium transition ${
                     isActive
@@ -104,13 +138,20 @@ export const ArchitectureModal: React.FC = () => {
                 >
                   <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
                   <span className="truncate">{s.label}</span>
-                </button>
+                </motion.button>
               );
             })}
-          </div>
+              </motion.div>
 
-          {/* Section Detail Panel */}
-          <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-slate-900 custom-scrollbar space-y-6 text-slate-800 dark:text-slate-200 text-sm leading-relaxed">
+              {/* Section Detail Panel */}
+              <div className="flex-1 p-6 overflow-y-auto bg-white dark:bg-slate-900 custom-scrollbar space-y-6 text-slate-800 dark:text-slate-200 text-sm leading-relaxed">
+                <motion.div
+                  key={activeSection}
+                  className="space-y-6"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.26, ease: easings.outQuart }}
+                >
             {activeSection === 'arch-overview' && (
               <div className="space-y-4">
                 <div className="border-b pb-3">
@@ -639,23 +680,28 @@ CREATE TABLE payment_records (
                 </div>
               </div>
             )}
-          </div>
-        </div>
+                </motion.div>
+              </div>
+            </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <div className="flex items-center space-x-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>VidyaOS SaaS System Engine Active</span>
-          </div>
-          <button
-            onClick={() => setShowArchitectureModal(false)}
-            className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition"
-          >
-            Close Blueprint
-          </button>
-        </div>
-      </div>
-    </div>
+            {/* Modal Footer */}
+            <motion.div variants={fadeUp} className="px-6 py-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+              <div className="flex items-center space-x-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>VidyaOS SaaS System Engine Active</span>
+              </div>
+              <motion.button
+                type="button"
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setShowArchitectureModal(false)}
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition hover:shadow-[var(--fb-glow-primary)]"
+              >
+                Close Blueprint
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

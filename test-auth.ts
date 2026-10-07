@@ -2,6 +2,8 @@
  * VidyaOS Authentication & Multi-Tenancy Automated Verification Suite
  */
 
+import { getIndiaDayName, getIndiaDateString } from './src/lib/date';
+
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
   return digits.length > 10 ? digits.slice(-10) : digits;
@@ -122,6 +124,56 @@ const mockCreatedUser: SafeUser = {
   orgId: 'org-apex'
 };
 assert(!('password' in mockCreatedUser), 'User model strictly excludes password property');
+
+// -------------------------------------------------------------
+// India-local date helpers — "today" must be computed, never hardcoded
+// (ParentPortal previously hard-coded 'Monday' for its today's-classes strip)
+// -------------------------------------------------------------
+console.log('\n===== India-local date helpers =====');
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// 2026-10-04 is a Sunday. At 12:00Z it is already 17:30 IST, still the same day.
+for (let i = 0; i < 7; i++) {
+  const instant = new Date(Date.UTC(2026, 9, 4 + i, 12, 0, 0));
+  assert(
+    getIndiaDayName(instant) === WEEKDAY_NAMES[i],
+    `getIndiaDayName resolves ${instant.toISOString().slice(0, 10)} to ${WEEKDAY_NAMES[i]}`
+  );
+}
+
+// IST is UTC+05:30, so the calendar day rolls over at 18:30 UTC — not midnight.
+assert(
+  getIndiaDayName(new Date('2026-10-04T18:29:00.000Z')) === 'Sunday',
+  'Day boundary: 18:29Z on Oct 4 is still Sunday in IST (23:59)'
+);
+assert(
+  getIndiaDayName(new Date('2026-10-04T18:30:00.000Z')) === 'Monday',
+  'Day boundary: 18:30Z on Oct 4 is already Monday in IST (00:00)'
+);
+assert(
+  getIndiaDayName(new Date('2026-10-07T12:00:00.000Z')) === 'Wednesday',
+  'Today (2026-10-07) resolves to Wednesday'
+);
+
+assert(
+  getIndiaDateString(new Date('2026-10-04T18:29:00.000Z')) === '2026-10-04',
+  'Date string boundary: 18:29Z is still 2026-10-04 in IST'
+);
+assert(
+  getIndiaDateString(new Date('2026-10-04T18:30:00.000Z')) === '2026-10-05',
+  'Date string boundary: 18:30Z is already 2026-10-05 in IST'
+);
+
+// Every TimetableSlot['dayOfWeek'] value must be producible by the helper,
+// otherwise "today's classes" could never match a slot on that day.
+const produced = new Set(
+  Array.from({ length: 7 }, (_, i) => getIndiaDayName(new Date(Date.UTC(2026, 9, 4 + i, 12))))
+);
+assert(
+  produced.size === 7,
+  'All 7 weekday names are reachable — no slot day is permanently unreachable'
+);
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

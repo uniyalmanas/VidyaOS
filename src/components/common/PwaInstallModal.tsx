@@ -16,6 +16,25 @@ import {
 } from 'lucide-react';
 import { PlatformType, usePwaInstall } from '../../hooks/usePwaInstall';
 import { ConsoleButton } from '../ui';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
+
+/** Modal shell: spring pop-in cascading header → platform tabs → steps → footer. */
+const pwaPanelVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { ...tSpring, delayChildren: 0.05, staggerChildren: 0.06 }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    y: 6,
+    transition: { duration: 0.16, ease: easings.inOut }
+  }
+};
 
 interface PwaInstallModalProps {
   isOpen: boolean;
@@ -34,8 +53,6 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
   );
   const [installStatus, setInstallStatus] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
   const handleDirectInstall = async () => {
     if (canPromptDirectly) {
       const res = await triggerInstall();
@@ -48,16 +65,29 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div
-        className="relative w-full max-w-lg bg-white dark:bg-[#1E1F20] rounded-2xl shadow-2xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden transition-all text-[#202124] dark:text-[#E8EAED]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header Accent Bar */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000]" />
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="pwa-install-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: easings.outQuart }}
+        >
+          <motion.div
+            variants={pwaPanelVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg bg-white dark:bg-[#1E1F20] rounded-2xl shadow-2xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden transition-all text-[#202124] dark:text-[#E8EAED]"
+          >
+            {/* Header Accent Bar */}
+            <motion.div variants={fadeUp} className="h-1.5 w-full bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000]" />
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 border-b border-[#DADCE0] dark:border-[#3C4043]">
+            {/* Modal Header */}
+            <motion.div variants={fadeUp} className="flex items-center justify-between p-5 border-b border-[#DADCE0] dark:border-[#3C4043]">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#FF3D00] to-[#FFA000] flex items-center justify-center shadow-md shadow-amber-500/20 text-white font-bold text-lg">
               <DownloadCloud className="w-5 h-5 text-white" />
@@ -81,10 +111,10 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+            </motion.div>
 
-        {/* OS Platform Tabs */}
-        <div className="flex border-b border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#18191A] p-1.5 gap-1.5 text-xs font-semibold">
+            {/* OS Platform Tabs */}
+            <motion.div variants={fadeUp} className="flex border-b border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#18191A] p-1.5 gap-1.5 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('android')}
             className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer ${
@@ -135,28 +165,46 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
               </span>
             )}
           </button>
-        </div>
+            </motion.div>
 
-        {/* Tab Content */}
-        <div className="p-6 space-y-4">
-          {/* Status banner if already installed */}
-          {isInstalled && (
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>
-                <strong>VidyaOS is installed!</strong> You are already running or have installed this app.
-              </span>
-            </div>
-          )}
+            {/* Tab Content */}
+            <motion.div variants={staggerContainerFast} className="p-6 space-y-4">
+              {/* Status banner if already installed */}
+              {isInstalled && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.24, ease: easings.outQuart }}
+                  className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2.5 text-xs text-emerald-800 dark:text-emerald-300"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    <strong>VidyaOS is installed!</strong> You are already running or have installed this app.
+                  </span>
+                </motion.div>
+              )}
 
-          {installStatus && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-[#B06000] dark:text-[#FFCA28]">
-              {installStatus}
-            </div>
-          )}
+              {installStatus && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.24, ease: easings.outQuart }}
+                  className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-[#B06000] dark:text-[#FFCA28]"
+                >
+                  {installStatus}
+                </motion.div>
+              )}
 
-          {/* Android View */}
-          {activeTab === 'android' && (
+              {/* Platform step panel (swaps with the tabs above) */}
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, ease: easings.outQuart }}
+              >
+
+              {/* Android View */}
+              {activeTab === 'android' && (
             <div className="space-y-4">
               <div className="p-3.5 bg-[#F8F9FA] dark:bg-[#282A2C] rounded-xl border border-[#DADCE0] dark:border-[#3C4043] space-y-2">
                 <div className="flex items-center justify-between">
@@ -171,13 +219,15 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                   Install VidyaOS directly to your app drawer and home screen. Launches in standalone full-screen without address bar clutter and works offline.
                 </p>
                 {canPromptDirectly ? (
-                  <button
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.97 }}
                     onClick={handleDirectInstall}
-                    className="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000] text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 transition cursor-pointer"
+                    className="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000] text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 transition hover:shadow-[var(--fb-glow-primary)] cursor-pointer"
                   >
                     <DownloadCloud className="w-4 h-4" />
                     Install VidyaOS on Android Now
-                  </button>
+                  </motion.button>
                 ) : (
                   <div className="space-y-2 pt-2 border-t border-[#DADCE0]/50 dark:border-[#3C4043]/50">
                     <p className="text-xs font-medium text-[#202124] dark:text-white">
@@ -274,13 +324,15 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                 </p>
 
                 {canPromptDirectly ? (
-                  <button
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.97 }}
                     onClick={handleDirectInstall}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000] text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 transition cursor-pointer"
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#D50000] via-[#FF3D00] to-[#FFA000] text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-md hover:brightness-105 transition hover:shadow-[var(--fb-glow-primary)] cursor-pointer"
                   >
                     <DownloadCloud className="w-4 h-4" />
                     Install VidyaOS on Laptop / PC
-                  </button>
+                  </motion.button>
                 ) : (
                   <div className="space-y-2 pt-2 border-t border-[#DADCE0]/50 dark:border-[#3C4043]/50">
                     <p className="text-xs font-medium text-[#202124] dark:text-white">
@@ -295,38 +347,41 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                 )}
               </div>
             </div>
-          )}
+              )}
+              </motion.div>
 
-          {/* Benefits Grid */}
-          <div className="grid grid-cols-3 gap-2 pt-1 text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
-            <div className="p-2 rounded-lg bg-[#F1F3F4]/60 dark:bg-[#282A2C]/60 flex flex-col items-center text-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-[#FFA000]" />
-              <span className="font-semibold text-[#202124] dark:text-white">Instant Load</span>
-              <span className="text-[10px]">Zero app store downloads</span>
-            </div>
-            <div className="p-2 rounded-lg bg-[#F1F3F4]/60 dark:bg-[#282A2C]/60 flex flex-col items-center text-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="font-semibold text-[#202124] dark:text-white">Offline Ready</span>
-              <span className="text-[10px]">Works when network drops</span>
-            </div>
-            <div className="p-2 rounded-lg bg-[#F1F3F4]/60 dark:bg-[#282A2C]/60 flex flex-col items-center text-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-              <span className="font-semibold text-[#202124] dark:text-white">Lightweight</span>
-              <span className="text-[10px]">&lt; 2MB storage use</span>
-            </div>
-          </div>
-        </div>
+              {/* Benefits Grid */}
+              <motion.div variants={fadeUp} className="grid grid-cols-3 gap-2 pt-1 text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
+                <div className="p-2 rounded-lg bg-[#F1F3F4]/60 dark:bg-[#282A2C]/60 flex flex-col items-center text-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-[#FFA000]" />
+                  <span className="font-semibold text-[#202124] dark:text-white">Instant Load</span>
+                  <span className="text-[10px]">Zero app store downloads</span>
+                </div>
+                <div className="p-2 rounded-lg bg-[#F1F3F4]/60 dark:bg-[#282A2C]/60 flex flex-col items-center text-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="font-semibold text-[#202124] dark:text-white">Offline Ready</span>
+                  <span className="text-[10px]">Works when network drops</span>
+                </div>
+                <div className="p-2 rounded-lg bg-[#F1F3F4]/60 dark:bg-[#282A2C]/60 flex flex-col items-center text-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="font-semibold text-[#202124] dark:text-white">Lightweight</span>
+                  <span className="text-[10px]">&lt; 2MB storage use</span>
+                </div>
+              </motion.div>
+            </motion.div>
 
-        {/* Modal Footer */}
-        <div className="p-4 bg-[#F8F9FA] dark:bg-[#18191A] border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between">
-          <span className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
-            VidyaOS Progressive Web Application v2.5
-          </span>
-          <ConsoleButton variant="secondary" size="xs" onClick={onClose}>
-            Close
-          </ConsoleButton>
-        </div>
-      </div>
-    </div>
+            {/* Modal Footer */}
+            <motion.div variants={fadeUp} className="p-4 bg-[#F8F9FA] dark:bg-[#18191A] border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between">
+              <span className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
+                VidyaOS Progressive Web Application v2.5
+              </span>
+              <ConsoleButton variant="secondary" size="xs" onClick={onClose}>
+                Close
+              </ConsoleButton>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

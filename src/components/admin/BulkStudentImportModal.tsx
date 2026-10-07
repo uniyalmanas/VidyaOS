@@ -175,17 +175,19 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
           classGrade: row.classGrade,
           board: row.board,
           schoolName: row.schoolName,
-          dateOfBirth: '2008-05-15',
+          dateOfBirth: '',
           admissionDate: new Date().toISOString().split('T')[0],
           phone: row.fatherPhone,
-          address: `${currentOrg.city || 'Dehradun'}, India`,
+          address: currentOrg.city ? `${currentOrg.city}, India` : '',
           avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(row.name)}`,
           batchIds: selectedBatchId ? [selectedBatchId] : [],
           guardian: {
             fatherName: row.fatherName,
             fatherPhone: row.fatherPhone,
             motherName: row.motherName,
-            parentUserId: `parent-auto-${Date.now()}-${i}`
+            // No login is created during bulk import (the CSV carries no password),
+            // so there is no parent account to link to yet.
+            parentUserId: ''
           },
           status: 'active'
         });

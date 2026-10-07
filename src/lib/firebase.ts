@@ -15,6 +15,8 @@ import {
 import {
   getFirestore,
   initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   getDoc,
   setDoc,
@@ -77,10 +79,32 @@ const targetDatabaseId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.f
   ? firebaseConfig.firestoreDatabaseId
   : undefined;
 
+// IndexedDB-backed persistence only exists in a browser. Node (tests, tooling)
+// keeps the SDK's in-memory default, which also throws if asked for persistence.
+// The `indexedDB` probe covers browsers where storage is disabled outright (older
+// Firefox private browsing exposes the object as null). For the narrower case of
+// IndexedDB opening but failing on read/write, the SDK catches the well-understood
+// failures itself and falls back to an in-memory cache instead of crashing the
+// client — see `canFallbackFromIndexedDbError` in @firebase/firestore.
+const canPersist =
+  typeof window !== 'undefined' &&
+  typeof window.document !== 'undefined' &&
+  typeof indexedDB !== 'undefined' &&
+  indexedDB !== null;
+
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    ignoreUndefinedProperties: true
+    ignoreUndefinedProperties: true,
+    // Persist query results to IndexedDB so a reload — or a dropped connection —
+    // renders the last known cloud state immediately instead of an empty screen
+    // waiting on the network. This is what makes the app feel like a real
+    // cloud-sync app, and it replaces the per-collection localStorage mirrors
+    // that went stale the moment another device wrote to Firestore.
+    // Multiple tabs share the cache, so two portals open side by side agree.
+    ...(canPersist
+      ? { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }
+      : {})
   }, targetDatabaseId);
 } catch (_) {
   firestoreInstance = targetDatabaseId ? getFirestore(app, targetDatabaseId) : getFirestore(app);
@@ -90,7 +114,9 @@ export const db = firestoreInstance;
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+// Avoid forcing an account-picker on every sign-in. This makes Google auth feel
+// noticeably slower and is unnecessary for a normal single-account flow.
+googleProvider.setCustomParameters({ prompt: 'consent' });
 
 /**
  * Creates a new user in Firebase Authentication in the background without
@@ -126,21 +152,10 @@ export async function createSecondaryUser(
           await signOut(secAuth);
           return { success: true, uid };
         } catch (signInErr: any) {
-          try {
-            const fallbackCred = await signInWithEmailAndPassword(secAuth, email, 'teacher123');
-            await updatePassword(fallbackCred.user, pass);
-            if (displayName) {
-              await updateProfile(fallbackCred.user, { displayName });
-            }
-            const uid = fallbackCred.user.uid;
-            await signOut(secAuth);
-            return { success: true, uid };
-          } catch (_) {
-            return {
-              success: false,
-              error: 'An account with this mobile number already exists. Please ask the faculty member to sign in.'
-            };
-          }
+          return {
+            success: false,
+            error: 'An account with this mobile number already exists with a different password. Ask the faculty member to reset their password.'
+          };
         }
       }
       console.warn('createSecondaryUser notice:', createErr?.code, createErr?.message);
@@ -209,6 +224,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Connection check on boot
 export async function testFirestoreConnection() {
+  if (import.meta.env.DEV) {
+    try {
+      const stored = localStorage.getItem('vidyaos_auth_session');
+      if (stored) {
+        const session = JSON.parse(stored);
+        if (session?.user && session.loginMethod === 'demo_preset' && !auth.currentUser) {
+          return;
+        }
+      }
+    } catch (_) {}
+  }
+
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
@@ -259,6 +286,7 @@ export {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   updateProfile,
+  updatePassword,
   doc,
   getDoc,
   setDoc,

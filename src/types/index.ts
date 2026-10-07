@@ -14,6 +14,7 @@ export interface Branch {
 
 export interface Organization {
   id: string;
+  ownerUid?: string;
   name: string;
   slug: string;
   tagline: string;
@@ -100,6 +101,7 @@ export interface Student {
     parentUserId: string; // linked to Parent auth account
   };
   status: 'active' | 'inactive';
+  userId?: string;
 }
 
 export interface Teacher {
@@ -165,6 +167,28 @@ export interface PaymentRecord {
   receivedBy: string;
   receiptNo: string;
   upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'bhim';
+  status?: 'pending_verification' | 'verified' | 'rejected';
+  verifiedBy?: string;
+  verifiedAt?: string;
+  rejectionReason?: string;
+}
+
+export interface PaymentSubmission {
+  id: string;
+  orgId: string;
+  invoiceId: string;
+  studentId: string;
+  amount: number;
+  paymentMethod: 'UPI';
+  transactionRef: string;
+  upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'bhim';
+  submittedBy: string;
+  submittedByName: string;
+  submittedAt: string;
+  status: 'pending_verification' | 'verified' | 'rejected';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
 }
 
 export interface FeeInvoice {
@@ -182,7 +206,7 @@ export interface FeeInvoice {
   netAmount: number;
   paidAmount: number;
   dueDate: string;
-  status: 'paid' | 'pending' | 'partially_paid' | 'overdue';
+  status: 'paid' | 'pending' | 'partially_paid' | 'overdue' | 'verification_pending';
   payments: PaymentRecord[];
   createdAt: string;
 }
@@ -302,7 +326,9 @@ export interface NotificationItem {
 }
 
 export interface AuthSession {
-  token: string;
+  // NOTE: Firebase Auth owns the ID token. It is deliberately NOT part of the
+  // session shape — persisting it to localStorage only created a stale,
+  // XSS-exfiltratable copy that nothing ever read.
   user: User;
   orgId: string;
   createdAt: number;
@@ -324,6 +350,8 @@ export interface ChatChannel {
   allowedRoles?: UserRole[]; // If empty, all roles can view
   lastMessage?: string;
   lastMessageTime?: string;
+  /** Epoch ms of `lastMessage`; used to keep the channel list ordered from Firestore. */
+  lastMessageMs?: number;
   unreadCount?: number;
   isPrivate?: boolean;
 }
@@ -348,6 +376,8 @@ export interface ChatMessage {
   reactions?: { [emoji: string]: string[] }; // emoji -> array of sender names/IDs
   attachments?: ChatMessageAttachment[];
   createdAt: string;
+  /** Sortable epoch-ms timestamp. `createdAt` is the display string; this is what
+   *  Firestore orders by so chat syncs chronologically across devices. */
+  createdAtMs?: number;
   pinned?: boolean;
 }
-

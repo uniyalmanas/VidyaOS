@@ -50,6 +50,7 @@ export interface AcademicContextType {
   deleteAssignment: (assignId: string) => void;
   addStudyMaterial: (mat: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>) => StudyMaterial;
   deleteStudyMaterial: (matId: string) => void;
+  deduplicateTeachers: () => { removedCount: number; mergedCount: number };
 }
 
 const AcademicContext = createContext<AcademicContextType | undefined>(undefined);
@@ -61,57 +62,118 @@ interface AcademicProviderProps {
   children: React.ReactNode;
 }
 
+/**
+ * Scans teachers list, identifies duplicates with identical phone numbers or names within the same coaching center,
+ * merges batch assignments into the canonical record, assigns distinct non-shared userIds,
+ * and identifies redundant duplicate documents to delete from Firestore.
+ */
+export function cleanAndDeduplicateTeachers(rawTeachers: Teacher[]): { cleaned: Teacher[]; removed: Teacher[] } {
+  const seenPhone = new Map<string, Teacher>();
+  const seenName = new Map<string, Teacher>();
+  const cleaned: Teacher[] = [];
+  const removed: Teacher[] = [];
+
+  rawTeachers.forEach(t => {
+    const cleanDigits = (t.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    const cleanName = (t.name || '').trim().toLowerCase();
+    const phoneKey = cleanDigits ? `${t.orgId}::${cleanDigits}` : null;
+    const nameKey = cleanName ? `${t.orgId}::${cleanName}` : null;
+
+    let canonical: Teacher | undefined;
+    if (phoneKey && seenPhone.has(phoneKey)) {
+      canonical = seenPhone.get(phoneKey);
+    } else if (nameKey && seenName.has(nameKey)) {
+      canonical = seenName.get(nameKey);
+    }
+
+    if (canonical) {
+      // Merge batch assignments into canonical record
+      canonical.assignedBatchIds = Array.from(new Set([
+        ...(canonical.assignedBatchIds || []),
+        ...(t.assignedBatchIds || [])
+      ]));
+      removed.push(t);
+    } else {
+      // Ensure unique non-shared userId
+      const safeTeacher: Teacher = {
+        ...t,
+        userId: t.userId || `user-teach-${cleanDigits || t.id}-${Math.random().toString(36).substring(2, 6)}`
+      };
+      if (phoneKey) seenPhone.set(phoneKey, safeTeacher);
+      if (nameKey) seenName.set(nameKey, safeTeacher);
+      cleaned.push(safeTeacher);
+    }
+  });
+
+  return { cleaned, removed };
+}
+
 export const AcademicProvider: React.FC<AcademicProviderProps> = ({
   currentOrg,
   selectedBranchId,
   isPlatformOwner,
   children
 }) => {
+  // The localStorage mirrors below are DEV-only (mock-mode convenience).
+  // Production hydrates every collection from Firestore, which persists to
+  // IndexedDB via the cache configured in firebase.ts — a second, unauthenticated
+  // copy in localStorage would only replay the previous tenant's data after a
+  // logout and could never stay in step with writes from other devices.
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
-    const saved = localStorage.getItem('vidyaos_teachers');
-    return saved ? JSON.parse(saved) : MOCK_TEACHERS;
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_teachers') : null;
+    const raw = saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_TEACHERS : []);
+    const { cleaned, removed } = cleanAndDeduplicateTeachers(raw);
+    if (removed.length > 0) {
+      removed.forEach(r => deleteTeacherFromFirestore(r.id, r.userId));
+    }
+    return cleaned;
   });
 
   const [exams, setExams] = useState<Exam[]>(() => {
-    const saved = localStorage.getItem('vidyaos_exams');
-    return saved ? JSON.parse(saved) : MOCK_EXAMS;
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_exams') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_EXAMS : []);
   });
 
   const [examResults, setExamResults] = useState<ExamResult[]>(() => {
-    const saved = localStorage.getItem('vidyaos_results');
-    return saved ? JSON.parse(saved) : MOCK_EXAM_RESULTS;
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_results') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_EXAM_RESULTS : []);
   });
 
   const [assignments, setAssignments] = useState<Assignment[]>(() => {
-    const saved = localStorage.getItem('vidyaos_assignments');
-    return saved ? JSON.parse(saved) : MOCK_ASSIGNMENTS;
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_assignments') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_ASSIGNMENTS : []);
   });
 
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>(() => {
-    const saved = localStorage.getItem('vidyaos_materials');
-    return saved ? JSON.parse(saved) : MOCK_STUDY_MATERIALS;
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_materials') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_STUDY_MATERIALS : []);
   });
 
-  const [timetableSlots] = useState<TimetableSlot[]>(MOCK_TIMETABLE);
+  const [timetableSlots] = useState<TimetableSlot[]>(import.meta.env.DEV ? MOCK_TIMETABLE : []);
 
-  // Sync to localStorage
+  // DEV-only mirrors (see the note above the state declarations).
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_teachers', JSON.stringify(teachers));
   }, [teachers]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_exams', JSON.stringify(exams));
   }, [exams]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_results', JSON.stringify(examResults));
   }, [examResults]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_assignments', JSON.stringify(assignments));
   }, [assignments]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_materials', JSON.stringify(studyMaterials));
   }, [studyMaterials]);
 
@@ -120,7 +182,13 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
 
     const unsubTeachers = subscribeToTeachers(data => {
-      if (data) setTeachers(data);
+      if (data) {
+        const { cleaned, removed } = cleanAndDeduplicateTeachers(data);
+        setTeachers(cleaned);
+        if (removed.length > 0) {
+          removed.forEach(r => deleteTeacherFromFirestore(r.id, r.userId));
+        }
+      }
     }, targetOrg);
 
     const unsubExams = subscribeToExams(data => {
@@ -181,8 +249,32 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
   }, [timetableSlots, currentOrg.id, isPlatformOwner, selectedBranchId]);
 
   const addTeacher = (data: Omit<Teacher, 'id' | 'orgId' | 'userId' | 'joiningDate'> & Partial<Pick<Teacher, 'userId' | 'joiningDate'>>): Teacher => {
+    const cleanDigits = (data.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    // Check if teacher with same phone number already exists in currentOrg to prevent duplicates
+    const existing = teachers.find(t =>
+      t.orgId === currentOrg.id &&
+      cleanDigits &&
+      t.phone.replace(/[^0-9]/g, '').slice(-10) === cleanDigits
+    );
+
+    if (existing) {
+      const mergedBatches = Array.from(new Set([...(existing.assignedBatchIds || []), ...(data.assignedBatchIds || [])]));
+      const updated: Teacher = {
+        ...existing,
+        ...data,
+        id: existing.id,
+        orgId: existing.orgId,
+        userId: existing.userId,
+        assignedBatchIds: mergedBatches
+      };
+      setTeachers(prev => prev.map(t => t.id === existing.id ? updated : t));
+      persistTeacherToFirestore(updated);
+      return updated;
+    }
+
+    const uniqueUserId = data.userId || `user-teach-${cleanDigits || Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
     const newTeacher: Teacher = {
-      userId: data.userId || `user-${Date.now()}`,
+      userId: uniqueUserId,
       joiningDate: data.joiningDate || new Date().toISOString().split('T')[0],
       ...data,
       id: `teach-${Date.now()}`,
@@ -205,8 +297,19 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
   };
 
   const deleteTeacher = (teacherId: string) => {
+    const target = teachers.find(t => t.id === teacherId);
     setTeachers(prev => prev.filter(t => t.id !== teacherId));
-    deleteTeacherFromFirestore(teacherId);
+    deleteTeacherFromFirestore(teacherId, target?.userId);
+  };
+
+  const deduplicateTeachers = () => {
+    const { cleaned, removed } = cleanAndDeduplicateTeachers(teachers);
+    if (removed.length > 0) {
+      setTeachers(cleaned);
+      removed.forEach(r => deleteTeacherFromFirestore(r.id, r.userId));
+      cleaned.forEach(c => persistTeacherToFirestore(c));
+    }
+    return { removedCount: removed.length, mergedCount: cleaned.length };
   };
 
   const createExam = (data: Omit<Exam, 'id' | 'orgId'>): Exam => {
@@ -282,8 +385,31 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
   };
 
   const deleteStudyMaterial = (matId: string) => {
+    // Find the material to get its fileUrl before removing from state
+    const material = studyMaterials.find(m => m.id === matId);
     setStudyMaterials(prev => prev.filter(m => m.id !== matId));
     deleteStudyMaterialFromFirestore(matId);
+
+    // Also delete the associated file from Firebase Storage to prevent orphaned files.
+    // Only attempt if the URL is a Firebase Storage URL (contains firebasestorage.googleapis.com).
+    if (material?.fileUrl && material.fileUrl.includes('firebasestorage.googleapis.com')) {
+      import('../../lib/firebase').then(({ deleteFileFromStorage }) => {
+        // Extract the storage path from the download URL.
+        // Firebase Storage download URLs encode the path as: /o/{encodedPath}?
+        try {
+          const url = new URL(material.fileUrl);
+          const encodedPath = url.pathname.split('/o/')[1];
+          if (encodedPath) {
+            const storagePath = decodeURIComponent(encodedPath.split('?')[0]);
+            deleteFileFromStorage(storagePath).catch(err => {
+              console.warn(`Could not delete storage file for material ${matId}:`, err);
+            });
+          }
+        } catch (e) {
+          console.warn('Could not parse storage URL for cleanup:', e);
+        }
+      });
+    }
   };
 
   return (
@@ -298,6 +424,7 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
         addTeacher,
         updateTeacher,
         deleteTeacher,
+        deduplicateTeachers,
         createExam,
         deleteExam,
         saveExamResults,

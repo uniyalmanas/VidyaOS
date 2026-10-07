@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { Student, Batch, User, Organization } from '../../types';
 import { MOCK_STUDENTS, MOCK_BATCHES } from '../../data/mockData';
+import { useAuth } from '../AuthContext';
 import {
   subscribeToStudents,
   subscribeToBatches,
@@ -14,7 +15,7 @@ import {
 export interface StudentContextType {
   students: Student[];
   batches: Batch[];
-  addStudent: (student: Omit<Student, 'id' | 'orgId' | 'enrollmentNo'>) => Student;
+  addStudent: (student: Omit<Student, 'id' | 'orgId' | 'enrollmentNo'> & Partial<Pick<Student, 'userId'>>) => Student;
   updateStudent: (studentId: string, updates: Partial<Student>) => void;
   deleteStudent: (studentId: string) => void;
   addBatch: (batch: Omit<Batch, 'id' | 'orgId'>) => Batch;
@@ -26,6 +27,37 @@ export interface StudentContextType {
 }
 
 const StudentContext = createContext<StudentContextType | undefined>(undefined);
+const DELETED_STUDENT_IDS_KEY = 'vidyaos_deleted_student_ids';
+const DELETED_BATCH_IDS_KEY = 'vidyaos_deleted_batch_ids';
+
+function readDeletedIds(storageKey: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((value): value is string => typeof value === 'string' && value.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function writeDeletedId(storageKey: string, id: string) {
+  if (!id) return;
+  const next = readDeletedIds(storageKey);
+  next.add(id);
+  try {
+    localStorage.setItem(storageKey, JSON.stringify([...next]));
+  } catch {
+    // Ignore storage quota issues in dev fallback contexts.
+  }
+}
+
+function filterDeletedItems<T extends { id: string }>(items: T[], storageKey: string): T[] {
+  const deleted = readDeletedIds(storageKey);
+  if (deleted.size === 0) return items;
+  return items.filter(item => !deleted.has(item.id));
+}
 
 interface StudentProviderProps {
   currentOrg: Organization;
@@ -35,6 +67,17 @@ interface StudentProviderProps {
   children: React.ReactNode;
 }
 
+function ensureStudentUniqueUserIds(list: Student[]): Student[] {
+  return list.map(s => {
+    if (s.userId) return s;
+    const cleanDigits = (s.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    return {
+      ...s,
+      userId: `user-stud-${cleanDigits || s.id}-${Math.random().toString(36).substring(2, 6)}`
+    };
+  });
+}
+
 export const StudentProvider: React.FC<StudentProviderProps> = ({
   currentOrg,
   selectedBranchId,
@@ -42,48 +85,83 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
   isPlatformOwner,
   children
 }) => {
-  const [selectedChildId, setSelectedChildId] = useState<string>('stud-rahul-10');
+  const fallbackStudents = useMemo(() => ensureStudentUniqueUserIds(MOCK_STUDENTS), []);
+  const fallbackBatches = useMemo(() => MOCK_BATCHES, []);
+
+  const [selectedChildId, setSelectedChildIdState] = useState<string>(import.meta.env.DEV ? 'stud-rahul-10' : '');
+
+  // IDOR guard. `authorizedStudentIds` is the single source of truth for which
+  // children a parent account may reach — a parent must not be able to point the
+  // portal at an arbitrary student id.
+  const { authorizedStudentIds } = useAuth();
+  const setSelectedChildId = useCallback((studentId: string) => {
+    if (currentUser.role === 'PARENT' && !authorizedStudentIds.includes(studentId)) return;
+    setSelectedChildIdState(studentId);
+  }, [currentUser.role, authorizedStudentIds]);
 
   const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem('vidyaos_students');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Student[];
-        return parsed.filter(s => !(s.name === 'Aarav Sharma' && s.schoolName === 'Delhi Public School' && s.orgId !== 'org-apex'));
-      } catch {
-        return MOCK_STUDENTS;
+    if (import.meta.env.DEV) {
+      const saved = localStorage.getItem('vidyaos_students');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Student[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return ensureStudentUniqueUserIds(filterDeletedItems(parsed, DELETED_STUDENT_IDS_KEY));
+          }
+        } catch {
+          return filterDeletedItems(fallbackStudents, DELETED_STUDENT_IDS_KEY);
+        }
       }
+      return filterDeletedItems(fallbackStudents, DELETED_STUDENT_IDS_KEY);
     }
-    return MOCK_STUDENTS;
+
+    // Production starts empty and is filled by the Firestore subscription below
+    // (persisted to IndexedDB by the cache configured in firebase.ts). Reading a
+    // localStorage copy here would be both stale — any write from another device
+    // or branch would be missed — and a leak of the previous tenant's roster
+    // after a logout.
+    return [];
   });
 
   const [batches, setBatches] = useState<Batch[]>(() => {
-    const saved = localStorage.getItem('vidyaos_batches');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Batch[];
-        return parsed
-          .filter(b => !(b.name.includes('Target 2027') && b.orgId !== 'org-apex'))
-          .map(b => ({
-            ...b,
-            feeAmountMonthly: typeof b.feeAmountMonthly === 'number' ? b.feeAmountMonthly : 2000,
-            capacity: typeof b.capacity === 'number' ? b.capacity : 30,
-            studentIds: Array.isArray(b.studentIds) ? b.studentIds : [],
-            scheduleDays: Array.isArray(b.scheduleDays) ? b.scheduleDays : ['Mon', 'Wed', 'Fri']
-          }));
-      } catch {
-        return MOCK_BATCHES;
+    if (import.meta.env.DEV) {
+      const saved = localStorage.getItem('vidyaos_batches');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as Batch[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return filterDeletedItems(parsed, DELETED_BATCH_IDS_KEY)
+              .filter(b => !(b.name.includes('Target 2027') && b.orgId !== 'org-apex'))
+              .map(b => ({
+                ...b,
+                feeAmountMonthly: typeof b.feeAmountMonthly === 'number' ? b.feeAmountMonthly : 2000,
+                capacity: typeof b.capacity === 'number' ? b.capacity : 30,
+                studentIds: Array.isArray(b.studentIds) ? b.studentIds : [],
+                scheduleDays: Array.isArray(b.scheduleDays) ? b.scheduleDays : ['Mon', 'Wed', 'Fri']
+              }));
+          }
+        } catch {
+          return filterDeletedItems(fallbackBatches, DELETED_BATCH_IDS_KEY);
+        }
       }
+      return filterDeletedItems(fallbackBatches, DELETED_BATCH_IDS_KEY);
     }
-    return MOCK_BATCHES;
+
+    // See the note in `students` above: production boots straight from Firestore.
+    return [];
   });
 
-  // Sync to localStorage
+  // DEV-only mirrors — mock-mode data survives a reload during development.
+  // Production does not write its collections back to localStorage: Firestore (with
+  // its persistent IndexedDB cache) is the single source of truth, and a second
+  // unauthenticated copy would only go stale and outlive the session that created it.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_students', JSON.stringify(students));
   }, [students]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_batches', JSON.stringify(batches));
   }, [batches]);
 
@@ -92,33 +170,64 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
 
     const unsubStudents = subscribeToStudents(data => {
-      if (data) setStudents(data);
+      if (!Array.isArray(data)) {
+        if (import.meta.env.DEV && students.length === 0) {
+          setStudents(fallbackStudents);
+        }
+        return;
+      }
+
+      if (data.length === 0 && import.meta.env.DEV) {
+        const filteredFallback = filterDeletedItems(fallbackStudents, DELETED_STUDENT_IDS_KEY);
+        setStudents(prev => (prev.length > 0 ? prev : filteredFallback));
+        return;
+      }
+
+      setStudents(ensureStudentUniqueUserIds(filterDeletedItems(data, DELETED_STUDENT_IDS_KEY)));
     }, targetOrg);
 
     const unsubBatches = subscribeToBatches(data => {
-      if (data) {
-        setBatches(data.map(b => ({
-          ...b,
-          feeAmountMonthly: typeof b.feeAmountMonthly === 'number' ? b.feeAmountMonthly : 2000,
-          capacity: typeof b.capacity === 'number' ? b.capacity : 30,
-          studentIds: Array.isArray(b.studentIds) ? b.studentIds : [],
-          scheduleDays: Array.isArray(b.scheduleDays) ? b.scheduleDays : ['Mon', 'Wed', 'Fri']
-        })));
+      if (!Array.isArray(data)) {
+        if (import.meta.env.DEV && batches.length === 0) {
+          setBatches(fallbackBatches);
+        }
+        return;
       }
+
+      if (data.length === 0 && import.meta.env.DEV) {
+        const filteredFallback = filterDeletedItems(fallbackBatches, DELETED_BATCH_IDS_KEY);
+        setBatches(prev => (prev.length > 0 ? prev : filteredFallback));
+        return;
+      }
+
+      setBatches(filterDeletedItems(data, DELETED_BATCH_IDS_KEY).map(b => ({
+        ...b,
+        feeAmountMonthly: typeof b.feeAmountMonthly === 'number' ? b.feeAmountMonthly : 2000,
+        capacity: typeof b.capacity === 'number' ? b.capacity : 30,
+        studentIds: Array.isArray(b.studentIds) ? b.studentIds : [],
+        scheduleDays: Array.isArray(b.scheduleDays) ? b.scheduleDays : ['Mon', 'Wed', 'Fri']
+      })));
     }, targetOrg);
 
     return () => {
       unsubStudents();
       unsubBatches();
     };
-  }, [currentOrg.id, isPlatformOwner]);
+  }, [currentOrg.id, isPlatformOwner, fallbackStudents, fallbackBatches, students.length, batches.length]);
 
-  // Sync parent child selection
+  // Sync parent child selection to the first linked child, and clear it when the
+  // account has none — otherwise a previous account's child would survive a
+  // logout/login on the same browser.
   useEffect(() => {
-    if (currentUser?.role === 'PARENT' && currentUser.linkedStudentIds && currentUser.linkedStudentIds.length > 0) {
-      setSelectedChildId(currentUser.linkedStudentIds[0]);
+    if (currentUser.role !== 'PARENT') return;
+    if (authorizedStudentIds.length === 0) {
+      if (selectedChildId) setSelectedChildIdState('');
+      return;
     }
-  }, [currentUser]);
+    if (!authorizedStudentIds.includes(selectedChildId)) {
+      setSelectedChildIdState(authorizedStudentIds[0]);
+    }
+  }, [currentUser.role, authorizedStudentIds, selectedChildId]);
 
   // Multi-Tenant Isolation: Filtered data views
   const tenantStudents = useMemo(() => {
@@ -132,19 +241,29 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
   }, [batches, currentOrg.id, isPlatformOwner, selectedBranchId]);
 
   const parentLinkedChildren = useMemo(() => {
-    if (currentUser.role !== 'PARENT' || !currentUser.linkedStudentIds) return [];
-    return students.filter(s => currentUser.linkedStudentIds?.includes(s.id));
-  }, [currentUser, students]);
+    if (currentUser.role !== 'PARENT') return [];
+    return students.filter(s => authorizedStudentIds.includes(s.id));
+  }, [currentUser.role, authorizedStudentIds, students]);
 
   const selectedChild = useMemo(() => {
-    return students.find(s => s.id === selectedChildId);
-  }, [students, selectedChildId]);
+    const found = students.find(s => s.id === selectedChildId);
+    if (!found) return undefined;
+    // Re-checked on read as well as on write, so a stale or tampered id can never
+    // resolve to a child this parent is not linked to.
+    if (currentUser.role === 'PARENT' && !authorizedStudentIds.includes(found.id)) return undefined;
+    return found;
+  }, [students, selectedChildId, currentUser.role, authorizedStudentIds]);
 
-  const addStudent = (data: Omit<Student, 'id' | 'orgId' | 'enrollmentNo'>): Student => {
+  const addStudent = (data: Omit<Student, 'id' | 'orgId' | 'enrollmentNo'> & Partial<Pick<Student, 'userId'>>): Student => {
     const nextNum = students.filter(s => s.orgId === currentOrg.id).length + 1;
     const enrollmentNo = `${currentOrg.logoText || 'ORG'}/${new Date().getFullYear()}/${String(nextNum).padStart(3, '0')}`;
+    const cleanDigits = (data.phone || '').replace(/[^0-9]/g, '').slice(-10);
+    const uniqueUserId = data.userId || `user-stud-${cleanDigits || Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
     const newStudent: Student = {
       ...data,
+      // After the spread: `userId: undefined` (no login provisioned yet) must not
+      // erase the generated fallback.
+      userId: uniqueUserId,
       id: `stud-${Date.now()}`,
       orgId: currentOrg.id,
       enrollmentNo
@@ -185,7 +304,10 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
   };
 
   const deleteStudent = (studentId: string) => {
+    const target = students.find(s => s.id === studentId);
     const batchesToClean = batches.filter(b => b.studentIds.includes(studentId));
+
+    writeDeletedId(DELETED_STUDENT_IDS_KEY, studentId);
     setStudents(prev => prev.filter(s => s.id !== studentId));
     if (batchesToClean.length > 0) {
       setBatches(prev => prev.map(b => {
@@ -196,8 +318,8 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
       }));
     }
 
-    // Atomically delete student and clean student ID from all batches
-    deleteStudentAtomically(studentId, batchesToClean);
+    // Atomically delete student, vacate user profile in Firestore, and clean student ID from all batches
+    deleteStudentAtomically(studentId, batchesToClean, target?.userId);
   };
 
   const addBatch = (data: Omit<Batch, 'id' | 'orgId'>): Batch => {

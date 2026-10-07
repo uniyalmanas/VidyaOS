@@ -22,7 +22,9 @@ import {
   AlertCircle,
   ShieldCheck,
   RefreshCw,
-  Lock
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import {
   ConsoleButton,
@@ -42,10 +44,14 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   targetUser,
   onSaved
 }) => {
-  const { currentUser: authUser, updateUserProfile, updateUserPassword } = useAuth();
+  const { currentUser: authUser, updateUserProfile, updateOwnPassword } = useAuth();
   const { students, teachers, updateStudent, updateTeacher, showToast } = useApp();
 
   const activeUser = targetUser || authUser;
+
+  // Whether the profile on screen belongs to the signed-in session. Passwords can
+  // only ever be changed for that session — see `updateOwnPassword`.
+  const isSelf = !targetUser || targetUser.id === authUser?.id;
 
   // Form states
   const [name, setName] = useState<string>('');
@@ -70,6 +76,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   const [bloodGroup, setBloodGroup] = useState<string>('');
   const [dateOfBirth, setDateOfBirth] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   const [saving, setSaving] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'general' | 'role_details'>('general');
@@ -87,7 +94,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
       // Check linked teacher or student record if available
       const linkedTeacher = teachers.find(t => t.id === activeUser.id || t.email === activeUser.email || t.userId === activeUser.id);
-      const linkedStudent = students.find(s => s.id === activeUser.id || s.email === activeUser.email);
+      // `s.userId` is the Firebase Auth UID — the only key that reliably matches a
+      // real signed-in person. Matching on `s.id` alone never succeeded, so student
+      // profiles were silently left unlinked.
+      const linkedStudent = students.find(s => s.userId === activeUser.id || s.id === activeUser.id || s.email === activeUser.email);
 
       setQualification(activeUser.qualification || linkedTeacher?.qualification || '');
       setSubjectsText(activeUser.subjects?.join(', ') || linkedTeacher?.subjects?.join(', ') || '');
@@ -99,8 +109,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
       setAddress(activeUser.address || linkedStudent?.address || '');
       setOccupation(activeUser.occupation || '');
       setEmergencyContact(activeUser.emergencyContact || linkedStudent?.guardian.fatherPhone || '');
-      setBloodGroup(activeUser.bloodGroup || 'O+');
-      setDateOfBirth(activeUser.dateOfBirth || linkedStudent?.dateOfBirth || '2008-05-15');
+      // Never seed the form with a placeholder: these values are submitted on save,
+      // so a fabricated default would be written into the profile as real data.
+      setBloodGroup(activeUser.bloodGroup || linkedStudent?.bloodGroup || '');
+      setDateOfBirth(activeUser.dateOfBirth || linkedStudent?.dateOfBirth || '');
     }
   }, [activeUser, isOpen, teachers, students]);
 
@@ -228,17 +240,33 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
       const updates: Partial<User> = cleanFirestoreData(rawUpdates);
 
-      // If user specified a new password, update via Firebase Auth
-      if (password.trim() && password.trim().length >= 6) {
-        await updateUserPassword(phone, password.trim());
+      // Passwords can only be changed for the account that is signed in — see
+      // `updateOwnPassword`. For anybody else the field is ignored on save and the
+      // reason is surfaced, instead of silently overwriting the admin's own
+      // password while appearing to succeed.
+      let passwordNotice: string | undefined;
+      const requestedPassword = password.trim();
+      if (requestedPassword) {
+        if (!isSelf) {
+          passwordNotice =
+            'The password was NOT changed. Only the person who owns a login can set its password.';
+        } else if (requestedPassword.length < 8) {
+          passwordNotice = 'The password was NOT changed — it needs at least 8 characters.';
+        } else {
+          const pwResult = await updateOwnPassword(requestedPassword);
+          if (!pwResult.success) {
+            passwordNotice = `The password was NOT changed — ${pwResult.error}`;
+          }
+        }
       }
 
       // 2. Persist update in AuthContext (Firestore /users, Firebase Auth, localStorage) if self
-      const isSelf = !targetUser || targetUser.id === authUser?.id;
       if (isSelf) {
         await updateUserProfile(updates);
-      } else {
-        // Persist directly to Firestore users collection
+      } else if (activeUser.id) {
+        // Persist directly to Firestore users collection. Guarded on a non-empty id:
+        // a guardian with no login has no `users/` document, and writing one under a
+        // placeholder key would orphan it.
         try {
           await setDoc(doc(db, 'users', activeUser.id), cleanFirestoreData({ ...activeUser, ...updates }), { merge: true });
         } catch (e) {
@@ -267,6 +295,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
 
       // 4. If target is a student, keep student record synchronized in AppContext & Firestore
       const linkedStudent = students.find(s => 
+        s.userId === activeUser.id || 
         s.id === activeUser.id || 
         (s.email && s.email.toLowerCase() === email.toLowerCase()) ||
         (s.phone && cleanPhoneDigits(s.phone) === targetPhoneClean)
@@ -286,7 +315,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         });
       }
 
-      showToast('Profile photo and details updated successfully!', 'success');
+      showToast(
+        passwordNotice
+          ? `Profile updated. ${passwordNotice}`
+          : 'Profile photo and details updated successfully!',
+        passwordNotice ? 'warning' : 'success'
+      );
       if (onSaved) {
         onSaved({ ...activeUser, ...updates, avatar: finalAvatarUrl });
       }
@@ -477,23 +511,35 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 </div>
               </div>
 
-              {/* Login Password (Stored in Database) */}
+              {/* Login password — settable only for the signed-in account */}
               <div>
                 <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-semibold mb-1">
-                  Login Password (Saved to Database)
+                  {isSelf ? 'New Login Password' : 'Login Password'}
                 </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 absolute left-3 top-2.5 text-[#5F6368] dark:text-[#9AA0A6]" />
                   <input
-                    type="text"
-                    placeholder="Enter login password for this person"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    placeholder={isSelf ? 'Leave blank to keep your current password' : 'Not changeable from this screen'}
                     value={password}
+                    disabled={!isSelf}
                     onChange={e => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] focus:border-[#FFA000] focus:ring-1 focus:ring-[#FFA000] text-[#202124] dark:text-[#E8EAED] rounded-lg transition font-mono text-xs"
+                    className="w-full pl-9 pr-9 py-2 bg-white dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] focus:border-[#FFA000] focus:ring-1 focus:ring-[#FFA000] text-[#202124] dark:text-[#E8EAED] rounded-lg transition font-mono text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-2 text-[#5F6368] dark:text-[#9AA0A6] hover:text-[#202124] dark:hover:text-[#E8EAED] transition"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
                 <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] mt-1">
-                  Used by this person to authenticate with their phone number in their specific role.
+                  {isSelf
+                    ? 'Minimum 8 characters. Used to sign in with your phone number — it is never stored in the database.'
+                    : 'A password can only be set by the person who owns the login. Ask them to sign in and update it themselves.'}
                 </p>
               </div>
 

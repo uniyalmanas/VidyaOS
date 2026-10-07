@@ -29,12 +29,14 @@ export const AttendanceProvider: React.FC<AttendanceProviderProps> = ({
   children
 }) => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => {
-    const saved = localStorage.getItem('vidyaos_attendance');
-    return saved ? JSON.parse(saved) : MOCK_ATTENDANCE;
+    // DEV-only mirror; production boots from Firestore (persistent cache) alone.
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_attendance') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_ATTENDANCE : []);
   });
 
-  // Sync to localStorage
+  // DEV-only mirror — attendance is PII and must not outlive a logout in prod.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_attendance', JSON.stringify(attendanceRecords));
   }, [attendanceRecords]);
 

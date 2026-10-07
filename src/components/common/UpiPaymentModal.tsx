@@ -1,48 +1,107 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { QrCode, Smartphone, CheckCircle, X, ShieldCheck, ArrowRight, Copy, Check } from 'lucide-react';
-import { ConsoleButton, StatusChip } from '../ui';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { ConsoleButton, StatusChip, CountUp } from '../ui';
+import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
+
+/** Modal shell: spring pop-in cascading header → payment body. */
+const upiPanelVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { ...tSpring, delayChildren: 0.05, staggerChildren: 0.06 }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    y: 6,
+    transition: { duration: 0.16, ease: easings.inOut }
+  }
+};
+
+/** The QR / UPI block scales up gently, like a code being presented. */
+const qrScaleVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.94 },
+  visible: { opacity: 1, scale: 1, transition: tSpring },
+  exit: { opacity: 0, scale: 0.97, transition: { duration: 0.12, ease: easings.inOut } }
+};
 
 export const UpiPaymentModal: React.FC = () => {
-  const { activeUpiModalInvoice, setActiveUpiModalInvoice, currentOrg, recordPayment, setActiveReceiptInvoice } = useApp();
+  const { activeUpiModalInvoice, setActiveUpiModalInvoice, currentOrg, submitPendingPayment, showToast } = useApp();
   const [selectedApp, setSelectedApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim'>('gpay');
   const [customUtr, setCustomUtr] = useState<string>('');
-  const [paymentSuccess, setPaymentSuccess] = useState<boolean>(false);
+  const [submissionSent, setSubmissionSent] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
 
-  if (!activeUpiModalInvoice) return null;
+  const dueAmount = activeUpiModalInvoice
+    ? activeUpiModalInvoice.netAmount - activeUpiModalInvoice.paidAmount
+    : 0;
+  const upiLink = activeUpiModalInvoice
+    ? `upi://pay?pa=${encodeURIComponent(currentOrg.upiId)}&pn=${encodeURIComponent(currentOrg.upiMerchantName || currentOrg.name)}&am=${encodeURIComponent(dueAmount.toFixed(2))}&cu=INR&tn=${encodeURIComponent(`Invoice ${activeUpiModalInvoice.invoiceNo}`)}`
+    : '';
 
-  const dueAmount = activeUpiModalInvoice.netAmount - activeUpiModalInvoice.paidAmount;
-
-  const handleCopyUpi = () => {
-    navigator.clipboard?.writeText(currentOrg.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
+  const handleCopyUpi = async () => {
+    try {
+      await navigator.clipboard.writeText(currentOrg.upiId);
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 2000);
+    } catch {
+      setSubmitError('Could not copy the UPI ID. Please copy it manually.');
+    }
   };
 
-  const handleCompletePayment = () => {
-    const utr = customUtr || `UPI/${Date.now().toString().slice(-8)}`;
-    recordPayment(activeUpiModalInvoice.id, {
-      amount: dueAmount,
-      paymentMethod: 'UPI',
-      transactionRef: utr,
-      upiApp: selectedApp
-    });
-
-    setPaymentSuccess(true);
-    setTimeout(() => {
-      setPaymentSuccess(false);
-      setActiveUpiModalInvoice(null);
-      // Auto open receipt for gratification!
-      setActiveReceiptInvoice(activeUpiModalInvoice);
-    }, 1200);
+  const handleSubmitPayment = async () => {
+    if (!activeUpiModalInvoice) return;
+    const utr = customUtr.trim();
+    if (!/^\d{12}$/.test(utr)) {
+      setSubmitError('Enter the 12-digit UTR shown by your UPI app after the payment.');
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await submitPendingPayment(activeUpiModalInvoice.id, {
+        amount: dueAmount,
+        paymentMethod: 'UPI',
+        transactionRef: utr,
+        upiApp: selectedApp
+      });
+      setSubmissionSent(true);
+      showToast('Payment reported and sent for center verification.', 'info');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Payment report could not be submitted.';
+      setSubmitError(message);
+      showToast(message, 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-[#1E1F20] w-full max-w-md rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden">
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-white dark:bg-[#1E1F20]">
+    <AnimatePresence>
+      {activeUpiModalInvoice && (
+        <motion.div
+          key="upi-payment-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: easings.outQuart }}
+        >
+          <motion.div
+            variants={upiPanelVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="bg-white dark:bg-[#1E1F20] w-full max-w-md rounded-2xl shadow-xl border border-[#DADCE0] dark:border-[#3C4043] overflow-hidden"
+          >
+            {/* Header */}
+            <motion.div variants={fadeUp} className="px-5 py-4 border-b border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between bg-white dark:bg-[#1E1F20]">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-[#FFA000]/15 text-[#FFA000] dark:text-[#FFCA28] flex items-center justify-center">
               <QrCode className="w-4 h-4" />
@@ -62,64 +121,48 @@ export const UpiPaymentModal: React.FC = () => {
           >
             <X className="w-4 h-4" />
           </button>
-        </div>
+          </motion.div>
 
-        {paymentSuccess ? (
-          <div className="p-8 text-center space-y-3">
+        {submissionSent ? (
+          <motion.div
+            key="upi-submitted"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.24, ease: easings.outQuart, delay: 0.06 }}
+            className="p-8 text-center space-y-3"
+          >
             <div className="w-14 h-14 bg-[#E6F4EA] dark:bg-emerald-950/60 text-[#188038] dark:text-[#81C995] rounded-full flex items-center justify-center mx-auto">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <h3 className="text-base font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">Payment Successful</h3>
+            <h3 className="text-base font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">Payment Reported</h3>
             <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
-              ₹{dueAmount.toLocaleString('en-IN')} confirmed. Generating official digital fee receipt...
+              Your ₹{dueAmount.toLocaleString('en-IN')} payment report is awaiting verification by the center. A paid receipt will be available only after they verify the transfer.
             </p>
-          </div>
+            <ConsoleButton variant="primary" onClick={() => setActiveUpiModalInvoice(null)}>Done</ConsoleButton>
+          </motion.div>
         ) : (
-          <div className="p-5 space-y-4">
+          <motion.div variants={staggerContainerFast} className="p-5 space-y-4">
             {/* Amount Banner */}
-            <div className="bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-3.5 flex items-center justify-between">
+            <motion.div variants={fadeUp} className="bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-3.5 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-semibold text-[#5F6368] dark:text-[#9AA0A6] uppercase tracking-wider">
                   Amount Payable
                 </span>
                 <div className="text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
-                  ₹{dueAmount.toLocaleString('en-IN')}
+                  <CountUp value={dueAmount} prefix="₹" duration={0.9} />
                 </div>
                 <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] truncate max-w-[200px]">
                   {activeUpiModalInvoice.title}
                 </div>
               </div>
               <StatusChip label={currentOrg.name} variant="info" size="xs" />
-            </div>
+            </motion.div>
 
-            {/* QR Code Card */}
-            <div className="border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 text-center bg-white dark:bg-[#1E1F20] space-y-3">
+            {/* UPI payment instructions */}
+            <motion.div variants={qrScaleVariants} className="border border-[#DADCE0] dark:border-[#3C4043] rounded-xl p-4 text-center bg-white dark:bg-[#1E1F20] space-y-3">
               <div className="text-xs font-semibold text-[#202124] dark:text-[#E8EAED] flex items-center justify-center gap-1.5">
                 <QrCode className="w-4 h-4 text-[#1A73E8]" />
-                Scan QR with any Indian UPI App
-              </div>
-              
-              {/* QR Mock Graphic */}
-              <div className="w-36 h-36 mx-auto bg-[#202124] p-2 rounded-xl flex items-center justify-center relative">
-                <div className="w-full h-full bg-white rounded-lg p-2 flex flex-col items-center justify-center border border-slate-300">
-                  <div className="grid grid-cols-6 gap-1 w-full h-full p-1 opacity-90">
-                    {Array.from({ length: 36 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`rounded-xs ${
-                          (i % 2 === 0 && i % 3 === 0) || i < 7 || i % 6 === 0 || i > 28
-                            ? 'bg-[#202124]'
-                            : 'bg-transparent'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="bg-[#1A73E8] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs">
-                      UPI
-                    </span>
-                  </div>
-                </div>
+                Pay directly to the center's UPI ID
               </div>
 
               {/* UPI ID Copy row */}
@@ -135,10 +178,20 @@ export const UpiPaymentModal: React.FC = () => {
                   <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
-            </div>
+              <a
+                href={upiLink}
+                className="inline-flex items-center justify-center gap-2 w-full rounded-lg bg-[#1A73E8] px-3 py-2 text-xs font-bold text-white hover:bg-[#1557B0] hover:shadow-[var(--fb-glow-primary)] transition"
+              >
+                <Smartphone className="w-4 h-4" />
+                Open UPI app · ₹{dueAmount.toLocaleString('en-IN')}
+              </a>
+              <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
+                If the link does not open, pay this UPI ID manually and enter the bank UTR below.
+              </p>
+            </motion.div>
 
             {/* Direct App Selection */}
-            <div>
+            <motion.div variants={fadeUp}>
               <div className="text-xs font-semibold text-[#5F6368] dark:text-[#9AA0A6] mb-2">
                 Or Pay via Installed UPI App:
               </div>
@@ -149,9 +202,11 @@ export const UpiPaymentModal: React.FC = () => {
                   { id: 'paytm', label: 'Paytm' },
                   { id: 'bhim', label: 'BHIM UPI' }
                 ].map(app => (
-                  <button
+                  <motion.button
                     key={app.id}
-                    onClick={() => setSelectedApp(app.id as any)}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 32, mass: 0.6 }}
+                    onClick={() => setSelectedApp(app.id as 'gpay' | 'phonepe' | 'paytm' | 'bhim')}
                     className={`py-2 px-1 text-[11px] font-semibold rounded-lg border transition flex flex-col items-center justify-center cursor-pointer ${
                       selectedApp === app.id
                         ? 'border-[#FFA000] bg-[#FFA000]/10 text-[#202124] dark:text-white font-bold ring-1 ring-[#FFA000]'
@@ -159,44 +214,63 @@ export const UpiPaymentModal: React.FC = () => {
                     }`}
                   >
                     {app.label}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
-            </div>
+            </motion.div>
 
             {/* Optional UTR / Reference */}
-            <div>
+            <motion.div variants={fadeUp}>
               <label className="block text-[11px] font-medium text-[#5F6368] dark:text-[#9AA0A6] mb-1">
-                UPI Reference / UTR Number (Optional verification)
+                Bank UTR (required; 12 digits)
               </label>
               <input
                 type="text"
                 placeholder="e.g. 428198273619"
                 value={customUtr}
-                onChange={e => setCustomUtr(e.target.value)}
+                inputMode="numeric"
+                maxLength={12}
+                onChange={e => {
+                  setCustomUtr(e.target.value.replace(/\D/g, '').slice(0, 12));
+                  setSubmitError(null);
+                }}
                 className="w-full text-xs font-mono px-3 py-2 border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
               />
-            </div>
+            </motion.div>
+            {submitError && (
+              <motion.p
+                role="alert"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18, ease: easings.outQuart }}
+                className="text-xs text-rose-600 dark:text-rose-400"
+              >
+                {submitError}
+              </motion.p>
+            )}
 
             {/* Action buttons */}
-            <div className="pt-2 space-y-2">
+            <motion.div variants={fadeUp} className="pt-2 space-y-2">
               <ConsoleButton
                 variant="primary"
                 size="md"
-                onClick={handleCompletePayment}
+                onClick={handleSubmitPayment}
+                disabled={submitting || dueAmount <= 0}
                 className="w-full justify-center"
                 iconRight={<ArrowRight className="w-4 h-4" />}
               >
-                Confirm & Mark Paid (₹{dueAmount.toLocaleString('en-IN')})
+                {submitting ? 'Submitting...' : 'Submit for verification'}
               </ConsoleButton>
               <div className="flex items-center justify-center space-x-1 text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#188038]" />
-                <span>Encrypted Indian UPI Banking Simulation Protocol</span>
+                <span>Submitting this report does not confirm receipt of funds.</span>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

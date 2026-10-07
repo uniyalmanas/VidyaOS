@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   Announcement,
   NotificationItem,
@@ -17,7 +17,12 @@ import {
 } from '../../data/mockChatData';
 import {
   subscribeToAnnouncements,
-  persistAnnouncementToFirestore
+  persistAnnouncementToFirestore,
+  subscribeToChatChannels,
+  subscribeToChatMessages,
+  persistChatMessageToFirestore,
+  persistChatChannelToFirestore,
+  toggleChatReactionFirestore
 } from '../../lib/firestoreService';
 
 export interface CommunicationContextType {
@@ -28,8 +33,9 @@ export interface CommunicationContextType {
   chatMessages: ChatMessage[];
   activeChatChannelId: string;
   setActiveChatChannelId: (channelId: string) => void;
-  sendChatMessage: (channelId: string, content: string, tag?: ChatMessageTag, attachments?: ChatMessageAttachment[]) => ChatMessage;
-  addChatReaction: (messageId: string, emoji: string) => void;
+  /** Resolves to the saved message, or null if the cloud write failed. */
+  sendChatMessage: (channelId: string, content: string, tag?: ChatMessageTag, attachments?: ChatMessageAttachment[]) => Promise<ChatMessage | null>;
+  addChatReaction: (messageId: string, emoji: string) => Promise<void>;
   createChatChannel: (channel: Omit<ChatChannel, 'id' | 'orgId'>) => ChatChannel;
 }
 
@@ -54,12 +60,14 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
   onShowToast,
   children
 }) => {
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
-    const saved = localStorage.getItem('vidyaos_announcements');
-    return saved ? JSON.parse(saved) : MOCK_ANNOUNCEMENTS;
-  });
+  // Announcements are Firestore-backed. The old localStorage mirror used a
+  // single global key (not org-scoped), which flashed another institute's
+  // notices on cold start before the listener replaced them.
+  const [announcements, setAnnouncements] = useState<Announcement[]>(
+    import.meta.env.DEV ? MOCK_ANNOUNCEMENTS : []
+  );
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
+  const [notifications, setNotifications] = useState<NotificationItem[]>(import.meta.env.DEV ? [
     {
       id: 'notif-1',
       orgId: 'org-apex',
@@ -82,79 +90,61 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
       read: true,
       linkTab: 'results'
     }
-  ]);
+  ] : []);
 
-  // VidyaChat State
-  const [chatChannels, setChatChannels] = useState<ChatChannel[]>(() => {
-    const saved = localStorage.getItem(`vidyaos_chat_channels_${currentOrg.id}`);
-    if (saved) return JSON.parse(saved);
-    const orgBatches = batches.filter(b => b.orgId === currentOrg.id);
-    return getDefaultChannelsForOrg(currentOrg.id, currentOrg.name, orgBatches);
+  // VidyaChat state. Firestore is the single source of truth — localStorage is
+  // deliberately NOT used for chat: it is per-browser, so a message a student
+  // sent could never reach a teacher's device.
+  const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [activeChatChannelId, setActiveChatChannelId] = useState<string>('');
+
+  // DEV demo personas have no cloud data yet, so keep a mutable snapshot of the
+  // mock channels/messages for the listeners to serve when Firestore is empty.
+  // A ref (rather than effect deps) prevents tearing the listeners down every
+  // time `batches` refreshes from its own subscription.
+  const chatFallbackRef = useRef<{ channels: ChatChannel[]; messages: ChatMessage[] }>({
+    channels: [],
+    messages: []
   });
+  chatFallbackRef.current = {
+    channels: getDefaultChannelsForOrg(
+      currentOrg.id,
+      currentOrg.name,
+      batches.filter(b => b.orgId === currentOrg.id)
+    ),
+    messages: getDefaultMessagesForOrg(currentOrg.id, currentOrg.name, currentOrg.ownerName)
+  };
 
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem(`vidyaos_chat_messages_${currentOrg.id}`);
-    if (saved) return JSON.parse(saved);
-    return getDefaultMessagesForOrg(currentOrg.id, currentOrg.name, currentOrg.ownerName);
-  });
-
-  const [activeChatChannelId, setActiveChatChannelId] = useState<string>(() => {
-    const orgBatches = batches.filter(b => b.orgId === currentOrg.id);
-    const initialChans = getDefaultChannelsForOrg(currentOrg.id, currentOrg.name, orgBatches);
-    return initialChans[0]?.id || 'chan-announcements';
-  });
-
-  // Sync announcements
-  useEffect(() => {
-    localStorage.setItem('vidyaos_announcements', JSON.stringify(announcements));
-  }, [announcements]);
-
-  // Real-time Firestore Subscriptions for Announcements
+  // Real-time Firestore subscription for announcements
   useEffect(() => {
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
-
     const unsubAnnouncements = subscribeToAnnouncements(data => {
       if (data) setAnnouncements(data);
     }, targetOrg);
-
     return () => {
       unsubAnnouncements();
     };
   }, [currentOrg.id, isPlatformOwner]);
 
-  // Strict tenant switch handler for VidyaChat
+  // Real-time Firestore subscriptions for chat channels + messages
   useEffect(() => {
-    const orgBatches = batches.filter(b => b.orgId === currentOrg.id);
-    const savedChans = localStorage.getItem(`vidyaos_chat_channels_${currentOrg.id}`);
-    const orgChannels: ChatChannel[] = savedChans
-      ? JSON.parse(savedChans)
-      : getDefaultChannelsForOrg(currentOrg.id, currentOrg.name, orgBatches);
-
-    setChatChannels(orgChannels);
-
-    const savedMsgs = localStorage.getItem(`vidyaos_chat_messages_${currentOrg.id}`);
-    const orgMessages: ChatMessage[] = savedMsgs
-      ? JSON.parse(savedMsgs)
-      : getDefaultMessagesForOrg(currentOrg.id, currentOrg.name, currentOrg.ownerName);
-
-    setChatMessages(orgMessages);
-
-    if (orgChannels.length > 0) {
-      setActiveChatChannelId(orgChannels[0].id);
-    }
-  }, [currentOrg.id]);
-
-  useEffect(() => {
-    if (currentOrg.id) {
-      localStorage.setItem(`vidyaos_chat_channels_${currentOrg.id}`, JSON.stringify(chatChannels));
-    }
-  }, [chatChannels, currentOrg.id]);
-
-  useEffect(() => {
-    if (currentOrg.id) {
-      localStorage.setItem(`vidyaos_chat_messages_${currentOrg.id}`, JSON.stringify(chatMessages));
-    }
-  }, [chatMessages, currentOrg.id]);
+    const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
+    const unsubChannels = subscribeToChatChannels(
+      setChatChannels,
+      targetOrg,
+      chatFallbackRef.current.channels
+    );
+    const unsubMessages = subscribeToChatMessages(
+      setChatMessages,
+      targetOrg,
+      chatFallbackRef.current.messages
+    );
+    return () => {
+      unsubChannels();
+      unsubMessages();
+    };
+  }, [currentOrg.id, isPlatformOwner]);
 
   // Multi-Tenant Isolation
   const tenantAnnouncements = useMemo(() => {
@@ -172,14 +162,29 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
     });
   }, [chatChannels, currentOrg.id, currentUser.role]);
 
+  // Only show messages for channels this role is allowed to see. Previously
+  // messages were filtered by org alone, so a student could read faculty-lounge
+  // history as long as they knew the channel id.
   const tenantChatMessages = useMemo(() => {
-    return chatMessages.filter(m => m.orgId === currentOrg.id);
-  }, [chatMessages, currentOrg.id]);
+    const visibleChannelIds = new Set(tenantChatChannels.map(c => c.id));
+    return chatMessages.filter(
+      m => m.orgId === currentOrg.id && visibleChannelIds.has(m.channelId)
+    );
+  }, [chatMessages, tenantChatChannels, currentOrg.id]);
 
   const tenantNotifications = useMemo(() => {
     if (isPlatformOwner) return notifications;
     return notifications.filter(n => n.orgId === currentOrg.id);
   }, [notifications, currentOrg.id, isPlatformOwner]);
+
+  // Keep the selected channel valid as channels stream in, or when the active
+  // organisation changes and the old channel id no longer exists.
+  useEffect(() => {
+    if (tenantChatChannels.length === 0) return;
+    if (!tenantChatChannels.some(c => c.id === activeChatChannelId)) {
+      setActiveChatChannelId(tenantChatChannels[0].id);
+    }
+  }, [tenantChatChannels, activeChatChannelId]);
 
   const createAnnouncement = (data: Omit<Announcement, 'id' | 'orgId' | 'createdAt' | 'createdBy'>): Announcement => {
     const newAnn: Announcement = {
@@ -194,25 +199,42 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
     return newAnn;
   };
 
-  const sendChatMessage = (
+  /**
+   * Sends a chat message to Firestore and returns it, or `null` if the cloud
+   * write failed. The write is awaited before local state is touched so a
+   * failure surfaces as an error toast instead of a message that silently
+   * disappears on the next reload.
+   */
+  const sendChatMessage = async (
     channelId: string,
     content: string,
     tag: ChatMessageTag = 'general',
     attachments?: ChatMessageAttachment[]
-  ): ChatMessage => {
+  ): Promise<ChatMessage | null> => {
     const targetChannel = chatChannels.find(c => c.id === channelId && c.orgId === currentOrg.id);
     if (!targetChannel) {
       onShowToast('Action blocked: Cross-institute messaging is strictly prohibited.', 'error');
-      return {} as any;
+      return null;
+    }
+    if (
+      targetChannel.allowedRoles &&
+      targetChannel.allowedRoles.length > 0 &&
+      !targetChannel.allowedRoles.includes(currentUser.role)
+    ) {
+      onShowToast(`You do not have permission to post in #${targetChannel.name}.`, 'error');
+      return null;
     }
 
     const now = new Date();
     const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const createdAtMs = now.getTime();
 
     const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: `msg-${createdAtMs}-${Math.random().toString(36).substring(2, 7)}`,
       channelId,
       orgId: currentOrg.id,
+      // currentUser.id === Firebase Auth uid on every login path, which is what
+      // the `senderId == request.auth.uid` rule in firestore.rules requires.
       senderId: currentUser.id || 'user-unknown',
       senderName: currentUser.name || 'User',
       senderRole: currentUser.role,
@@ -221,31 +243,43 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
       tag,
       attachments,
       createdAt: `Today, ${timeStr}`,
+      createdAtMs,
       reactions: {}
     };
 
-    setChatMessages(prev => [...prev, newMsg]);
+    const updatedChannel: ChatChannel = {
+      ...targetChannel,
+      lastMessage: content.slice(0, 60) + (content.length > 60 ? '...' : ''),
+      lastMessageTime: timeStr,
+      lastMessageMs: createdAtMs
+    };
 
-    setChatChannels(prev => prev.map(ch => {
-      if (ch.id === channelId) {
-        return {
-          ...ch,
-          lastMessage: content.slice(0, 60) + (content.length > 60 ? '...' : ''),
-          lastMessageTime: timeStr
-        };
-      }
-      return ch;
-    }));
+    try {
+      await Promise.all([
+        persistChatMessageToFirestore(newMsg),
+        persistChatChannelToFirestore(updatedChannel)
+      ]);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Chat send failed:', error);
+      onShowToast('Message could not be sent. Check your connection and try again.', 'error');
+      return null;
+    }
+
+    // Optimistic echo — the live listener will reconcile with the server copy.
+    setChatMessages(prev => [...prev, newMsg]);
+    setChatChannels(prev => prev.map(ch => (ch.id === channelId ? updatedChannel : ch)));
 
     return newMsg;
   };
 
-  const addChatReaction = (messageId: string, emoji: string) => {
+  const addChatReaction = async (messageId: string, emoji: string): Promise<void> => {
+    const userIdentifier = currentUser.id || currentUser.name;
+
+    // Optimistic local toggle for instant feedback...
     setChatMessages(prev => prev.map(msg => {
       if (msg.id !== messageId) return msg;
       const currentReactions = msg.reactions || {};
       const userList = currentReactions[emoji] || [];
-      const userIdentifier = currentUser.id || currentUser.name;
       const exists = userList.includes(userIdentifier);
       const updatedList = exists
         ? userList.filter(id => id !== userIdentifier)
@@ -260,6 +294,14 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
 
       return { ...msg, reactions: newReactions };
     }));
+
+    // ...then reconcile against Firestore so the reaction reaches everyone.
+    try {
+      await toggleChatReactionFirestore(messageId, emoji, userIdentifier);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Reaction sync failed:', error);
+      onShowToast('Reaction could not be synced.', 'error');
+    }
   };
 
   const createChatChannel = (channelData: Omit<ChatChannel, 'id' | 'orgId'>): ChatChannel => {
@@ -270,7 +312,19 @@ export const CommunicationProvider: React.FC<CommunicationProviderProps> = ({
     };
     setChatChannels(prev => [...prev, newChan]);
     setActiveChatChannelId(newChan.id);
-    onShowToast(`Channel #${newChan.name} created!`, 'success');
+
+    // Rules only let staff create channels, so confirm against Firestore before
+    // claiming success — otherwise a student sees "created!" and then an error.
+    persistChatChannelToFirestore(newChan)
+      .then(() => onShowToast(`Channel #${newChan.name} created!`, 'success'))
+      .catch(error => {
+        if (import.meta.env.DEV) console.error('Channel create failed:', error);
+        setChatChannels(prev => prev.filter(c => c.id !== newChan.id));
+        onShowToast(
+          'Channel could not be created. Creating channels is limited to admin and faculty accounts.',
+          'error'
+        );
+      });
     return newChan;
   };
 

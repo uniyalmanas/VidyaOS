@@ -32,10 +32,10 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   const effectiveBack = onBack || (breadcrumbs && breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2]?.onClick : undefined);
 
   return (
-    <div className={`space-y-2 pb-5 border-b border-black/[0.08] dark:border-white/[0.08] ${className}`}>
+    <div className={`space-y-2 pb-4 sm:pb-5 border-b border-black/[0.08] dark:border-white/[0.08] ${className}`}>
       {/* Breadcrumb Path */}
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav aria-label="Breadcrumb" className="flex items-center space-x-1.5 text-xs text-[#86868B] font-apple-text">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[10px] sm:text-xs text-[#86868B] font-apple-text overflow-x-auto no-scrollbar whitespace-nowrap min-w-0">
           {breadcrumbs.map((item, idx) => {
             const isLast = idx === breadcrumbs.length - 1;
             return (
@@ -62,9 +62,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       )}
 
       {/* Main Title Row & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+      <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1 min-w-0">
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
             {effectiveBack && (
               <button
                 type="button"
@@ -76,13 +76,13 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
                 <ArrowLeft className="w-5 h-5 stroke-[2.2]" />
               </button>
             )}
-            <h1 className="text-xl sm:text-2xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
+            <h1 className="text-lg sm:text-2xl font-semibold font-apple-display tracking-[-0.04em] text-[#1D1D1F] dark:text-[#F5F5F7] truncate">
               {title}
             </h1>
             {badge && <div className="flex-shrink-0">{badge}</div>}
           </div>
           {subtitle && (
-            <p className="text-xs sm:text-sm text-[#86868B] font-apple-text leading-relaxed">
+            <p className="text-[11px] sm:text-sm text-[#86868B] font-apple-text leading-relaxed break-words">
               {subtitle}
             </p>
           )}

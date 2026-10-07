@@ -24,13 +24,16 @@ import {
   Batch,
   Teacher,
   FeeInvoice,
+  PaymentSubmission,
   PaymentRecord,
   AttendanceRecord,
   Exam,
   ExamResult,
   Assignment,
   StudyMaterial,
-  Announcement
+  Announcement,
+  ChatChannel,
+  ChatMessage
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -47,6 +50,55 @@ import {
   MOCK_ANNOUNCEMENTS
 } from '../data/mockData';
 
+function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
+  if (!import.meta.env.DEV) return [];
+  if (!orgId) return items;
+  return items.filter((item): item is T & { orgId: string } =>
+    'orgId' in item && item.orgId === orgId
+  );
+}
+
+function isExpectedFirestoreFallbackError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /permission|permissions|denied|unauthenticated|insufficient|offline|unavailable|network/i.test(message);
+}
+
+function logListenerFallback(scope: string, error: unknown) {
+  if (import.meta.env.DEV && !isExpectedFirestoreFallbackError(error)) {
+    console.warn(`${scope} listener notice:`, error);
+  }
+}
+
+function shouldUseMockFallbackOnly(): boolean {
+  if (!import.meta.env.DEV) return false;
+  try {
+    const stored = localStorage.getItem('vidyaos_auth_session');
+    if (!stored) return false;
+    const session = JSON.parse(stored);
+    return !!session?.user && session.loginMethod === 'demo_preset' && !auth.currentUser;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function readDeletedIds(storageKey: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((value): value is string => typeof value === 'string' && value.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+function filterDeletedItems<T extends { id: string }>(items: T[], storageKey: string): T[] {
+  const deleted = readDeletedIds(storageKey);
+  if (deleted.size === 0) return items;
+  return items.filter(item => !deleted.has(item.id));
+}
+
 // Track if initial seeding has already been attempted in this session
 let isSeedingInProgress = false;
 let seedingAlreadyCompleted = false;
@@ -55,7 +107,7 @@ let seedingAlreadyCompleted = false;
  * Initializes Firestore collections with baseline coaching data once in development if empty.
  */
 export async function seedInitialFirestoreDataIfEmpty() {
-  if (isSeedingInProgress || seedingAlreadyCompleted || !auth.currentUser) return;
+  if (!import.meta.env.DEV || isSeedingInProgress || seedingAlreadyCompleted || !auth.currentUser) return;
   isSeedingInProgress = true;
 
   try {
@@ -125,33 +177,57 @@ export async function seedInitialFirestoreDataIfEmpty() {
 // REAL-TIME SCOPED LISTENERS (Bounded reads & query performance)
 // ----------------------------------------------------
 
-export function subscribeToOrganizations(onData: (orgs: Organization[]) => void) {
+export function subscribeToOrganizations(
+  onData: (orgs: Organization[]) => void,
+  orgId?: string,
+  isPlatformOwner = false
+) {
   try {
-    const colRef = query(collection(db, 'organizations'), limit(50));
-    return onSnapshot(
-      colRef,
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const list = snapshot.docs.map(d => d.data() as Organization);
-          onData(list);
-        } else {
-          onData(MOCK_ORGANIZATIONS);
-          seedInitialFirestoreDataIfEmpty();
+    if (shouldUseMockFallbackOnly()) {
+      onData(developmentFallback(MOCK_ORGANIZATIONS, orgId));
+      return () => {};
+    }
+    if (isPlatformOwner) {
+      return onSnapshot(
+        query(collection(db, 'organizations'), limit(50)),
+        snapshot => onData(snapshot.docs.map(document => document.data() as Organization)),
+        error => {
+          logListenerFallback('Real-time organizations', error);
+          onData(developmentFallback(MOCK_ORGANIZATIONS));
         }
+      );
+    }
+    if (!orgId) {
+      onData(developmentFallback(MOCK_ORGANIZATIONS));
+      return () => {};
+    }
+    return onSnapshot(
+      doc(db, 'organizations', orgId),
+      (snapshot) => {
+        onData(snapshot.exists()
+          ? [snapshot.data() as Organization]
+          : developmentFallback(MOCK_ORGANIZATIONS, orgId));
+        if (!snapshot.exists() && import.meta.env.DEV) seedInitialFirestoreDataIfEmpty();
       },
       (error) => {
-        console.warn('Real-time organizations listener notice:', error.message);
-        onData(MOCK_ORGANIZATIONS);
+        logListenerFallback('Real-time organizations', error);
+        onData(developmentFallback(MOCK_ORGANIZATIONS, orgId));
       }
     );
   } catch (e) {
-    onData(MOCK_ORGANIZATIONS);
+    if (import.meta.env.DEV) console.error('Could not start organizations listener:', e);
+    onData(developmentFallback(MOCK_ORGANIZATIONS, orgId));
     return () => {};
   }
 }
 
 export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_USERS, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'users'), where('orgId', '==', orgId), limit(100))
       : query(collection(db, 'users'), limit(100));
@@ -162,18 +238,19 @@ export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string
           const list = snapshot.docs.map(d => d.data() as User);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_USERS.filter(u => u.orgId === orgId) : MOCK_USERS;
+          const fallback = developmentFallback(MOCK_USERS, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time users listener notice:', error.message);
-        const fallback = orgId ? MOCK_USERS.filter(u => u.orgId === orgId) : MOCK_USERS;
+        logListenerFallback('Real-time users', error);
+        const fallback = developmentFallback(MOCK_USERS, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_USERS.filter(u => u.orgId === orgId) : MOCK_USERS;
+    const fallback = developmentFallback(MOCK_USERS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start users listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -181,6 +258,11 @@ export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string
 
 export function subscribeToStudents(onData: (students: Student[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = filterDeletedItems(developmentFallback(MOCK_STUDENTS, orgId), 'vidyaos_deleted_student_ids');
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'students'), where('orgId', '==', orgId), limit(250))
       : query(collection(db, 'students'), limit(250));
@@ -188,21 +270,22 @@ export function subscribeToStudents(onData: (students: Student[]) => void, orgId
       targetRef,
       (snapshot) => {
         if (!snapshot.empty) {
-          const list = snapshot.docs.map(d => d.data() as Student);
+          const list = filterDeletedItems(snapshot.docs.map(d => d.data() as Student), 'vidyaos_deleted_student_ids');
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_STUDENTS.filter(s => s.orgId === orgId) : MOCK_STUDENTS;
+          const fallback = filterDeletedItems(developmentFallback(MOCK_STUDENTS, orgId), 'vidyaos_deleted_student_ids');
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time students listener notice:', error.message);
-        const fallback = orgId ? MOCK_STUDENTS.filter(s => s.orgId === orgId) : MOCK_STUDENTS;
+        logListenerFallback('Real-time students', error);
+        const fallback = filterDeletedItems(developmentFallback(MOCK_STUDENTS, orgId), 'vidyaos_deleted_student_ids');
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_STUDENTS.filter(s => s.orgId === orgId) : MOCK_STUDENTS;
+    const fallback = developmentFallback(MOCK_STUDENTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start students listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -210,6 +293,11 @@ export function subscribeToStudents(onData: (students: Student[]) => void, orgId
 
 export function subscribeToBatches(onData: (batches: Batch[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = filterDeletedItems(developmentFallback(MOCK_BATCHES, orgId), 'vidyaos_deleted_batch_ids');
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'batches'), where('orgId', '==', orgId), limit(100))
       : query(collection(db, 'batches'), limit(100));
@@ -217,21 +305,22 @@ export function subscribeToBatches(onData: (batches: Batch[]) => void, orgId?: s
       targetRef,
       (snapshot) => {
         if (!snapshot.empty) {
-          const list = snapshot.docs.map(d => d.data() as Batch);
+          const list = filterDeletedItems(snapshot.docs.map(d => d.data() as Batch), 'vidyaos_deleted_batch_ids');
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_BATCHES.filter(b => b.orgId === orgId) : MOCK_BATCHES;
+          const fallback = filterDeletedItems(developmentFallback(MOCK_BATCHES, orgId), 'vidyaos_deleted_batch_ids');
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time batches listener notice:', error.message);
-        const fallback = orgId ? MOCK_BATCHES.filter(b => b.orgId === orgId) : MOCK_BATCHES;
+        logListenerFallback('Real-time batches', error);
+        const fallback = filterDeletedItems(developmentFallback(MOCK_BATCHES, orgId), 'vidyaos_deleted_batch_ids');
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_BATCHES.filter(b => b.orgId === orgId) : MOCK_BATCHES;
+    const fallback = developmentFallback(MOCK_BATCHES, orgId);
+    if (import.meta.env.DEV) console.error('Could not start batches listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -239,6 +328,11 @@ export function subscribeToBatches(onData: (batches: Batch[]) => void, orgId?: s
 
 export function subscribeToTeachers(onData: (teachers: Teacher[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_TEACHERS, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'teachers'), where('orgId', '==', orgId), limit(100))
       : query(collection(db, 'teachers'), limit(100));
@@ -249,18 +343,19 @@ export function subscribeToTeachers(onData: (teachers: Teacher[]) => void, orgId
           const list = snapshot.docs.map(d => d.data() as Teacher);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_TEACHERS.filter(t => t.orgId === orgId) : MOCK_TEACHERS;
+          const fallback = developmentFallback(MOCK_TEACHERS, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time teachers listener notice:', error.message);
-        const fallback = orgId ? MOCK_TEACHERS.filter(t => t.orgId === orgId) : MOCK_TEACHERS;
+        logListenerFallback('Real-time teachers', error);
+        const fallback = developmentFallback(MOCK_TEACHERS, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_TEACHERS.filter(t => t.orgId === orgId) : MOCK_TEACHERS;
+    const fallback = developmentFallback(MOCK_TEACHERS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start teachers listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -268,6 +363,11 @@ export function subscribeToTeachers(onData: (teachers: Teacher[]) => void, orgId
 
 export function subscribeToInvoices(onData: (invoices: FeeInvoice[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_INVOICES, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'invoices'), where('orgId', '==', orgId), limit(250))
       : query(collection(db, 'invoices'), limit(250));
@@ -278,25 +378,61 @@ export function subscribeToInvoices(onData: (invoices: FeeInvoice[]) => void, or
           const list = snapshot.docs.map(d => d.data() as FeeInvoice);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_INVOICES.filter(inv => inv.orgId === orgId) : MOCK_INVOICES;
+          const fallback = developmentFallback(MOCK_INVOICES, orgId);
           onData(fallback);
         }
+
       },
       (error) => {
-        console.warn('Real-time invoices listener notice:', error.message);
-        const fallback = orgId ? MOCK_INVOICES.filter(inv => inv.orgId === orgId) : MOCK_INVOICES;
+        logListenerFallback('Real-time invoices', error);
+        const fallback = developmentFallback(MOCK_INVOICES, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_INVOICES.filter(inv => inv.orgId === orgId) : MOCK_INVOICES;
+    const fallback = developmentFallback(MOCK_INVOICES, orgId);
+    if (import.meta.env.DEV) console.error('Could not start invoices listener:', e);
     onData(fallback);
+    return () => {};
+  }
+}
+
+export function subscribeToPaymentSubmissions(
+  onData: (submissions: PaymentSubmission[]) => void,
+  orgId: string
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      onData([]);
+      return () => {};
+    }
+    const targetRef = query(
+      collection(db, 'paymentSubmissions'),
+      where('orgId', '==', orgId),
+      limit(250)
+    );
+    return onSnapshot(
+      targetRef,
+      snapshot => onData(snapshot.docs.map(document => document.data() as PaymentSubmission)),
+      error => {
+        logListenerFallback('Payment submissions', error);
+        onData([]);
+      }
+    );
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('Could not start payment submissions listener:', error);
+    onData([]);
     return () => {};
   }
 }
 
 export function subscribeToAttendance(onData: (records: AttendanceRecord[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_ATTENDANCE, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'attendance'), where('orgId', '==', orgId), limit(500))
       : query(collection(db, 'attendance'), limit(500));
@@ -307,18 +443,19 @@ export function subscribeToAttendance(onData: (records: AttendanceRecord[]) => v
           const list = snapshot.docs.map(d => d.data() as AttendanceRecord);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_ATTENDANCE.filter(att => att.orgId === orgId) : MOCK_ATTENDANCE;
+          const fallback = developmentFallback(MOCK_ATTENDANCE, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time attendance listener notice:', error.message);
-        const fallback = orgId ? MOCK_ATTENDANCE.filter(att => att.orgId === orgId) : MOCK_ATTENDANCE;
+        logListenerFallback('Real-time attendance', error);
+        const fallback = developmentFallback(MOCK_ATTENDANCE, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_ATTENDANCE.filter(att => att.orgId === orgId) : MOCK_ATTENDANCE;
+    const fallback = developmentFallback(MOCK_ATTENDANCE, orgId);
+    if (import.meta.env.DEV) console.error('Could not start attendance listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -326,6 +463,11 @@ export function subscribeToAttendance(onData: (records: AttendanceRecord[]) => v
 
 export function subscribeToExams(onData: (exams: Exam[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_EXAMS, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'exams'), where('orgId', '==', orgId), limit(100))
       : query(collection(db, 'exams'), limit(100));
@@ -336,18 +478,19 @@ export function subscribeToExams(onData: (exams: Exam[]) => void, orgId?: string
           const list = snapshot.docs.map(d => d.data() as Exam);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_EXAMS.filter(e => e.orgId === orgId) : MOCK_EXAMS;
+          const fallback = developmentFallback(MOCK_EXAMS, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time exams listener notice:', error.message);
-        const fallback = orgId ? MOCK_EXAMS.filter(e => e.orgId === orgId) : MOCK_EXAMS;
+        logListenerFallback('Real-time exams', error);
+        const fallback = developmentFallback(MOCK_EXAMS, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_EXAMS.filter(e => e.orgId === orgId) : MOCK_EXAMS;
+    const fallback = developmentFallback(MOCK_EXAMS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start exams listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -355,6 +498,11 @@ export function subscribeToExams(onData: (exams: Exam[]) => void, orgId?: string
 
 export function subscribeToAnnouncements(onData: (announcements: Announcement[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_ANNOUNCEMENTS, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'announcements'), where('orgId', '==', orgId), limit(100))
       : query(collection(db, 'announcements'), limit(100));
@@ -365,18 +513,19 @@ export function subscribeToAnnouncements(onData: (announcements: Announcement[])
           const list = snapshot.docs.map(d => d.data() as Announcement);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_ANNOUNCEMENTS.filter(a => a.orgId === orgId) : MOCK_ANNOUNCEMENTS;
+          const fallback = developmentFallback(MOCK_ANNOUNCEMENTS, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time announcements listener notice:', error.message);
-        const fallback = orgId ? MOCK_ANNOUNCEMENTS.filter(a => a.orgId === orgId) : MOCK_ANNOUNCEMENTS;
+        logListenerFallback('Real-time announcements', error);
+        const fallback = developmentFallback(MOCK_ANNOUNCEMENTS, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_ANNOUNCEMENTS.filter(a => a.orgId === orgId) : MOCK_ANNOUNCEMENTS;
+    const fallback = developmentFallback(MOCK_ANNOUNCEMENTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start announcements listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -384,6 +533,11 @@ export function subscribeToAnnouncements(onData: (announcements: Announcement[])
 
 export function subscribeToStudyMaterials(onData: (materials: StudyMaterial[]) => void, orgId?: string) {
   try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_STUDY_MATERIALS, orgId);
+      onData(fallback);
+      return () => {};
+    }
     const targetRef = orgId
       ? query(collection(db, 'studyMaterials'), where('orgId', '==', orgId), limit(150))
       : query(collection(db, 'studyMaterials'), limit(150));
@@ -394,18 +548,19 @@ export function subscribeToStudyMaterials(onData: (materials: StudyMaterial[]) =
           const list = snapshot.docs.map(d => d.data() as StudyMaterial);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_STUDY_MATERIALS.filter(m => m.orgId === orgId) : MOCK_STUDY_MATERIALS;
+          const fallback = developmentFallback(MOCK_STUDY_MATERIALS, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time study materials listener notice:', error.message);
-        const fallback = orgId ? MOCK_STUDY_MATERIALS.filter(m => m.orgId === orgId) : MOCK_STUDY_MATERIALS;
+        logListenerFallback('Real-time study materials', error);
+        const fallback = developmentFallback(MOCK_STUDY_MATERIALS, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_STUDY_MATERIALS.filter(m => m.orgId === orgId) : MOCK_STUDY_MATERIALS;
+    const fallback = developmentFallback(MOCK_STUDY_MATERIALS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start study materials listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -441,7 +596,8 @@ export async function persistStudentWithBatchAtomically(
  */
 export async function deleteStudentAtomically(
   studentId: string,
-  batchesToClean: Batch[]
+  batchesToClean: Batch[],
+  userId?: string
 ): Promise<void> {
   try {
     const batch = writeBatch(db);
@@ -450,6 +606,14 @@ export async function deleteStudentAtomically(
     for (const b of batchesToClean) {
       const cleanedIds = b.studentIds.filter(id => id !== studentId);
       batch.set(doc(db, 'batches', b.id), { ...b, studentIds: cleanedIds });
+    }
+
+    if (userId) {
+      batch.set(doc(db, 'users', userId), {
+        status: 'vacated',
+        vacatedAt: new Date().toISOString(),
+        orgId: ''
+      }, { merge: true });
     }
 
     await batch.commit();
@@ -463,12 +627,147 @@ export async function deleteStudentAtomically(
  */
 export async function recordPaymentAtomically(
   invoiceId: string,
-  updatedInvoice: FeeInvoice
-): Promise<void> {
+  payment: PaymentRecord
+): Promise<FeeInvoice> {
   try {
-    await setDoc(doc(db, 'invoices', invoiceId), updatedInvoice);
+    return await runTransaction(db, async transaction => {
+      const invoiceRef = doc(db, 'invoices', invoiceId);
+      const invoiceSnapshot = await transaction.get(invoiceRef);
+      if (!invoiceSnapshot.exists()) {
+        throw new Error('Invoice not found.');
+      }
+      const invoice = invoiceSnapshot.data() as FeeInvoice;
+      const balance = invoice.netAmount - invoice.paidAmount;
+      if (!Number.isFinite(payment.amount) || payment.amount <= 0 || payment.amount > balance) {
+        throw new Error('Payment amount exceeds the current invoice balance.');
+      }
+      const normalizedReference = payment.transactionRef.trim().toLowerCase();
+      if (invoice.payments?.some(existing => existing.transactionRef.trim().toLowerCase() === normalizedReference)) {
+        throw new Error('This payment reference has already been recorded.');
+      }
+      const paidAmount = invoice.paidAmount + payment.amount;
+      const updatedInvoice: FeeInvoice = {
+        ...invoice,
+        paidAmount,
+        status: paidAmount >= invoice.netAmount ? 'paid' : 'partially_paid',
+        payments: [...(invoice.payments || []), payment]
+      };
+      transaction.set(invoiceRef, cleanFirestoreData(updatedInvoice));
+      return updatedInvoice;
+    });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `invoices/${invoiceId}`);
+  }
+}
+
+export async function createPaymentSubmission(submission: PaymentSubmission): Promise<void> {
+    try {
+      await setDoc(
+        doc(db, 'paymentSubmissions', submission.id),
+        cleanFirestoreData(submission)
+      );
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `paymentSubmissions/${submission.id}`);
+    }
+  }
+
+export async function verifyPaymentSubmission(
+    submissionId: string,
+    reviewerId: string,
+    reviewerName: string
+  ): Promise<FeeInvoice> {
+    try {
+      return await runTransaction(db, async transaction => {
+        const submissionRef = doc(db, 'paymentSubmissions', submissionId);
+        const submissionSnapshot = await transaction.get(submissionRef);
+        if (!submissionSnapshot.exists()) {
+          throw new Error('Payment submission was not found.');
+        }
+
+        const submission = submissionSnapshot.data() as PaymentSubmission;
+        if (submission.status !== 'pending_verification') {
+          throw new Error('This payment submission has already been reviewed.');
+        }
+
+        const invoiceRef = doc(db, 'invoices', submission.invoiceId);
+        const invoiceSnapshot = await transaction.get(invoiceRef);
+        if (!invoiceSnapshot.exists()) {
+          throw new Error('The invoice for this payment could not be found.');
+        }
+
+        const invoice = invoiceSnapshot.data() as FeeInvoice;
+        const existingPayments = invoice.payments || [];
+        const normalizedReference = submission.transactionRef.trim().toLowerCase();
+        if (existingPayments.some(payment => payment.transactionRef.trim().toLowerCase() === normalizedReference)) {
+          throw new Error('This UPI reference has already been recorded on the invoice.');
+        }
+
+        const balance = invoice.netAmount - invoice.paidAmount;
+        if (!Number.isFinite(submission.amount) || submission.amount <= 0 || submission.amount > balance) {
+          throw new Error('The submitted amount exceeds the current invoice balance.');
+        }
+
+        const verifiedAt = new Date().toISOString();
+        const payment: PaymentRecord = {
+          id: submission.id,
+          invoiceId: invoice.id,
+          amount: submission.amount,
+          paymentDate: verifiedAt.slice(0, 10),
+          paymentMethod: 'UPI',
+          transactionRef: submission.transactionRef,
+          receivedBy: reviewerName,
+          receiptNo: `REC-${Date.now()}-${submission.id.slice(-6)}`,
+          upiApp: submission.upiApp,
+          status: 'verified',
+          verifiedBy: reviewerName,
+          verifiedAt
+        };
+        const paidAmount = invoice.paidAmount + submission.amount;
+        const updatedInvoice: FeeInvoice = {
+          ...invoice,
+          paidAmount,
+          status: paidAmount >= invoice.netAmount ? 'paid' : 'partially_paid',
+          payments: [...existingPayments, payment]
+        };
+
+        transaction.set(invoiceRef, cleanFirestoreData(updatedInvoice));
+        transaction.update(submissionRef, {
+          status: 'verified',
+          reviewedBy: reviewerId,
+          reviewedAt: verifiedAt
+        });
+        return updatedInvoice;
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `paymentSubmissions/${submissionId}`);
+    }
+  }
+
+export async function rejectPaymentSubmission(
+    submissionId: string,
+    reviewerId: string,
+    reason: string
+  ): Promise<void> {
+    try {
+      await runTransaction(db, async transaction => {
+        const submissionRef = doc(db, 'paymentSubmissions', submissionId);
+        const submissionSnapshot = await transaction.get(submissionRef);
+        if (!submissionSnapshot.exists()) {
+          throw new Error('Payment submission was not found.');
+        }
+        const submission = submissionSnapshot.data() as PaymentSubmission;
+        if (submission.status !== 'pending_verification') {
+          throw new Error('This payment submission has already been reviewed.');
+        }
+        transaction.update(submissionRef, {
+          status: 'rejected',
+          reviewedBy: reviewerId,
+          reviewedAt: new Date().toISOString(),
+          rejectionReason: reason.trim().slice(0, 200) || 'Payment could not be verified.'
+        });
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `paymentSubmissions/${submissionId}`);
   }
 }
 
@@ -480,11 +779,22 @@ export async function persistStudentToFirestore(student: Student): Promise<void>
   }
 }
 
-export async function deleteStudentFromFirestore(studentId: string): Promise<void> {
+export async function deleteStudentFromFirestore(studentId: string, userId?: string): Promise<void> {
   try {
     await deleteDoc(doc(db, 'students', studentId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `students/${studentId}`);
+  }
+  if (userId) {
+    try {
+      await setDoc(doc(db, 'users', userId), {
+        status: 'vacated',
+        vacatedAt: new Date().toISOString(),
+        orgId: ''
+      }, { merge: true });
+    } catch (e) {
+      console.warn(`Firestore student user profile vacate notice (${userId}):`, e);
+    }
   }
 }
 
@@ -506,11 +816,22 @@ export async function persistTeacherToFirestore(teacher: Teacher): Promise<void>
   }
 }
 
-export async function deleteTeacherFromFirestore(teacherId: string): Promise<void> {
+export async function deleteTeacherFromFirestore(teacherId: string, userId?: string): Promise<void> {
   try {
     await deleteDoc(doc(db, 'teachers', teacherId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `teachers/${teacherId}`);
+    console.warn(`Firestore teacher delete notice (${teacherId}):`, error);
+  }
+  if (userId) {
+    try {
+      await setDoc(doc(db, 'users', userId), {
+        status: 'vacated',
+        vacatedAt: new Date().toISOString(),
+        orgId: ''
+      }, { merge: true });
+    } catch (e) {
+      console.warn(`Firestore user profile vacate notice (${userId}):`, e);
+    }
   }
 }
 
@@ -582,16 +903,17 @@ export function subscribeToExamResults(onData: (results: ExamResult[]) => void, 
           const list = snapshot.docs.map(d => d.data() as ExamResult);
           onData(list);
         } else {
-          onData(MOCK_EXAM_RESULTS);
+          onData(developmentFallback(MOCK_EXAM_RESULTS, orgId));
         }
       },
       (error) => {
-        console.warn('Real-time exam results listener notice:', error.message);
-        onData(MOCK_EXAM_RESULTS);
+        logListenerFallback('Real-time exam results', error);
+        onData(developmentFallback(MOCK_EXAM_RESULTS, orgId));
       }
     );
   } catch (e) {
-    onData(MOCK_EXAM_RESULTS);
+    if (import.meta.env.DEV) console.error('Could not start exam results listener:', e);
+    onData(developmentFallback(MOCK_EXAM_RESULTS, orgId));
     return () => {};
   }
 }
@@ -621,18 +943,19 @@ export function subscribeToAssignments(onData: (assignments: Assignment[]) => vo
           const list = snapshot.docs.map(d => d.data() as Assignment);
           onData(list);
         } else {
-          const fallback = orgId ? MOCK_ASSIGNMENTS.filter(a => a.orgId === orgId) : MOCK_ASSIGNMENTS;
+          const fallback = developmentFallback(MOCK_ASSIGNMENTS, orgId);
           onData(fallback);
         }
       },
       (error) => {
-        console.warn('Real-time assignments listener notice:', error.message);
-        const fallback = orgId ? MOCK_ASSIGNMENTS.filter(a => a.orgId === orgId) : MOCK_ASSIGNMENTS;
+        logListenerFallback('Real-time assignments', error);
+        const fallback = developmentFallback(MOCK_ASSIGNMENTS, orgId);
         onData(fallback);
       }
     );
   } catch (e) {
-    const fallback = orgId ? MOCK_ASSIGNMENTS.filter(a => a.orgId === orgId) : MOCK_ASSIGNMENTS;
+    const fallback = developmentFallback(MOCK_ASSIGNMENTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start assignments listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -701,5 +1024,158 @@ export async function deleteStudyMaterialFromFirestore(matId: string): Promise<v
     await deleteDoc(doc(db, 'studyMaterials', matId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `studyMaterials/${matId}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CHAT CHANNELS & MESSAGES (VIDYACHAT) — real-time cloud sync
+//
+// Chat previously lived ONLY in localStorage, which is per-browser: a message a
+// student sent could never reach a teacher's device. Firestore is now the single
+// source of truth. `fallback` exists purely so the DEV demo personas still have
+// something to render when the cloud collection is empty.
+// ---------------------------------------------------------------------------
+
+/** Chat is dev-only-mock: never leak mock channels/messages into production. */
+function chatFallback<T>(items: T[]): T[] {
+  return import.meta.env.DEV ? items : [];
+}
+
+export function subscribeToChatChannels(
+  onData: (channels: ChatChannel[]) => void,
+  orgId?: string,
+  fallback: ChatChannel[] = []
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      onData(chatFallback(fallback));
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(collection(db, 'chatChannels'), where('orgId', '==', orgId), limit(100))
+      : query(collection(db, 'chatChannels'), limit(100));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as ChatChannel));
+        } else {
+          onData(chatFallback(fallback));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time chat channels', error);
+        onData(chatFallback(fallback));
+      }
+    );
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start chat channel listener:', e);
+    onData(chatFallback(fallback));
+    return () => {};
+  }
+}
+
+export function subscribeToChatMessages(
+  onData: (messages: ChatMessage[]) => void,
+  orgId?: string,
+  fallback: ChatMessage[] = []
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      onData(chatFallback(fallback));
+      return () => {};
+    }
+    // Newest-first off the wire (requires the chatMessages composite index),
+    // reversed below so the UI receives chronological order.
+    const targetRef = orgId
+      ? query(
+          collection(db, 'chatMessages'),
+          where('orgId', '==', orgId),
+          orderBy('createdAtMs', 'desc'),
+          limit(200)
+        )
+      : query(collection(db, 'chatMessages'), orderBy('createdAtMs', 'desc'), limit(200));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as ChatMessage).reverse());
+        } else {
+          onData(chatFallback(fallback));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time chat messages', error);
+        onData(chatFallback(fallback));
+      }
+    );
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start chat message listener:', e);
+    onData(chatFallback(fallback));
+    return () => {};
+  }
+}
+
+export async function persistChatMessageToFirestore(message: ChatMessage): Promise<void> {
+  try {
+    await setDoc(
+      doc(db, 'chatMessages', message.id),
+      cleanFirestoreData(message)
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `chatMessages/${message.id}`);
+  }
+}
+
+export async function persistChatChannelToFirestore(channel: ChatChannel): Promise<void> {
+  try {
+    await setDoc(
+      doc(db, 'chatChannels', channel.id),
+      cleanFirestoreData(channel),
+      { merge: true }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `chatChannels/${channel.id}`);
+  }
+}
+
+export async function deleteChatChannelFromFirestore(channelId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'chatChannels', channelId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `chatChannels/${channelId}`);
+  }
+}
+
+/**
+ * Toggle a reaction. Runs in a transaction so two people reacting to the same
+ * message at the same time don't clobber each other's entries, and so the emoji
+ * key never has to be interpolated into a field path.
+ */
+export async function toggleChatReactionFirestore(
+  messageId: string,
+  emoji: string,
+  userIdentifier: string
+): Promise<void> {
+  try {
+    const messageRef = doc(db, 'chatMessages', messageId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(messageRef);
+      if (!snap.exists()) return;
+      const data = snap.data() as ChatMessage;
+      const reactions: { [emoji: string]: string[] } = { ...(data.reactions || {}) };
+      const users = reactions[emoji] || [];
+      const next = users.includes(userIdentifier)
+        ? users.filter(u => u !== userIdentifier)
+        : [...users, userIdentifier];
+      if (next.length > 0) {
+        reactions[emoji] = next;
+      } else {
+        delete reactions[emoji];
+      }
+      tx.update(messageRef, { reactions });
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `chatMessages/${messageId}`);
   }
 }

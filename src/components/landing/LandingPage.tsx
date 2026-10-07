@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   Building2, Users, BookOpen, GraduationCap, ShieldCheck, ArrowRight, Sparkles,
-  Smartphone, QrCode, Shield, Clock, ChevronDown, ChevronUp, TrendingUp, Check,
-  ExternalLink, Sun, Moon, DownloadCloud, Menu, X
+  Smartphone, QrCode, Shield, Clock, ChevronDown, TrendingUp, Check,
+  ExternalLink, Sun, Moon, DownloadCloud, Menu, X, Network
 } from 'lucide-react';
+import { AnimatePresence, motion, useMotionValue, useSpring, type Variants } from 'motion/react';
 import { UserRole } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
-import { ConsoleButton, StatusChip, VidyaLogo } from '../ui';
+import { ConsoleButton, StatusChip, VidyaLogo, Reveal, RevealGroup, CountUp } from '../ui';
 import { usePwaInstall } from '../../hooks/usePwaInstall';
 import { PwaInstallModal } from '../common/PwaInstallModal';
+import {
+  fadeUp, fadeUpLg, staggerContainer, dropdownIn, tDefault, tFast, tSpring, easings
+} from '../../lib/motion';
 
 interface LandingPageProps {
   onSelectRole: (role: UserRole) => void;
@@ -21,7 +25,7 @@ interface LandingPageProps {
 const border = 'border border-black/[0.08] dark:border-white/[0.08]';
 const card = `bg-white dark:bg-[#1C1C1E] ${border} shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)]`;
 const muted = 'text-[#86868B] dark:text-[#86868B]';
-const sectionTitle = 'text-xs uppercase tracking-wider font-semibold text-[#0071E3] dark:text-[#2997FF] font-apple-text';
+const sectionTitle = 'text-xs uppercase tracking-wider font-semibold text-[var(--fb-primary)] font-apple-text';
 const heading = 'text-3xl sm:text-4xl lg:text-5xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7]';
 
 const navLinks = [
@@ -41,13 +45,13 @@ const roleTabs: { id: UserRole; label: string; icon: React.ElementType }[] = [
 ];
 
 const features = [
-  { icon: QrCode, tint: 'bg-[#FF9500]/12 text-[#FF9500] dark:text-[#FF9F0A]', title: 'Zero-Leakage UPI Fee Engine',
+  { icon: QrCode, tint: 'bg-blue-500/10 text-[var(--fb-primary)]', title: 'Zero-Leakage UPI Fee Engine',
     text: 'Auto-generate fee invoices with student roll numbers, batch tags, and instant UPI QR codes. Parents pay via PhonePe, GPay, or Paytm, and get instant downloadable receipts.',
     points: ['Automated WhatsApp Due Reminders', 'GST / PAN Ready Digital Receipts'] },
-  { icon: Smartphone, tint: 'bg-[#34C759]/12 text-[#248A3D] dark:text-[#30D158]', title: '20-Second Mobile Attendance',
+  { icon: Smartphone, tint: 'bg-amber-500/10 text-[var(--fb-accent)]', title: '20-Second Mobile Attendance',
     text: 'Faculty marks entire batch attendance in seconds with 1-tap presets. Absent students automatically trigger real-time WhatsApp alerts to parents.',
     points: ['Real-time Absent Alerts to Parents', 'Monthly % Attendance Log'] },
-  { icon: Building2, tint: 'bg-[#0071E3]/12 text-[#0071E3] dark:text-[#2997FF]', title: 'Multi-Branch & Batch Topology',
+  { icon: Building2, tint: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300', title: 'Multi-Branch & Batch Topology',
     text: 'Organize morning, evening, and weekend batches across multiple branches. Supports CBSE, ICSE, State Boards, IIT-JEE, and NEET curriculums.',
     points: ['Branch-Level Revenue Ledgers', 'Shared Faculty Timetable Slots'] },
   { icon: Sparkles, tint: 'bg-[#AF52DE]/12 text-[#AF52DE] dark:text-[#BF5AF2]', title: 'AI Study Assistant (Gemini)',
@@ -56,7 +60,7 @@ const features = [
   { icon: Shield, tint: 'bg-[#34C759]/12 text-[#248A3D] dark:text-[#30D158]', title: 'Multi-Tenant Data Privacy',
     text: 'Every coaching center gets a dedicated tenant workspace. Student phone numbers, fee data, and exam results are never mixed or shared with competitors.',
     points: ['Strict Role-Based Isolation', 'Hardened Firestore Security Rules'] },
-  { icon: Clock, tint: 'bg-[#0071E3]/12 text-[#0071E3] dark:text-[#2997FF]', title: 'Offline-Resilient Cloud Sync',
+  { icon: Clock, tint: 'bg-orange-500/10 text-[var(--fb-accent)]', title: 'Offline-Resilient Cloud Sync',
     text: 'Never halt attendance or receipt printing because of a broadband drop. Data is cached locally and automatically syncs when the connection resumes.',
     points: ['Instant Local-First Performance', 'Background Firestore Sync'] },
 ];
@@ -83,10 +87,260 @@ const faqs = [
     a: 'Yes, within your plan limits (1 branch on Starter, 2 on Growth, 5 on Multi-Branch Pro). Owners can filter students and fee collections by branch and manage shared faculty schedules.' },
 ];
 
+/* ------------------------------------------------------------------ */
+/* Interactive demo widgets.                                           */
+/* These live at MODULE scope on purpose: child components holding     */
+/* useState inside the LandingPage body would remount on every parent  */
+/* render and lose their state.                                        */
+/* ------------------------------------------------------------------ */
+
+const fmtINR = (n: number) => Math.round(n).toLocaleString('en-IN');
+const fmtInt = (n: number) => String(Math.round(n));
+
+/** Number that smoothly springs toward `value` instead of snapping. */
+const AnimatedNumber: React.FC<{
+  value: number;
+  format: (n: number) => string;
+  className?: string;
+}> = ({ value, format, className }) => {
+  const source = useMotionValue(value);
+  const spring = useSpring(source, { stiffness: 170, damping: 26, mass: 0.6 });
+  const [display, setDisplay] = useState(() => format(value));
+
+  useEffect(() => {
+    source.set(value);
+  }, [value, source]);
+
+  useEffect(() => spring.on('change', latest => setDisplay(format(latest))), [spring, format]);
+
+  return <span className={`count-up ${className ?? ''}`}>{display}</span>;
+};
+
+/** Parent-portal demo: paying the fee flips the button into a paid state. */
+const PayFeeButton: React.FC = () => {
+  const [paid, setPaid] = useState(false);
+
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {paid ? (
+        <motion.span
+          key="paid"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={tSpring}
+          className="inline-flex items-center justify-center gap-1.5 h-8 px-4 min-w-[160px] rounded-full text-xs font-bold select-none bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+        >
+          <Check className="w-3.5 h-3.5" />
+          Paid ₹2,500
+        </motion.span>
+      ) : (
+        <motion.button
+          key="pay"
+          type="button"
+          onClick={() => setPaid(true)}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={tFast}
+          className="hover-lift inline-flex items-center justify-center gap-1.5 h-8 px-4 min-w-[160px] rounded-full text-xs font-bold text-white cursor-pointer select-none bg-[var(--fb-primary)] hover:bg-[var(--fb-primary-hover)] border border-black/10 dark:border-white/15 shadow-[0_2px_12px_rgba(79,70,229,0.35)] active:scale-[0.97]"
+        >
+          <QrCode className="w-3.5 h-3.5" />
+          Pay Fee (₹2,500)
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+};
+
+type AttMark = 'P' | 'A' | 'L';
+
+const rosterStudents = [
+  { name: 'Rahul Sharma', roll: '10-01' },
+  { name: 'Priya Verma', roll: '10-02' },
+  { name: 'Aman Gupta', roll: '10-03' },
+  { name: 'Sneha Iyer', roll: '10-04' },
+];
+
+const markPill: Record<AttMark, string> = {
+  P: 'bg-[#188038]',
+  A: 'bg-[#DC2626]',
+  L: 'bg-[var(--fb-accent)]',
+};
+
+/**
+ * Teacher demo: P/A/L segmented control per row (with a sliding layoutId
+ * indicator) plus a working "Mark All 32 Present" bulk action.
+ */
+const AttendanceDesk: React.FC = () => {
+  const [marks, setMarks] = useState<AttMark[]>(['P', 'P', 'A', 'P']);
+  const allPresent = marks.every(m => m === 'P');
+
+  const setMark = (idx: number, m: AttMark) =>
+    setMarks(prev => prev.map((v, i) => (i === idx ? m : v)));
+
+  const markAllPresent = () => setMarks(rosterStudents.map(() => 'P' as AttMark));
+
+  return (
+    <div className={`${card} p-4 rounded-xl space-y-3`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <span className="text-xs font-bold">Batch Roster Attendance (Class 10 CBSE Math)</span>
+          <p className={`text-[11px] ${muted}`}>Faculty: Prof. Anjali Sharma · 32 Students Enrolled</p>
+        </div>
+        <button
+          type="button"
+          onClick={markAllPresent}
+          aria-disabled={allPresent}
+          className={`inline-flex items-center justify-center h-7 px-3.5 min-w-[160px] rounded-full text-xs font-bold select-none transition-colors duration-150 ${
+            allPresent
+              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 cursor-default'
+              : 'hover-lift text-white cursor-pointer bg-[var(--fb-primary)] hover:bg-[var(--fb-primary-hover)] border border-black/10 dark:border-white/15 shadow-[0_2px_12px_rgba(79,70,229,0.35)] active:scale-[0.97]'
+          }`}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={allPresent ? 'done' : 'todo'}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={tSpring}
+              className="inline-flex items-center gap-1.5"
+            >
+              {allPresent ? (
+                <><Check className="w-3.5 h-3.5" /> 32 Present</>
+              ) : (
+                'Mark All 32 Present'
+              )}
+            </motion.span>
+          </AnimatePresence>
+        </button>
+      </div>
+
+      <div className="space-y-1.5">
+        {rosterStudents.map((s, i) => (
+          <div
+            key={s.roll}
+            className="p-2.5 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-xs flex items-center justify-between gap-2 border border-black/[0.04] dark:border-white/[0.06]"
+          >
+            <span className="truncate">{s.name} · Roll {s.roll}</span>
+            <div className="flex gap-0.5 p-0.5 rounded-lg bg-black/[0.05] dark:bg-white/[0.07] border border-black/[0.06] dark:border-white/[0.08] flex-shrink-0">
+              {(['P', 'A', 'L'] as AttMark[]).map(m => {
+                const active = marks[i] === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMark(i, m)}
+                    aria-label={`${m === 'P' ? 'Present' : m === 'A' ? 'Absent' : 'Late'} for ${s.name}`}
+                    aria-pressed={active}
+                    className={`relative px-2 py-0.5 rounded-md font-bold text-[10px] cursor-pointer transition-colors duration-150 ${
+                      active ? 'text-white' : 'text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-white'
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId={`attMark-${i}`}
+                        transition={tSpring}
+                        className={`absolute inset-0 rounded-md transition-colors duration-200 ${markPill[m]}`}
+                      />
+                    )}
+                    <span className="relative z-10">{m}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <p className={`text-[10px] ${muted} pl-1`}>…and 28 more students in this batch</p>
+      </div>
+    </div>
+  );
+};
+
+/** Student demo: "View Solution" expands an inline step-by-step answer. */
+const StudentTestCard: React.FC = () => {
+  const [showSolution, setShowSolution] = useState(false);
+
+  return (
+    <div className={`${card} p-4 rounded-xl space-y-3`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <span className="text-xs font-bold">Student Academic Vault · Rahul Sharma</span>
+          <p className={`text-[11px] ${muted}`}>Class 10 CBSE · Mathematics & Science</p>
+        </div>
+        <div><StatusChip label="RANK #2" variant="success" size="xs" /></div>
+      </div>
+
+      <div className="p-3 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-black/[0.04] dark:border-white/[0.06]">
+        <div>
+          <span className="font-semibold">Diagnostic Test 3: Trigonometry</span>
+          <p className={`text-[10px] ${muted}`}>Scored 44/50 (88%) · Percentile: 94th</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowSolution(v => !v)}
+          aria-expanded={showSolution}
+          className="shrink-0 inline-flex items-center gap-1.5 h-7 px-3.5 rounded-full text-xs font-bold cursor-pointer bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] hover:bg-[var(--fb-primary-subtle)] hover:text-[var(--fb-primary)] hover:border-[var(--fb-primary-border)] dark:hover:bg-[var(--fb-primary-subtle)] dark:hover:text-[var(--fb-primary)] dark:hover:border-[var(--fb-primary-border)] transition-colors duration-150 active:scale-[0.97]"
+        >
+          <motion.span animate={{ rotate: showSolution ? 180 : 0 }} transition={tFast} className="inline-flex">
+            <ChevronDown className="w-3.5 h-3.5" />
+          </motion.span>
+          {showSolution ? 'Hide Solution' : 'View Solution'}
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {showSolution && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: easings.outQuart }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3 border-t border-black/[0.08] dark:border-white/[0.08] text-left">
+              <span className="font-bold text-[11px] text-[var(--fb-primary)]">Q7 · Step-by-step solution</span>
+              <p className={`text-[11px] ${muted} mt-1 leading-relaxed`}>
+                Given cos θ = 0.6 → sin θ = √(1 − 0.36) = 0.8. Opposite : Hypotenuse = 0.8 : 1,
+                so the triangle area resolves to <strong className="text-[#188038] dark:text-[#30D158]">48 cm²</strong>. Marks awarded: 5/5.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/** Console address-bar latency chip: cheap rotating "live" values. */
+const latencySamples = [12, 11, 14, 9, 13, 10, 16, 12];
+
+const LiveLatencyChip: React.FC = () => {
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setIdx(v => (v + 1) % latencySamples.length), 2600);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <motion.span
+      key={latencySamples[idx]}
+      initial={{ opacity: 0.35, y: -3 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={tFast}
+      className="text-[9px] px-1 rounded tabular-nums bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-sans font-bold flex-shrink-0"
+    >
+      {latencySamples[idx]}ms
+    </motion.span>
+  );
+};
+
 export const LandingPage: React.FC<LandingPageProps> = ({
-  onSelectRole, onOpenLogin, onEnterApp, onOpenRegister
+  onSelectRole, onOpenLogin, onOpenArchitecture, onEnterApp, onOpenRegister
 }) => {
-  const { resolvedTheme, toggleTheme, theme } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const pwaState = usePwaInstall();
   const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -111,7 +365,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     studentCount <= 100 ? plans[0] : studentCount <= 300 ? plans[1] : plans[2];
 
   const totalMonthlyCollection = studentCount * monthlyFee;
-  const estimatedRecoveredLeakage = Math.round(totalMonthlyCollection * 0.08);
+  // Leakage grows with centre size: interpolates the stated 8–12% range
+  // (8% at 20 students → 12% at 1,000 students) so copy and maths agree.
+  const leakageRate = 0.08 + ((studentCount - 20) / 980) * 0.04;
+  const estimatedRecoveredLeakage = Math.round(totalMonthlyCollection * leakageRate);
   const staffHoursSaved = Math.round(studentCount * 0.25);
 
   const choosePlan = (id: 'starter' | 'growth' | 'pro') =>
@@ -121,31 +378,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const statLabel = `text-xs font-normal ${muted} mt-0.5 font-apple-text`;
 
   return (
-    <div className="w-full min-h-dvh overflow-x-hidden scroll-smooth bg-[#F5F5F7] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text selection:bg-[#0071E3]/20 selection:text-[#0071E3] transition-colors duration-200">
+    <div className="w-full min-h-dvh overflow-x-hidden scroll-smooth bg-[#F5F5F7] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text selection:bg-[var(--fb-primary-subtle)] selection:text-[var(--fb-primary)] transition-colors duration-200">
 
       {/* Dynamic Top App Bar: Apple Frosted Glass with Liquid Blur */}
       <nav
-        className={`sticky top-0 z-50 w-full transition-all duration-200 px-4 sm:px-6 lg:px-8 ${
+        className={`sticky top-0 z-50 w-full transition-all duration-300 px-4 sm:px-6 lg:px-8 ${
           isScrolled
-            ? 'bg-white/90 dark:bg-[#000000]/90 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] shadow-xs py-3 sm:py-3.5'
-            : 'bg-white/80 dark:bg-[#000000]/80 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.06] py-4 sm:py-5'
+            ? 'bg-white/90 dark:bg-[#000000]/90 backdrop-blur-2xl border-b border-black/[0.08] dark:border-white/[0.1] shadow-[0_10px_30px_-14px_rgba(0,0,0,0.22)] dark:shadow-[0_10px_30px_-14px_rgba(0,0,0,0.85)] py-3 sm:py-3.5'
+            : 'bg-white/80 dark:bg-[#000000]/80 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.06] shadow-none py-4 sm:py-5'
         }`}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-6 w-full">
-          {/* Brand Anchor: VidyaOS Emblem */}
-          <a href="#" className="flex items-center flex-shrink-0 cursor-pointer group">
+          {/* Brand Anchor: VidyaOS Emblem — smooth scroll to top, no hash jump */}
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="flex items-center flex-shrink-0 cursor-pointer group"
+            aria-label="VidyaOS — back to top"
+          >
             <VidyaLogo size="md" showBadge={true} badgeText="v2.5" />
-          </a>
+          </button>
 
-          {/* Desktop Navigation Links: Clean Pill Cluster, placed close together */}
+          {/* Desktop Navigation Links: Clean Pill Cluster with slide-in underline */}
           <div className="hidden lg:flex items-center gap-1 bg-black/[0.04] dark:bg-white/[0.06] p-1.5 rounded-full border border-black/[0.06] dark:border-white/[0.08] shadow-2xs">
             {navLinks.map(l => (
               <a
                 key={l.href}
                 href={l.href}
-                className="px-3.5 lg:px-4 py-2 rounded-full text-[13px] font-semibold text-[#1D1D1F]/80 dark:text-[#F5F5F7]/80 hover:text-[#0071E3] dark:hover:text-[#2997FF] hover:bg-white dark:hover:bg-white/10 hover:shadow-2xs transition-all duration-150 whitespace-nowrap"
+                className="group relative px-3.5 lg:px-4 py-2 rounded-full text-[13px] font-semibold text-[#1D1D1F]/80 dark:text-[#F5F5F7]/80 hover:text-[var(--fb-primary)] hover:bg-white dark:hover:text-[var(--fb-primary)] dark:hover:bg-white/10 hover:shadow-2xs transition-all duration-150 whitespace-nowrap"
               >
                 {l.label}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 right-3.5 bottom-1 h-0.5 rounded-full bg-[var(--fb-primary)] origin-left scale-x-0 transition-transform duration-200 ease-out group-hover:scale-x-100"
+                />
               </a>
             ))}
           </div>
@@ -156,11 +422,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {!pwaState.isInstalled && (
               <button
                 onClick={() => setIsPwaModalOpen(true)}
-                className="p-2 sm:p-2.5 rounded-full border border-amber-500/25 bg-amber-500/10 hover:bg-amber-500/20 text-[#C96B00] dark:text-[#FFCA28] transition cursor-pointer flex-shrink-0 active:scale-95"
+                className="p-2 sm:p-2.5 rounded-full border border-blue-500/25 bg-blue-500/10 hover:bg-blue-500/20 text-[#005ECF] dark:text-[#5AC8FA] transition cursor-pointer flex-shrink-0 active:scale-95"
                 title="Install VidyaOS App"
                 aria-label="Install App"
               >
-                <DownloadCloud className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
+                <DownloadCloud className="w-4 h-4 text-[#0071E3] dark:text-[#5AC8FA]" />
               </button>
             )}
 
@@ -172,7 +438,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               aria-label="Toggle Theme"
             >
               {resolvedTheme === 'dark'
-                ? <Sun className="w-4 h-4 text-[#FFCA28]" />
+                ? <Sun className="w-4 h-4 text-[#2997FF]" />
                 : <Moon className="w-4 h-4 text-[#0071E3]" />}
             </button>
 
@@ -180,9 +446,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {onOpenRegister && (
               <button
                 onClick={() => onOpenRegister()}
-                className="hidden xl:inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold px-3 py-2 rounded-full text-amber-700 dark:text-[#FFCA28] hover:bg-amber-500/10 transition cursor-pointer whitespace-nowrap active:scale-95"
+                className="hidden xl:inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold px-3 py-2 rounded-full text-[#005ECF] dark:text-[#5AC8FA] hover:bg-blue-500/10 transition cursor-pointer whitespace-nowrap active:scale-95"
               >
-                <Sparkles className="w-4 h-4 text-[#FFA000] dark:text-[#FFCA28]" />
+                <Sparkles className="w-4 h-4 text-[#0071E3] dark:text-[#5AC8FA]" />
                 <span>Register</span>
               </button>
             )}
@@ -212,56 +478,77 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={() => setMobileMenuOpen(prev => !prev)}
               className="lg:hidden p-2 sm:p-2.5 rounded-full border border-black/[0.08] dark:border-white/[0.12] bg-black/[0.03] dark:bg-white/[0.06] text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.06] dark:hover:bg-white/[0.12] transition cursor-pointer active:scale-95"
               aria-label="Toggle navigation menu"
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile & Tablet Dropdown Navigation Drawer */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden mt-2 p-2.5 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] rounded-2xl shadow-xl space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
-            <div className="flex flex-col gap-0.5">
-              {navLinks.map(l => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] active:bg-black/[0.06] transition flex items-center justify-between"
-                >
-                  <span>{l.label}</span>
-                  <ArrowRight className="w-3 h-3 text-[#86868B]" />
-                </a>
-              ))}
-            </div>
+        {/* Mobile & Tablet Dropdown Navigation Drawer (animated enter + exit) */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              variants={dropdownIn}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="lg:hidden mt-2 p-2.5 bg-white/95 dark:bg-[#1C1C1E]/95 backdrop-blur-2xl border border-black/[0.08] dark:border-white/[0.1] rounded-2xl shadow-xl space-y-2"
+            >
+              <div className="flex flex-col gap-0.5">
+                {navLinks.map(l => (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-3 py-2 rounded-xl text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.08] active:bg-black/[0.06] transition flex items-center justify-between"
+                  >
+                    <span>{l.label}</span>
+                    <ArrowRight className="w-3 h-3 text-[#86868B]" />
+                  </a>
+                ))}
+              </div>
 
-            <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center gap-2">
-              {onOpenRegister && (
-                <button
-                  onClick={() => { setMobileMenuOpen(false); onOpenRegister(); }}
-                  className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/10 text-amber-700 dark:text-[#FFCA28] border border-amber-500/25 text-center transition cursor-pointer"
-                >
-                  Register Center
-                </button>
-              )}
-              {!pwaState.isInstalled && (
-                <button
-                  onClick={() => { setMobileMenuOpen(false); setIsPwaModalOpen(true); }}
-                  className="flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium rounded-lg border border-black/[0.08] dark:border-white/[0.12] text-center cursor-pointer"
-                >
-                  <DownloadCloud className="w-3.5 h-3.5 text-[#FFA000]" />
-                  <span>Install App</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+              <div className="pt-2 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center gap-2">
+                {onOpenRegister && (
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); onOpenRegister(); }}
+                    className="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-blue-500/10 text-[#005ECF] dark:text-[#5AC8FA] border border-blue-500/25 text-center transition cursor-pointer"
+                  >
+                    Register Center
+                  </button>
+                )}
+                {!pwaState.isInstalled && (
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); setIsPwaModalOpen(true); }}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-medium rounded-lg border border-black/[0.08] dark:border-white/[0.12] text-center cursor-pointer"
+                  >
+                    <DownloadCloud className="w-3.5 h-3.5 text-[#0071E3]" />
+                    <span>Install App</span>
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* Hero */}
-      <section className="relative w-full overflow-hidden pt-12 pb-16 sm:pt-20 sm:pb-24 lg:pt-28 lg:pb-32 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(0,113,227,0.08),rgba(245,245,247,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(41,151,255,0.12),rgba(0,0,0,0))]">
-        <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 sm:space-y-8">
-          <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.12] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] shadow-2xs max-w-full backdrop-blur-md">
+      <section className="relative w-full overflow-hidden pt-12 pb-16 sm:pt-20 sm:pb-24 lg:pt-28 lg:pb-32 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,120,128,0.08),rgba(245,245,247,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(174,174,178,0.1),rgba(17,17,19,0))]">
+        {/* Ambient indigo/saffron glow orbs — slow, soft, decorative only */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -left-24 -right-24 h-[30rem] rounded-full bg-[radial-gradient(circle,rgba(79,70,229,0.22),transparent_65%)] blur-3xl animate-gradient-pan" />
+          <div className="absolute top-32 -right-16 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.18),transparent_65%)] blur-2xl animate-float" />
+          <div className="absolute top-72 -left-16 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.16),transparent_65%)] blur-2xl animate-float" style={{ animationDelay: '1.4s' }} />
+        </div>
+
+        <motion.div
+          className="relative w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 sm:space-y-8"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div variants={fadeUp} className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-black/[0.04] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.12] text-xs font-medium text-[#1D1D1F] dark:text-[#F5F5F7] shadow-2xs max-w-full backdrop-blur-md">
             <span className="relative flex h-2 w-2 flex-shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0071E3] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0071E3]"></span>
@@ -270,98 +557,129 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="sm:hidden">VIDYAOS 2.5 • APPLE-GRADE SIMPLICITY</span>
               <span className="hidden sm:inline">VIDYAOS 2.5 • HIGH-PERFORMANCE OPERATING SYSTEM FOR TUITION CENTERS</span>
             </span>
-          </div>
+          </motion.div>
 
-          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] max-w-4xl mx-auto leading-[1.06]">
+          <motion.h1 variants={fadeUpLg} className="text-4xl sm:text-6xl lg:text-7xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] max-w-4xl mx-auto leading-[1.06]">
             The Modern Operating System for{' '}
-            <span className="bg-gradient-to-r from-[#FF9500] via-[#FF2D55] to-[#AF52DE] bg-clip-text text-transparent">
+            <span className="text-gradient-brand">
               Coaching & Education Centers
             </span>
-          </h1>
+          </motion.h1>
 
-          <p className={`text-base sm:text-xl ${muted} max-w-2xl mx-auto leading-relaxed font-normal font-apple-text`}>
+          <motion.p variants={fadeUp} className={`text-base sm:text-xl ${muted} max-w-2xl mx-auto leading-relaxed font-normal font-apple-text`}>
             Eliminate chaotic WhatsApp groups, lost paper attendance registers, and overdue cash fees. VidyaOS unites{' '}
             <strong className="text-[#1D1D1F] dark:text-white font-medium">zero-surcharge UPI payments</strong>,{' '}
             <strong className="text-[#1D1D1F] dark:text-white font-medium">20-second batch attendance</strong>, and{' '}
             <strong className="text-[#1D1D1F] dark:text-white font-medium">automated WhatsApp parent alerts</strong> in one fluid, beautiful console.
-          </p>
+          </motion.p>
 
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-medium text-[#86868B] max-w-2xl mx-auto">
+          <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-medium text-[#86868B] max-w-2xl mx-auto">
             {['₹0 Gateway Cuts', '1-Tap Attendance (<20s)', 'Automated WhatsApp Alerts', 'Multi-Child Single Login', 'Offline-First Sync'].map(p => (
-              <span key={p} className="px-3 py-1 rounded-full bg-white dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] shadow-2xs">{p}</span>
+              <span key={p} className="px-3 py-1 rounded-full bg-white dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] shadow-2xs transition-colors duration-150 hover:text-[var(--fb-primary)] hover:border-[var(--fb-primary-border)] dark:hover:text-[var(--fb-primary)] dark:hover:border-[var(--fb-primary-border)] cursor-default">{p}</span>
             ))}
-          </div>
+          </motion.div>
 
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto sm:max-w-none">
+          <motion.div variants={fadeUp} className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto sm:max-w-none">
             {onOpenRegister && (
-              <ConsoleButton variant="primary" size="lg"
-                icon={<Sparkles className="w-4 h-4" />} iconRight={<ArrowRight className="w-4 h-4" />}
+              <motion.button
+                type="button"
                 onClick={() => onOpenRegister()}
-                className="w-full sm:w-auto justify-center shadow-[0_4px_16px_rgba(255,160,0,0.3)] hover:shadow-[0_6px_24px_rgba(255,160,0,0.4)]">
-                Register Your Center (Free Trial)
-              </ConsoleButton>
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                transition={tFast}
+                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2.5 h-10 sm:h-11 px-6 rounded-full text-sm sm:text-base font-semibold text-white cursor-pointer select-none gradient-brand shadow-[0_8px_24px_rgba(79,70,229,0.40)] hover:shadow-[0_14px_36px_rgba(79,70,229,0.55)] transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fb-primary)] focus-visible:ring-offset-2"
+              >
+                <Sparkles className="w-4 h-4 transition-transform duration-200 group-hover:rotate-12" />
+                <span>Register Your Center (Free Trial)</span>
+                <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </motion.button>
             )}
             <ConsoleButton variant="secondary" size="lg"
-              icon={<Building2 className="w-4 h-4 text-[#0071E3] dark:text-[#2997FF]" />}
-              onClick={() => onSelectRole('CENTER_ADMIN')} className="w-full sm:w-auto justify-center">
+              icon={<Building2 className="w-4 h-4 text-[var(--fb-primary)]" />}
+              onClick={() => onSelectRole('CENTER_ADMIN')}
+              className="w-full sm:w-auto justify-center hover:-translate-y-0.5">
               Open Admin Console Demo
             </ConsoleButton>
-          </div>
+          </motion.div>
 
-          <div className="pt-10 sm:pt-14">
-            <div className="bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-2xl border border-black/[0.06] dark:border-white/[0.08] rounded-3xl p-6 sm:p-8 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
-              <div><div className={`${stat} text-[#1D1D1F] dark:text-white`}>450+</div><div className={statLabel}>Coaching Centers Active</div></div>
-              <div><div className={`${stat} text-[#34C759] dark:text-[#30D158]`}>₹4.8 Cr+</div><div className={statLabel}>UPI Fees Reconciled</div></div>
-              <div><div className={`${stat} text-[#FF9500] dark:text-[#FF9F0A]`}>&lt; 20 sec</div><div className={statLabel}>1-Tap Batch Attendance</div></div>
-              <div><div className={`${stat} text-[#0071E3] dark:text-[#2997FF]`}>99.8%</div><div className={statLabel}>Parent Transparency Rate</div></div>
+          <motion.div variants={fadeUpLg} className="pt-10 sm:pt-14">
+            <div className="hover-lift bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-2xl border border-black/[0.06] dark:border-white/[0.08] rounded-3xl p-6 sm:p-8 max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
+              <div>
+                <div className={`${stat} text-[#1D1D1F] dark:text-white`}><CountUp value={450} suffix="+" /></div>
+                <div className={statLabel}>Coaching Centers Active</div>
+              </div>
+              <div>
+                <div className={`${stat} text-[var(--fb-accent)]`}><CountUp value={4.8} decimals={1} prefix="₹" suffix=" Cr+" /></div>
+                <div className={statLabel}>UPI Fees Reconciled</div>
+              </div>
+              <div>
+                <div className={`${stat} text-[var(--fb-primary)]`}><CountUp value={20} prefix="< " suffix=" sec" /></div>
+                <div className={statLabel}>1-Tap Batch Attendance</div>
+              </div>
+              <div>
+                <div className={stat}><span className="text-gradient-brand"><CountUp value={99.8} decimals={1} suffix="%" /></span></div>
+                <div className={statLabel}>Parent Transparency Rate</div>
+              </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* Features */}
       <section id="features" className="scroll-mt-24 py-12 sm:py-20 max-w-7xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
-        <div className="text-center max-w-2xl mx-auto space-y-2">
+        <Reveal className="text-center max-w-2xl mx-auto space-y-2">
           <h2 className={sectionTitle}>Engineered for Indian Realities</h2>
           <p className={heading}>Everything You Need to Run Your Institute</p>
           <p className={`text-[13px] sm:text-sm ${muted}`}>
             Tailored specifically for Indian coaching operations: cash/UPI reconciliations, multi-branch batches, and instant parent communication.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+        <RevealGroup className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {features.map(f => {
             const Icon = f.icon;
             return (
-              <div key={f.title} className={`${card} p-5 sm:p-6 rounded-2xl shadow-xs space-y-3`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${f.tint}`}>
+              <motion.article
+                key={f.title}
+                variants={fadeUp}
+                whileHover={{ y: -4, transition: tFast }}
+                whileTap={{ y: -1, scale: 0.99, transition: { duration: 0.1 } }}
+                className={`group relative overflow-hidden p-5 sm:p-6 rounded-2xl space-y-3 cursor-default transition-[border-color] duration-200 hover:border-[var(--fb-primary-border)] dark:hover:border-[var(--fb-primary-border)] ${card}`}
+              >
+                {/* Gradient sheen that fades in on hover */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-[linear-gradient(135deg,var(--fb-primary-subtle),transparent_45%,var(--fb-accent-subtle))]"
+                />
+                <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center ${f.tint} transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:scale-110 group-hover:-rotate-6`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-bold font-google-sans">{f.title}</h3>
-                <p className={`text-[13px] sm:text-xs ${muted} leading-relaxed`}>{f.text}</p>
-                <ul className={`pt-2 border-t border-black/[0.06] dark:border-white/[0.08] space-y-1.5 text-[13px] sm:text-xs ${muted}`}>
+                <h3 className="relative text-base font-bold font-google-sans">{f.title}</h3>
+                <p className={`relative text-[13px] sm:text-xs ${muted} leading-relaxed`}>{f.text}</p>
+                <ul className={`relative pt-2 border-t border-black/[0.06] dark:border-white/[0.08] space-y-1.5 text-[13px] sm:text-xs ${muted}`}>
                   {f.points.map(p => (
                     <li key={p} className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-[#188038] shrink-0" /> {p}</li>
                   ))}
                 </ul>
-              </div>
+              </motion.article>
             );
           })}
-        </div>
+        </RevealGroup>
       </section>
 
       {/* Role demo */}
       <section id="console-demo" className={`scroll-mt-24 py-12 sm:py-16 bg-white dark:bg-[#1C1C1E] border-y border-black/[0.08] dark:border-white/[0.08] transition-colors`}>
         <div id="interactive-demo" className="scroll-mt-24 max-w-6xl mx-auto px-4 lg:px-8 space-y-6 sm:space-y-8">
-          <div className="text-center max-w-2xl mx-auto space-y-2">
+          <Reveal className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>Role-Based Console Experience</h2>
             <p className={heading}>One Unified OS, Five Dedicated Workspaces</p>
             <p className={`text-[13px] sm:text-sm ${muted}`}>
               Each stakeholder gets a purpose-built workspace with isolated permissions, clean tabular data, and zero noise.
             </p>
-          </div>
+          </Reveal>
 
-          <div className={`flex flex-nowrap sm:flex-wrap items-center sm:justify-center gap-1.5 p-1 bg-black/[0.04] dark:bg-white/[0.06] rounded-xl ${border} w-full sm:w-fit mx-auto overflow-x-auto`}>
+          {/* Role switcher with sliding indigo pill */}
+          <Reveal variant="fade" className={`flex flex-nowrap sm:flex-wrap items-center sm:justify-center gap-1.5 p-1 bg-black/[0.04] dark:bg-white/[0.06] rounded-xl ${border} w-full sm:w-fit mx-auto overflow-x-auto`}>
             {roleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activePreviewTab === tab.id;
@@ -369,20 +687,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setActivePreviewTab(tab.id)}
-                  className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
+                  aria-current={isActive ? 'true' : undefined}
+                  className={`relative flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
                     isActive
-                      ? 'bg-white dark:bg-[#2C2C2E] text-[#1D1D1F] dark:text-white font-bold shadow-xs border border-amber-500/40'
+                      ? 'text-white shadow-xs'
                       : `${muted} hover:text-[#1D1D1F] dark:hover:text-white`
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5 text-[#FFA000]" />
-                  <span>{tab.label}</span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="roleTabPill"
+                      transition={tSpring}
+                      className="absolute inset-0 rounded-lg bg-[var(--fb-primary)] shadow-[0_2px_12px_rgba(79,70,229,0.4)]"
+                    />
+                  )}
+                  <Icon className={`relative z-10 w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-[var(--fb-primary)]'}`} />
+                  <span className="relative z-10">{tab.label}</span>
                 </button>
               );
             })}
-          </div>
+          </Reveal>
 
-          <div className={`bg-[#F5F5F7] dark:bg-[#000000] rounded-2xl ${border} overflow-hidden shadow-lg ring-1 ring-black/5 dark:ring-white/5`}>
+          <Reveal variant="scale" delay={0.05} className={`bg-[#F5F5F7] dark:bg-[#000000] rounded-2xl ${border} overflow-hidden shadow-lg ring-1 ring-black/5 dark:ring-white/5`}>
             <div className={`bg-white dark:bg-[#1C1C1E] px-3 sm:px-4 py-3 border-b border-black/[0.08] dark:border-white/[0.08] flex items-center justify-between gap-3 text-xs`}>
               <div className="flex items-center space-x-2 flex-shrink-0">
                 <div className="w-3 h-3 rounded-full bg-[#FF5F56]"></div>
@@ -394,13 +720,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <div className={`flex-1 max-w-md mx-2 hidden sm:flex items-center space-x-2 px-3 py-1 rounded-md bg-black/[0.03] dark:bg-white/[0.06] ${muted} text-[11px] font-mono ${border}`}>
                 <ShieldCheck className="w-3 h-3 text-[#188038] flex-shrink-0" />
-                <span className="truncate">https://console.vidyaos.in/apex-academy/{activePreviewTab.toLowerCase().replace('_', '-')}</span>
-                <span className="ml-auto text-[9px] px-1 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-sans font-bold flex-shrink-0">12ms</span>
+                <span className="truncate" title="Live preview session — one-click launch from this demo">
+                  https://console.vidyaos.in/apex-academy/{activePreviewTab.toLowerCase().replace('_', '-')}
+                </span>
+                <LiveLatencyChip />
               </div>
 
               <button
                 onClick={() => onSelectRole(activePreviewTab)}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[#E65100] dark:text-[#FFCA28] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer flex-shrink-0 ml-auto sm:ml-0"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--fb-primary-subtle)] text-[var(--fb-primary)] border border-[var(--fb-primary-border)] hover:bg-[var(--fb-primary)] hover:text-white transition-colors duration-150 cursor-pointer flex-shrink-0 ml-auto sm:ml-0 active:scale-95"
               >
                 <span className="hidden sm:inline">Launch Live Session</span>
                 <span className="sm:hidden">Launch</span>
@@ -408,165 +736,143 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </div>
 
-            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-              {activePreviewTab === 'CENTER_ADMIN' && (
-                <div className="space-y-4">
-                  <div className={`${card} border-l-4 border-l-[#FFA000] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusChip label="DAILY PRIORITY" variant="warning" size="xs" />
-                        <span className={`text-xs ${muted}`}>Apex Science Academy · Session 2026–27</span>
+            <div className="p-3 sm:p-6">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={activePreviewTab}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.24, ease: easings.outQuart }}
+                  className="space-y-4 sm:space-y-6"
+                >
+                  {activePreviewTab === 'CENTER_ADMIN' && (
+                    <div className="space-y-4">
+                      <div className={`${card} border-l-4 border-l-[var(--fb-primary)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusChip label="DAILY PRIORITY" variant="warning" size="xs" />
+                            <span className={`text-xs ${muted}`}>Apex Science Academy · Session 2026–27</span>
+                          </div>
+                          <h4 className="font-google-sans font-bold text-sm sm:text-base mt-1">
+                            Aaj Ka Kaam · 1-Tap Attendance & Overdue WhatsApp UPI
+                          </h4>
+                        </div>
+                        <span className="text-xs font-mono font-semibold text-[#188038] break-all">Counter UPI: apex@okaxis</span>
                       </div>
-                      <h4 className="font-google-sans font-bold text-sm sm:text-base mt-1">
-                        Aaj Ka Kaam · 1-Tap Attendance & Overdue WhatsApp UPI
-                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className={`${card} hover-lift p-4 rounded-xl`}>
+                          <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Enrolled Students</span>
+                          <div className="text-2xl font-bold font-google-sans mt-1">214</div>
+                          <span className="text-[11px] text-[var(--fb-primary)]">Across 8 active batches</span>
+                        </div>
+                        <div className={`${card} hover-lift p-4 rounded-xl`}>
+                          <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Today's Attendance</span>
+                          <div className="text-2xl font-bold font-google-sans text-[#188038] dark:text-[#30D158] mt-1">94.8%</div>
+                          <span className="text-[11px] text-[#188038] dark:text-[#30D158]">↑ 3.2% this month</span>
+                        </div>
+                        <div className={`${card} hover-lift p-4 rounded-xl`}>
+                          <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Pending Fees Due</span>
+                          <div className="text-2xl font-bold font-google-sans text-[var(--fb-primary)] mt-1">₹42,500</div>
+                          <span className={`text-[11px] ${muted}`}>14 collections pending</span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-xs font-mono font-semibold text-[#188038] break-all">Counter UPI: apex@okaxis</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className={`${card} p-4 rounded-xl`}>
-                      <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Enrolled Students</span>
-                      <div className="text-2xl font-bold font-google-sans mt-1">214</div>
-                      <span className="text-[11px] text-[#0071E3] dark:text-[#2997FF]">Across 8 active batches</span>
-                    </div>
-                    <div className={`${card} p-4 rounded-xl`}>
-                      <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Today's Attendance</span>
-                      <div className="text-2xl font-bold font-google-sans text-[#188038] dark:text-[#30D158] mt-1">94.8%</div>
-                      <span className="text-[11px] text-[#188038] dark:text-[#30D158]">↑ 3.2% this month</span>
-                    </div>
-                    <div className={`${card} p-4 rounded-xl`}>
-                      <span className={`${muted} font-semibold uppercase tracking-wider text-[10px]`}>Pending Fees Due</span>
-                      <div className="text-2xl font-bold font-google-sans text-[#E65100] dark:text-[#FFCA28] mt-1">₹42,500</div>
-                      <span className={`text-[11px] ${muted}`}>14 collections pending</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {activePreviewTab === 'PARENT' && (
-                <div className="space-y-4">
-                  <div className={`${card} p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-xs ${muted}`}>Logged in Parent:</span>
-                        <strong className="text-xs">Rajesh Sharma</strong>
-                        <StatusChip label="OTP VERIFIED" variant="success" size="xs" />
+                  {activePreviewTab === 'PARENT' && (
+                    <div className="space-y-4">
+                      <div className={`${card} p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`text-xs ${muted}`}>Logged in Parent:</span>
+                            <strong className="text-xs">Rajesh Sharma</strong>
+                            <StatusChip label="OTP VERIFIED" variant="success" size="xs" />
+                          </div>
+                          <div className="text-sm font-bold font-google-sans mt-1">
+                            Rahul Sharma (Class 10 CBSE) · Next Class: Today, 5:00 PM
+                          </div>
+                        </div>
+                        <PayFeeButton />
                       </div>
-                      <div className="text-sm font-bold font-google-sans mt-1">
-                        Rahul Sharma (Class 10 CBSE) · Next Class: Today, 5:00 PM
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { l: 'Attendance', v: '92%', c: 'text-[#188038] dark:text-[#30D158]', s: 'Present Today' },
+                          { l: 'Fees Due', v: '₹2,500', c: 'text-[var(--fb-primary)]', s: 'Due 10 Oct' },
+                          { l: 'Latest Score', v: '44 / 50', c: 'text-[var(--fb-primary)]', s: 'Rank #2' },
+                          { l: 'Homework', v: 'Checked', c: '', s: '0 Overdue' },
+                        ].map(m => (
+                          <div key={m.l} className={`${card} p-3 rounded-xl text-center`}>
+                            <span className={`text-[10px] ${muted} uppercase font-bold`}>{m.l}</span>
+                            <div className={`text-xl font-bold mt-0.5 ${m.c}`}>{m.v}</div>
+                            <span className={`text-[10px] ${muted}`}>{m.s}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <ConsoleButton variant="primary" size="sm" icon={<QrCode className="w-3.5 h-3.5" />} className="justify-center">
-                      Pay Fee (₹2,500)
-                    </ConsoleButton>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {[
-                      { l: 'Attendance', v: '92%', c: 'text-[#188038] dark:text-[#30D158]', s: 'Present Today' },
-                      { l: 'Fees Due', v: '₹2,500', c: 'text-[#FFA000] dark:text-[#FFCA28]', s: 'Due 10 Oct' },
-                      { l: 'Latest Score', v: '44 / 50', c: 'text-[#0071E3] dark:text-[#2997FF]', s: 'Rank #2' },
-                      { l: 'Homework', v: 'Checked', c: '', s: '0 Overdue' },
-                    ].map(m => (
-                      <div key={m.l} className={`${card} p-3 rounded-xl text-center`}>
-                        <span className={`text-[10px] ${muted} uppercase font-bold`}>{m.l}</span>
-                        <div className={`text-xl font-bold mt-0.5 ${m.c}`}>{m.v}</div>
-                        <span className={`text-[10px] ${muted}`}>{m.s}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {activePreviewTab === 'TEACHER' && (
-                <div className={`${card} p-4 rounded-xl space-y-3`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-bold">Batch Roster Attendance (Class 10 CBSE Math)</span>
-                      <p className={`text-[11px] ${muted}`}>Faculty: Prof. Anjali Sharma · 32 Students Enrolled</p>
-                    </div>
-                    <ConsoleButton variant="blue" size="xs" className="justify-center">Mark All 32 Present</ConsoleButton>
-                  </div>
-                  <div className={`p-3 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-xs ${muted} flex items-center justify-between gap-2 border border-black/[0.04] dark:border-white/[0.06]`}>
-                    <span>Rahul Sharma · Roll 10-01</span>
-                    <div className="flex gap-1">
-                      <span className="px-2 py-0.5 rounded bg-[#188038] text-white font-bold text-[10px]">P</span>
-                      <span className="px-2 py-0.5 rounded bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] font-bold text-[10px]">A</span>
-                      <span className="px-2 py-0.5 rounded bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.1] font-bold text-[10px]">L</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                  {activePreviewTab === 'TEACHER' && (
+                    <AttendanceDesk />
+                  )}
 
-              {activePreviewTab === 'STUDENT' && (
-                <div className={`${card} p-4 rounded-xl space-y-3`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-bold">Student Academic Vault · Rahul Sharma</span>
-                      <p className={`text-[11px] ${muted}`}>Class 10 CBSE · Mathematics & Science</p>
-                    </div>
-                    <div><StatusChip label="RANK #2" variant="success" size="xs" /></div>
-                  </div>
-                  <div className="p-3 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 border border-black/[0.04] dark:border-white/[0.06]">
-                    <div>
-                      <span className="font-semibold">Diagnostic Test 3: Trigonometry</span>
-                      <p className={`text-[10px] ${muted}`}>Scored 44/50 (88%) · Percentile: 94th</p>
-                    </div>
-                    <ConsoleButton variant="secondary" size="xs" className="justify-center">View Solution</ConsoleButton>
-                  </div>
-                </div>
-              )}
+                  {activePreviewTab === 'STUDENT' && (
+                    <StudentTestCard />
+                  )}
 
-              {activePreviewTab === 'PLATFORM_OWNER' && (
-                <div className={`${card} p-4 rounded-xl space-y-3`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <span className="text-xs font-bold">Multi-Tenant Platform Control</span>
-                      <p className={`text-[11px] ${muted}`}>450+ Active Coaching Centers across India</p>
-                    </div>
-                    <StatusChip label="HEALTHY" variant="success" size="xs" />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                    {[
-                      { l: 'Monthly MRR', v: '₹18,40,000', c: 'text-[#188038] dark:text-[#30D158]' },
-                      { l: 'Active Quotas', v: '28,400 Students', c: '' },
-                      { l: 'Database Leaks', v: '0 Incidents', c: 'text-[#188038] dark:text-[#30D158]' },
-                    ].map(m => (
-                      <div key={m.l} className="p-2.5 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-center border border-black/[0.04] dark:border-white/[0.06]">
-                        <span className={`text-[10px] ${muted}`}>{m.l}</span>
-                        <div className={`text-lg font-bold ${m.c}`}>{m.v}</div>
+                  {activePreviewTab === 'PLATFORM_OWNER' && (
+                    <div className={`${card} p-4 rounded-xl space-y-3`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-bold">Multi-Tenant Platform Control</span>
+                          <p className={`text-[11px] ${muted}`}>450+ Active Coaching Centers across India</p>
+                        </div>
+                        <StatusChip label="HEALTHY" variant="success" size="xs" />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                        {[
+                          { l: 'Monthly MRR', v: '₹18,40,000', c: 'text-[#188038] dark:text-[#30D158]' },
+                          { l: 'Active Quotas', v: '28,400 Students', c: '' },
+                          { l: 'Database Leaks', v: '0 Incidents', c: 'text-[#188038] dark:text-[#30D158]' },
+                        ].map(m => (
+                          <div key={m.l} className="p-2.5 bg-[#F5F5F7] dark:bg-[#000000] rounded-lg text-center border border-black/[0.04] dark:border-white/[0.06]">
+                            <span className={`text-[10px] ${muted}`}>{m.l}</span>
+                            <div className={`text-lg font-bold ${m.c}`}>{m.v}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Calculator */}
       <section id="fee-calculator" className="scroll-mt-24 py-12 sm:py-20 bg-white dark:bg-[#1C1C1E] border-y border-black/[0.08] dark:border-white/[0.08] transition-colors">
         <div id="roi-calculator" className="scroll-mt-24 max-w-5xl mx-auto px-4 lg:px-8 space-y-8 sm:space-y-10">
-          <div className="text-center max-w-2xl mx-auto space-y-2">
+          <Reveal className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>Course Fee Recovery Estimator</h2>
             <p className={heading}>Calculate Your Recovered Fee Leakage</p>
             <p className={`text-[13px] sm:text-sm ${muted}`}>
               Indian coaching & education centers typically lose 8–12% of total collections to delayed payments, uncollected dues, and lost receipts.
             </p>
-          </div>
+          </Reveal>
 
-          <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-[#F5F5F7] dark:bg-[#000000] p-4 sm:p-8 rounded-2xl ${border}`}>
+          <Reveal className={`grid grid-cols-1 lg:grid-cols-12 gap-6 items-center bg-[#F5F5F7] dark:bg-[#000000] p-4 sm:p-8 rounded-2xl ${border}`}>
             <div className="lg:col-span-7 space-y-6">
               <div>
                 <div className="flex justify-between items-center text-xs font-semibold mb-2">
                   <label htmlFor="students">Enrolled Students:</label>
-                  <span className="text-[#FFA000] font-bold text-sm font-mono">{studentCount} Students</span>
+                  <span className="text-[var(--fb-primary)] font-bold text-sm font-mono">{studentCount} Students</span>
                 </div>
                 <div className="py-2">
                   <input id="students" type="range" min="20" max="1000" step="10" value={studentCount}
                     onChange={e => setStudentCount(Number(e.target.value))}
                     aria-label="Enrolled students"
-                    className="w-full h-2 bg-black/[0.1] dark:bg-white/[0.15] rounded-lg appearance-none cursor-pointer accent-[#FFA000] touch-pan-y" />
+                    className="vidya-range touch-pan-y" />
                 </div>
                 <div className="flex justify-between text-[10px] text-[#86868B] mt-1 font-mono">
                   <span>20</span><span>500</span><span>1,000</span>
@@ -576,13 +882,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div>
                 <div className="flex justify-between items-center text-xs font-semibold mb-2">
                   <label htmlFor="fee">Average Monthly Fee per Student:</label>
-                  <span className="text-[#188038] dark:text-[#30D158] font-bold text-sm font-mono">₹{monthlyFee.toLocaleString('en-IN')}</span>
+                  <span className="text-[var(--fb-accent)] font-bold text-sm font-mono">₹{monthlyFee.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="py-2">
                   <input id="fee" type="range" min="500" max="10000" step="250" value={monthlyFee}
                     onChange={e => setMonthlyFee(Number(e.target.value))}
                     aria-label="Average monthly fee per student"
-                    className="w-full h-2 bg-black/[0.1] dark:bg-white/[0.15] rounded-lg appearance-none cursor-pointer accent-[#188038] dark:accent-[#30D158] touch-pan-y" />
+                    className="vidya-range accent-range touch-pan-y" />
                 </div>
                 <div className="flex justify-between text-[10px] text-[#86868B] mt-1 font-mono">
                   <span>₹500</span><span>₹5,000</span><span>₹10,000</span>
@@ -590,163 +896,242 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               <div className={`p-3.5 rounded-lg ${card} text-[13px] sm:text-xs ${muted} flex items-start gap-2.5`}>
-                <TrendingUp className="w-4 h-4 text-[#FFA000] shrink-0 mt-0.5" />
+                <TrendingUp className="w-4 h-4 text-[var(--fb-primary)] shrink-0 mt-0.5" />
                 <span>
                   Automatic UPI payment links & automated WhatsApp reminders achieve an average <strong>92% on-time collection rate</strong> within 5 days of invoice dispatch.
                 </span>
               </div>
             </div>
 
-            <div className={`lg:col-span-5 ${card} p-5 sm:p-6 rounded-xl space-y-4 text-center`}>
+            <div className={`lg:col-span-5 ${card} p-5 sm:p-6 rounded-xl space-y-4 text-center hover-lift hover:border-[var(--fb-primary-border)] dark:hover:border-[var(--fb-primary-border)]`}>
               <div>
                 <span className={`text-[10px] ${muted} font-semibold uppercase tracking-wider`}>Total Monthly Revenue</span>
-                <div className="text-2xl font-bold font-google-sans mt-1 break-words">₹{totalMonthlyCollection.toLocaleString('en-IN')}</div>
+                <div className="text-2xl font-bold font-google-sans mt-1 break-words">₹<AnimatedNumber value={totalMonthlyCollection} format={fmtINR} /></div>
               </div>
 
-              <div className="p-4 bg-[#E6F4EA] dark:bg-emerald-950/40 rounded-xl border border-[#CEEAD6] dark:border-emerald-800/40">
+              <div className="p-4 bg-[#E6F4EA] dark:bg-emerald-950/40 rounded-xl border border-[#CEEAD6] dark:border-emerald-800/40 transition-transform duration-200 hover:scale-[1.015]">
                 <span className="text-xs text-[#188038] dark:text-[#81C995] font-semibold block">Estimated Fee Leakage Recovered</span>
                 <div className="text-2xl sm:text-3xl font-bold font-google-sans text-[#188038] dark:text-[#81C995] mt-1 break-words">
-                  + ₹{estimatedRecoveredLeakage.toLocaleString('en-IN')}
+                  + ₹<AnimatedNumber value={estimatedRecoveredLeakage} format={fmtINR} />
                 </div>
-                <span className={`text-[10px] ${muted}`}>per month from uncollected or delayed dues</span>
+                <span className={`text-[10px] ${muted}`}>
+                  per month · applies a {(leakageRate * 100).toFixed(1)}% leakage rate (industry range 8–12%)
+                </span>
               </div>
 
-              <div className="p-3 bg-[#FEF7E0] dark:bg-amber-950/40 rounded-xl border border-[#FEEFC3] dark:border-amber-900/40 text-left flex items-center justify-between gap-2">
+              <div className="p-3 bg-[#EAF4FF] dark:bg-blue-950/40 rounded-xl border border-[var(--fb-primary-border)] text-left flex items-center justify-between gap-2 transition-shadow duration-200 hover:shadow-md">
                 <div>
-                  <span className="text-[10px] font-bold text-[#E65100] dark:text-[#FFCA28] uppercase tracking-wider block">Recommended Plan</span>
+                  <span className="text-[10px] font-bold text-[var(--fb-primary)] uppercase tracking-wider block">Recommended Plan</span>
                   <span className="text-xs font-bold">{recommendedPlan.name} ({recommendedPlan.price}/mo)</span>
                 </div>
                 <button type="button" onClick={() => choosePlan(recommendedPlan.id)}
-                  className="text-xs font-bold text-[#E65100] dark:text-[#FFCA28] hover:underline cursor-pointer shrink-0 py-2">
+                  className="text-xs font-bold text-[var(--fb-primary)] hover:underline underline-offset-2 cursor-pointer shrink-0 py-2 transition-colors">
                   Select Plan →
                 </button>
               </div>
 
-              <div className="text-xs text-[#0071E3] dark:text-[#2997FF] font-semibold">⚡ ~{staffHoursSaved} Staff Hours Saved Every Month</div>
+              <div className="text-xs text-[var(--fb-primary)] font-semibold">⚡ ~<AnimatedNumber value={staffHoursSaved} format={fmtInt} /> Staff Hours Saved Every Month</div>
 
               <ConsoleButton variant="primary" size="md" onClick={() => choosePlan(recommendedPlan.id)} className="w-full justify-center">
                 Start with {recommendedPlan.name}
               </ConsoleButton>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Pricing */}
       <section id="pricing-tiers" className="scroll-mt-24 py-12 sm:py-20 max-w-6xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
-        <div id="pricing" className="scroll-mt-24 text-center max-w-2xl mx-auto space-y-2">
-          <h2 className={sectionTitle}>Simple, Transparent Pricing</h2>
-          <p className={heading}>Plans Built for Every Coaching Scale</p>
-          <p className={`text-[13px] sm:text-sm ${muted}`}>
-            No hidden gateway surcharges. Flat transparent pricing (₹599 / ₹1,299 / ₹2,199/mo). 14-day free trial on all plans.
-          </p>
-        </div>
+        <Reveal className="max-w-2xl mx-auto">
+          <div id="pricing" className="scroll-mt-24 text-center space-y-2">
+            <h2 className={sectionTitle}>Simple, Transparent Pricing</h2>
+            <p className={heading}>Plans Built for Every Coaching Scale</p>
+            <p className={`text-[13px] sm:text-sm ${muted}`}>
+              No hidden gateway surcharges. Flat transparent pricing (₹599 / ₹1,299 / ₹2,199/mo). 14-day free trial on all plans.
+            </p>
+          </div>
+        </Reveal>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-md lg:max-w-none mx-auto">
-          {plans.map(p => (
-            <div
-              key={p.id}
-              className={`bg-white dark:bg-[#1C1C1E] p-5 sm:p-6 rounded-2xl flex flex-col justify-between space-y-6 relative ${
-                p.featured
-                  ? 'border-2 border-[#FFA000] shadow-lg lg:-translate-y-2 order-first lg:order-none'
-                  : border
-              }`}
-            >
-              {p.featured && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <StatusChip label="MOST POPULAR" variant="warning" size="xs" />
-                </div>
-              )}
-              <div className="space-y-4">
-                <div>
-                  <span className={`text-xs font-bold uppercase tracking-wider ${p.featured ? 'text-[#E65100] dark:text-[#FFCA28]' : 'text-[#86868B]'}`}>{p.name}</span>
-                  <div className="text-3xl font-bold font-google-sans mt-1">
-                    {p.price}<span className="text-xs font-normal text-[#86868B]">/mo</span>
+        <RevealGroup className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-md lg:max-w-none mx-auto">
+          {plans.map(p => {
+            const isRecommended = recommendedPlan.id === p.id;
+            const cardVariants: Variants = {
+              hidden: { opacity: 0, y: 18, scale: p.featured ? 0.96 : 0.99 },
+              visible: { opacity: 1, y: 0, scale: p.featured ? 1.03 : 1, transition: tDefault },
+            };
+            return (
+              <motion.div
+                key={p.id}
+                variants={cardVariants}
+                role="button"
+                tabIndex={0}
+                aria-label={`Choose the ${p.name} plan`}
+                onClick={() => choosePlan(p.id)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    choosePlan(p.id);
+                  }
+                }}
+                whileHover={{ y: -4, transition: tFast }}
+                whileTap={{ y: -1, scale: 0.99, transition: { duration: 0.1 } }}
+                className={`relative text-left cursor-pointer bg-white dark:bg-[#1C1C1E] p-5 sm:p-7 rounded-2xl flex flex-col justify-between space-y-6 transition-[border-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fb-primary-border)] shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] ${
+                  isRecommended
+                    ? 'border-2 border-[var(--fb-primary)] ring-4 ring-[var(--fb-primary-subtle)]'
+                    : p.featured
+                      ? 'border-2 border-[var(--fb-accent-border)] hover:border-[var(--fb-primary-border)] dark:hover:border-[var(--fb-primary-border)]'
+                      : `${border} hover:border-[var(--fb-primary-border)] dark:hover:border-[var(--fb-primary-border)] hover:shadow-lg dark:hover:shadow-[0_16px_40px_rgba(0,0,0,0.5)]`
+                }`}
+              >
+                {p.featured && (
+                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5 gradient-brand rounded-t-2xl" />
+                )}
+                {p.featured && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <StatusChip label="MOST POPULAR" variant="warning" size="xs" />
                   </div>
-                  <p className="text-[13px] sm:text-xs text-[#86868B] mt-1">{p.blurb}</p>
+                )}
+                <div className="space-y-4">
+                  <div>
+                    {isRecommended && (
+                      <motion.span
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={tFast}
+                        className="inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[var(--fb-accent-subtle)] text-[var(--fb-accent-text)] border border-[var(--fb-accent-border)]"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Best for {studentCount} students
+                      </motion.span>
+                    )}
+                    <span className={`block text-xs font-bold uppercase tracking-wider ${p.featured ? 'text-[var(--fb-primary)]' : 'text-[#86868B]'}`}>{p.name}</span>
+                    <div className="text-3xl font-bold font-google-sans mt-1">
+                      {p.price}<span className="text-xs font-normal text-[#86868B]">/mo</span>
+                    </div>
+                    <p className="text-[13px] sm:text-xs text-[#86868B] mt-1">{p.blurb}</p>
+                  </div>
+                  <ul className={`space-y-2 text-[13px] sm:text-xs border-t border-black/[0.08] dark:border-white/[0.08] pt-4 ${p.featured ? 'font-medium' : muted}`}>
+                    {p.items.map(i => (
+                      <li key={i} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-[#188038] dark:text-[#30D158] shrink-0" /> {i}</li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className={`space-y-2 text-[13px] sm:text-xs border-t border-black/[0.08] dark:border-white/[0.08] pt-4 ${p.featured ? 'font-medium' : muted}`}>
-                  {p.items.map(i => (
-                    <li key={i} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-[#188038] dark:text-[#30D158] shrink-0" /> {i}</li>
-                  ))}
-                </ul>
-              </div>
-              <ConsoleButton variant={p.featured ? 'primary' : 'secondary'} size="md" onClick={() => choosePlan(p.id)} className="w-full justify-center">
-                {p.cta}
-              </ConsoleButton>
-            </div>
-          ))}
-        </div>
+                <ConsoleButton
+                  variant={p.featured ? 'primary' : 'secondary'}
+                  size="md"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="w-full justify-center pointer-events-none"
+                >
+                  {p.cta}
+                </ConsoleButton>
+              </motion.div>
+            );
+          })}
+        </RevealGroup>
       </section>
 
       {/* FAQ */}
       <section id="faqs" className="scroll-mt-24 py-12 sm:py-16 max-w-4xl mx-auto px-4 lg:px-8 space-y-8">
-        <div className="text-center space-y-2">
+        <Reveal className="text-center space-y-2">
           <h2 className={sectionTitle}>Frequently Asked Questions</h2>
           <p className="text-xl sm:text-2xl font-bold font-google-sans">Answers for Coaching Center Owners</p>
-        </div>
+        </Reveal>
 
-        <div className="space-y-2.5">
-          {faqs.map((faq, idx) => (
-            <div key={idx} className={`${card} rounded-xl overflow-hidden transition`}>
-              <button
-                onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                aria-expanded={openFaq === idx}
-                className="w-full min-h-[48px] p-4 text-left flex items-center justify-between gap-2 text-[13px] sm:text-xs font-bold cursor-pointer"
-              >
-                <span>{faq.q}</span>
-                {openFaq === idx
-                  ? <ChevronUp className="w-4 h-4 text-[#FFA000] shrink-0" />
-                  : <ChevronDown className="w-4 h-4 text-[#86868B] shrink-0" />}
-              </button>
-              {openFaq === idx && (
-                <div className={`px-4 pb-4 pt-3 text-[13px] sm:text-xs ${muted} leading-relaxed border-t border-black/[0.08] dark:border-white/[0.08]`}>
-                  {faq.a}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <RevealGroup className="space-y-2.5">
+          {faqs.map((faq, idx) => {
+            const isOpen = openFaq === idx;
+            return (
+              <motion.div key={idx} variants={fadeUp} className={`${card} rounded-xl overflow-hidden transition-shadow duration-200 hover:shadow-[0_8px_28px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_8px_28px_rgba(0,0,0,0.5)]`}>
+                <button
+                  onClick={() => setOpenFaq(isOpen ? null : idx)}
+                  aria-expanded={isOpen}
+                  className={`w-full min-h-[48px] p-4 text-left flex items-center justify-between gap-2 text-[13px] sm:text-xs font-bold cursor-pointer transition-colors duration-150 ${
+                    isOpen ? 'text-[var(--fb-primary)]' : 'hover:text-[var(--fb-primary)]'
+                  }`}
+                >
+                  <span>{faq.q}</span>
+                  <motion.span
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    transition={tFast}
+                    className={`shrink-0 ${isOpen ? 'text-[var(--fb-primary)]' : 'text-[#86868B]'}`}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </motion.span>
+                </button>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.26, ease: easings.outQuart }}
+                      className="overflow-hidden"
+                    >
+                      <div className={`px-4 pb-4 pt-3 text-[13px] sm:text-xs ${muted} leading-relaxed border-t border-black/[0.08] dark:border-white/[0.08]`}>
+                        {faq.a}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            );
+          })}
+        </RevealGroup>
       </section>
 
       {/* Final CTA */}
-      <section className="py-12 sm:py-16 bg-[#051E34] text-white">
-        <div className="max-w-4xl mx-auto px-4 text-center space-y-6">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 text-xs font-semibold text-[#FFCA28]">
+      <section className="relative overflow-hidden py-14 sm:py-20 text-white">
+        <div aria-hidden="true" className="absolute inset-0 gradient-brand" />
+        <div aria-hidden="true" className="absolute inset-0 bg-[#0B0A1F]/70" />
+        <div aria-hidden="true" className="absolute -top-20 -left-24 -right-24 h-72 rounded-full bg-[radial-gradient(circle,rgba(251,146,60,0.32),transparent_65%)] blur-3xl animate-float" />
+
+        <Reveal variant="up-lg" className="relative z-10 max-w-4xl mx-auto px-4 text-center space-y-6">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-semibold text-[#FDBA74]">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Set up in under 60 seconds</span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-bold font-google-sans tracking-tight">
             Ready to modernize your coaching center?
           </h2>
-          <p className="text-[13px] sm:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
+          <p className="text-[13px] sm:text-sm text-white/70 max-w-xl mx-auto leading-relaxed">
             Join hundreds of Indian coaching and education centers saving 40+ hours every month on fee follow-ups, paper attendance registers, and parent communications.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 w-full max-w-sm sm:max-w-none mx-auto">
             <ConsoleButton variant="primary" size="lg" iconRight={<ArrowRight className="w-4 h-4" />}
-              onClick={() => onSelectRole('CENTER_ADMIN')} className="w-full sm:w-auto justify-center">
+              onClick={() => onSelectRole('CENTER_ADMIN')}
+              className="w-full sm:w-auto justify-center hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(79,70,229,0.6)]">
               Launch Live Center Admin Demo
             </ConsoleButton>
             <ConsoleButton variant="secondary" size="lg" onClick={onEnterApp}
-              className="w-full sm:w-auto justify-center bg-white/10 text-white border-white/20 hover:bg-white/20 dark:bg-white/10 dark:text-white">
+              className="w-full sm:w-auto justify-center bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white hover:-translate-y-0.5 dark:bg-white/10 dark:text-white">
               Enter VidyaOS Application
             </ConsoleButton>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* Footer */}
       <footer className={`bg-white dark:bg-[#1C1C1E] border-t border-black/[0.08] dark:border-white/[0.08] py-8 px-4 lg:px-8 text-xs ${muted}`}>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center text-center md:text-left justify-between gap-4">
+        <Reveal variant="fade" className="max-w-7xl mx-auto flex flex-col md:flex-row items-center text-center md:text-left justify-between gap-4">
           <VidyaLogo size="sm" badgeText="ENTERPRISE" subtitle="Operating System for Coaching & Education Centers" />
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            <button onClick={() => onSelectRole('CENTER_ADMIN')} className="hover:text-[#FFA000] cursor-pointer py-1">Center Admin</button>
-            <button onClick={() => onSelectRole('PARENT')} className="hover:text-[#FFA000] cursor-pointer py-1">Parent Portal</button>
-            <button onClick={() => onSelectRole('TEACHER')} className="hover:text-[#FFA000] cursor-pointer py-1">Teacher Desk</button>
-            <button onClick={() => onSelectRole('STUDENT')} className="hover:text-[#FFA000] cursor-pointer py-1">Student Workspace</button>
+            <button onClick={() => onSelectRole('CENTER_ADMIN')} className="hover:text-[var(--fb-accent)] transition-colors duration-150 cursor-pointer py-1">Center Admin</button>
+            <button onClick={() => onSelectRole('PARENT')} className="hover:text-[var(--fb-accent)] transition-colors duration-150 cursor-pointer py-1">Parent Portal</button>
+            <button onClick={() => onSelectRole('TEACHER')} className="hover:text-[var(--fb-accent)] transition-colors duration-150 cursor-pointer py-1">Teacher Desk</button>
+            <button onClick={() => onSelectRole('STUDENT')} className="hover:text-[var(--fb-accent)] transition-colors duration-150 cursor-pointer py-1">Student Workspace</button>
+            {onOpenArchitecture && (
+              <button
+                onClick={onOpenArchitecture}
+                className="inline-flex items-center gap-1.5 hover:text-[var(--fb-accent)] transition-colors duration-150 cursor-pointer py-1"
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>View Architecture</span>
+              </button>
+            )}
           </div>
           <div>© 2026 VidyaOS Technologies India Pvt Ltd. All rights reserved.</div>
-        </div>
+        </Reveal>
       </footer>
 
       <PwaInstallModal isOpen={isPwaModalOpen} onClose={() => setIsPwaModalOpen(false)} pwaState={pwaState} />

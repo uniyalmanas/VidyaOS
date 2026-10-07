@@ -55,9 +55,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles, ch
           <div className="flex gap-2">
             <button
               onClick={() => {
-                const myPortal = currentUser.role === 'CENTER_ADMIN' ? '/admin'
-                  : currentUser.role === 'TEACHER' ? '/teacher'
+                // Note: STAFF belongs to the admin console too, and the admin route is
+                // tenant-scoped (`/admin/:orgId`) — pointing at bare `/admin` only ever
+                // worked by bouncing through a second redirect, and STAFF fell through
+                // to `/` instead.
+                const myPortal = (currentUser.role === 'CENTER_ADMIN' || currentUser.role === 'STAFF')
+                  ? (currentUser.orgId ? `/admin/${currentUser.orgId}` : '/admin')
                   : currentUser.role === 'PARENT' ? '/parent'
+                  : currentUser.role === 'TEACHER' ? '/teacher'
                   : currentUser.role === 'STUDENT' ? '/student'
                   : currentUser.role === 'PLATFORM_OWNER' ? '/owner'
                   : '/';

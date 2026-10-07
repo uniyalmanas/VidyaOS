@@ -54,6 +54,20 @@ service cloud.firestore {
       );
     }
 
+    function isStudent() {
+      return isSignedIn() && hasUserDoc() && getUserRole() == 'STUDENT';
+    }
+
+    function isParent() {
+      return isSignedIn() && hasUserDoc() && getUserRole() == 'PARENT';
+    }
+
+    function ownsOrganization(orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerUid == request.auth.uid;
+    }
+
     // Strict multi-tenant isolation helper (NO unprofiled bypass)
     function isTenantMember(orgId) {
       return isSignedIn() && orgId != null && (
@@ -75,18 +89,26 @@ service cloud.firestore {
     // USER PROFILES & ROLES
     // ------------------------------------------------------------------------
     match /users/{userId} {
-      // User can read their own profile, or tenant admin/staff in the same center, or platform owner
+      // User profiles contain contact details; restrict listing to their owner and trusted admins.
       allow read: if isSignedIn() && (
         request.auth.uid == userId ||
         isPlatformOwner() ||
-        (hasUserDoc() && resource.data.orgId != null && getUserOrgId() == resource.data.orgId)
+        (hasUserDoc() && isCenterAdmin() &&
+         resource.data.orgId != null && getUserOrgId() == resource.data.orgId)
       );
 
-      // User can create their own profile upon authentication; Admins can provision staff/teachers in their org
+      // Self-registration is restricted to the owner profile of an organization the caller owns.
+      // Other roles must be provisioned by an existing center admin or platform owner.
       allow create: if isSignedIn() && (
-        request.auth.uid == userId ||
+        (request.auth.uid == userId &&
+         request.resource.data.uid == request.auth.uid &&
+         request.resource.data.role == 'CENTER_ADMIN' &&
+         request.resource.data.orgId is string &&
+         ownsOrganization(request.resource.data.orgId)) ||
         isPlatformOwner() ||
-        (isCenterAdmin() && hasUserDoc() && request.resource.data.orgId == getUserOrgId())
+        (isCenterAdmin() && hasUserDoc() &&
+         request.resource.data.orgId == getUserOrgId() &&
+         request.resource.data.role in ['CENTER_ADMIN', 'STAFF', 'TEACHER', 'STUDENT', 'PARENT'])
       );
 
       // Updates: Users can update their own non-sensitive profile (name, phone, avatar).
@@ -95,8 +117,15 @@ service cloud.firestore {
         isPlatformOwner() ||
         (request.auth.uid == userId && 
          request.resource.data.role == resource.data.role && 
-         request.resource.data.orgId == resource.data.orgId) ||
-        (isCenterAdmin() && hasUserDoc() && resource.data.orgId == getUserOrgId() && request.resource.data.orgId == resource.data.orgId)
+         (request.resource.data.orgId == resource.data.orgId ||
+          (request.resource.data.role == 'CENTER_ADMIN' &&
+           ownsOrganization(request.resource.data.orgId))) &&
+         (!('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid) &&
+         (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid)) ||
+        (isCenterAdmin() && hasUserDoc() &&
+         resource.data.orgId == getUserOrgId() &&
+         request.resource.data.orgId == resource.data.orgId &&
+         request.resource.data.role in ['CENTER_ADMIN', 'STAFF', 'TEACHER', 'STUDENT', 'PARENT'])
       );
 
       // Only Platform Owner can permanently delete user records
@@ -107,14 +136,25 @@ service cloud.firestore {
     // ORGANIZATIONS (TUITION & COACHING CENTERS)
     // ------------------------------------------------------------------------
     match /organizations/{orgId} {
-      // Public read for coaching center directory, branding, and registration discovery
-      allow read: if true;
+      // Center contact details are visible only to its members, owner, matching account, or platform owner.
+      allow read: if isSignedIn() && (
+        isPlatformOwner() ||
+        isTenantMember(orgId) ||
+        resource.data.ownerUid == request.auth.uid ||
+        (request.auth.token.email != null && resource.data.email == request.auth.token.email)
+      );
 
-      // Creating a new organization allowed during onboarding or by Platform Owner
-      allow create: if isSignedIn();
+      // Self-service onboarding may create only a new organization owned by the caller.
+      allow create: if isSignedIn() &&
+        request.resource.data.id == orgId &&
+        request.resource.data.ownerUid == request.auth.uid;
 
       // Only Center Admin of that organization or Platform Owner can update center profile & settings
-      allow update: if isTenantMember(orgId) && (isCenterAdmin() || isPlatformOwner());
+      allow update: if isTenantMember(orgId) &&
+        (isCenterAdmin() || isPlatformOwner()) &&
+        ((!('ownerUid' in resource.data) && !('ownerUid' in request.resource.data)) ||
+          request.resource.data.ownerUid == resource.data.ownerUid) &&
+        request.resource.data.id == resource.data.id;
 
       // Only Platform Owner can delete an entire organization
       allow delete: if isPlatformOwner();
@@ -184,11 +224,93 @@ service cloud.firestore {
 
       allow update: if isSignedIn() && 
         isTenantMember(resource.data.orgId) &&
+        isCenterStaffOrAdmin(resource.data.orgId) &&
         request.resource.data.orgId == resource.data.orgId;
 
       allow delete: if isSignedIn() && 
         isTenantMember(resource.data.orgId) && 
         (isCenterAdmin() || isPlatformOwner());
+    }
+
+    // ------------------------------------------------------------------------
+    // PENDING PAYER-REPORTED UPI TRANSFERS
+    // ------------------------------------------------------------------------
+    function isLinkedToStudent(studentId) {
+      let studentPath = /databases/$(database)/documents/students/$(studentId);
+      return exists(studentPath) && (
+        get(studentPath).data.userId == request.auth.uid ||
+        get(studentPath).data.guardian.parentUserId == request.auth.uid ||
+        (hasUserDoc() &&
+         getUserDoc().linkedStudentIds is list &&
+         getUserDoc().linkedStudentIds.hasAny([studentId]))
+      );
+    }
+
+    function isValidPaymentSubmission(data) {
+      return data.keys().hasOnly([
+          'id', 'orgId', 'invoiceId', 'studentId', 'amount', 'paymentMethod',
+          'transactionRef', 'upiApp', 'submittedBy', 'submittedByName',
+          'submittedAt', 'status', 'reviewedBy', 'reviewedAt', 'rejectionReason'
+        ]) &&
+        data.keys().hasAll([
+          'id', 'orgId', 'invoiceId', 'studentId', 'amount', 'paymentMethod',
+          'transactionRef', 'submittedBy', 'submittedByName', 'submittedAt', 'status'
+        ]) &&
+        data.id is string && data.id.size() <= 100 &&
+        data.orgId is string && data.orgId.size() <= 100 &&
+        data.invoiceId is string && data.invoiceId.size() <= 150 &&
+        data.studentId is string && data.studentId.size() <= 150 &&
+        data.amount is number && data.amount > 0 && data.amount <= 10000000 &&
+        data.paymentMethod == 'UPI' &&
+        data.transactionRef is string && data.transactionRef.matches('^[0-9]{12}$') &&
+        data.submittedBy is string && data.submittedBy.size() <= 128 &&
+        data.submittedByName is string && data.submittedByName.size() > 0 && data.submittedByName.size() <= 100 &&
+        data.submittedAt is string && data.submittedAt.size() <= 40 &&
+        data.status in ['pending_verification', 'verified', 'rejected'] &&
+        (!('upiApp' in data) || data.upiApp in ['gpay', 'phonepe', 'paytm', 'bhim']) &&
+        (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 128)) &&
+        (!('reviewedAt' in data) || (data.reviewedAt is string && data.reviewedAt.size() <= 40)) &&
+        (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 200));
+    }
+
+    match /paymentSubmissions/{submissionId} {
+      allow read: if isSignedIn() && (
+        (resource.data.submittedBy == request.auth.uid) ||
+        isCenterStaffOrAdmin(resource.data.orgId)
+      );
+
+      allow create: if isSignedIn() &&
+        isValidPaymentSubmission(request.resource.data) &&
+        request.resource.data.id == submissionId &&
+        request.resource.data.submittedBy == request.auth.uid &&
+        request.resource.data.status == 'pending_verification' &&
+        request.resource.data.paymentMethod == 'UPI' &&
+        (isStudent() || isParent()) &&
+        isTenantMember(request.resource.data.orgId) &&
+        isLinkedToStudent(request.resource.data.studentId) &&
+        exists(/databases/$(database)/documents/invoices/$(request.resource.data.invoiceId)) &&
+        get(/databases/$(database)/documents/invoices/$(request.resource.data.invoiceId)).data.orgId == request.resource.data.orgId &&
+        get(/databases/$(database)/documents/invoices/$(request.resource.data.invoiceId)).data.studentId == request.resource.data.studentId &&
+        request.resource.data.amount <=
+          get(/databases/$(database)/documents/invoices/$(request.resource.data.invoiceId)).data.netAmount -
+          get(/databases/$(database)/documents/invoices/$(request.resource.data.invoiceId)).data.paidAmount;
+
+      allow update: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId) &&
+        isValidPaymentSubmission(request.resource.data) &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.invoiceId == resource.data.invoiceId &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.amount == resource.data.amount &&
+        request.resource.data.transactionRef == resource.data.transactionRef &&
+        request.resource.data.submittedBy == resource.data.submittedBy &&
+        resource.data.status == 'pending_verification' &&
+        request.resource.data.status in ['verified', 'rejected'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'reviewedBy', 'reviewedAt', 'rejectionReason'
+        ]);
+
+      allow delete: if isSignedIn() && isCenterStaffOrAdmin(resource.data.orgId);
     }
 
     // ------------------------------------------------------------------------
@@ -221,8 +343,10 @@ service cloud.firestore {
     // EXAM RESULTS & MARKS
     // ------------------------------------------------------------------------
     match /examResults/{resultId} {
+      // Only tenant members can read exam results. Removed the orgId==null bypass
+      // that allowed orphaned/unseeded results to leak across tenants.
       allow read: if isSignedIn() && (
-        resource.data.orgId == null || isTenantMember(resource.data.orgId)
+        isTenantMember(resource.data.orgId)
       );
 
       // Only teachers and center admins within tenant can create, update, delete graded results
@@ -270,14 +394,37 @@ service cloud.firestore {
     // ------------------------------------------------------------------------
     match /chatChannels/{channelId} {
       allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
-      allow create, update, delete: if isSignedIn() && isTenantMember(request.resource.data.orgId);
+      // Only staff may create or remove channels.
+      allow create: if isSignedIn() &&
+        isTenantMember(request.resource.data.orgId) &&
+        isCenterInstructorOrAdmin(request.resource.data.orgId);
+      allow delete: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        isCenterInstructorOrAdmin(resource.data.orgId);
+      // Any tenant member may bump the last-message preview when sending, but
+      // nobody may rewrite allowedRoles/isPrivate after the fact — otherwise a
+      // student could add themselves to the faculty lounge.
+      allow update: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['lastMessage', 'lastMessageTime', 'lastMessageMs']);
     }
 
     match /chatMessages/{messageId} {
       allow read: if isSignedIn() && isTenantMember(resource.data.orgId);
-      allow create: if isSignedIn() && isTenantMember(request.resource.data.orgId);
-      allow update, delete: if isSignedIn() && isTenantMember(resource.data.orgId) && 
+      // Require senderId to match authenticated user to prevent message spoofing
+      allow create: if isSignedIn() &&
+        isTenantMember(request.resource.data.orgId) &&
+        request.resource.data.senderId == request.auth.uid;
+      // Editing or deleting a message: only its author, an org admin, or the
+      // platform owner.
+      allow update, delete: if isSignedIn() && isTenantMember(resource.data.orgId) &&
         (request.auth.uid == resource.data.senderId || isCenterAdmin() || isPlatformOwner());
+      // Reacting mutates ONLY the reactions map, so any tenant member may toggle
+      // reactions on any message without thereby gaining the right to edit it.
+      allow update: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
     }
 
     // ------------------------------------------------------------------------

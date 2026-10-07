@@ -22,8 +22,28 @@ import {
   DataTable,
   ConsoleCard,
   ConsoleButton,
-  StatusChip
+  StatusChip,
+  Reveal
 } from '../ui';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
+
+/** Inline onboarding modal shell: spring pop-in cascading title → form fields. */
+const orgPanelVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { ...tSpring, delayChildren: 0.05, staggerChildren: 0.06 }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    y: 6,
+    transition: { duration: 0.16, ease: easings.inOut }
+  }
+};
 
 export const PlatformDashboard: React.FC = () => {
   const { navigate } = useRouter();
@@ -35,7 +55,8 @@ export const PlatformDashboard: React.FC = () => {
     createNewOrganization,
     students,
     setCurrentOrgId,
-    switchRole
+    switchRole,
+    showToast
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -64,17 +85,22 @@ export const PlatformDashboard: React.FC = () => {
     o.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCreateOrg = (e: React.FormEvent) => {
+  const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOrgName.trim()) return;
 
-    createNewOrganization({
-      name: newOrgName,
-      ownerName: newOrgOwner,
-      phone: newOrgPhone,
-      city: newOrgCity,
-      planId: newOrgPlan
-    });
+    try {
+      await createNewOrganization({
+        name: newOrgName,
+        ownerName: newOrgOwner,
+        phone: newOrgPhone,
+        city: newOrgCity,
+        planId: newOrgPlan
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not create organization.', 'error');
+      return;
+    }
 
     setShowNewOrgModal(false);
     setNewOrgName('');
@@ -89,7 +115,8 @@ export const PlatformDashboard: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="max-w-7xl mx-auto p-3 sm:p-5 lg:p-8 space-y-4 sm:space-y-6">
+      <div className="relative overflow-hidden rounded-[30px] border border-black/[0.06] dark:border-white/[0.08] bg-[radial-gradient(circle_at_top_left,_rgba(120,120,128,0.07),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(174,174,178,0.1),_transparent_25%),linear-gradient(180deg,rgba(255,255,255,0.78),rgba(242,242,244,0.96))] dark:bg-[radial-gradient(circle_at_top_left,_rgba(174,174,178,0.06),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(174,174,178,0.08),_transparent_25%),linear-gradient(180deg,rgba(28,28,30,0.98),rgba(17,17,19,0.96))] p-3 sm:p-4 shadow-[0_20px_40px_rgba(15,23,42,0.04)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.35)]">
       {/* Platform Header */}
       <PageHeader
         breadcrumbs={[
@@ -115,9 +142,10 @@ export const PlatformDashboard: React.FC = () => {
           </ConsoleButton>
         }
       />
+      </div>
 
       {/* KPI Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <Reveal className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
           label="Monthly Recurring Revenue"
           value={`₹${(mrr ?? 0).toLocaleString('en-IN')}`}
@@ -149,7 +177,7 @@ export const PlatformDashboard: React.FC = () => {
           accentColor="#188038"
           icon={<ShieldCheck className="w-4 h-4" />}
         />
-      </div>
+      </Reveal>
 
       {/* User Role Distribution Visualization Card */}
       <UserRoleDistributionCard />
@@ -275,9 +303,14 @@ export const PlatformDashboard: React.FC = () => {
 
       {/* Subscription Plans Card Grid */}
       <div className="space-y-3">
-        <h2 className="text-base font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
-          SaaS Subscription Tiers
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-base font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+            SaaS Subscription Tiers
+          </h2>
+          <span className="text-[10px] uppercase tracking-[0.14em] text-[#86868B] font-semibold">
+            Pricing
+          </span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {subscriptionPlans.map(plan => (
             <ConsoleCard
@@ -288,16 +321,17 @@ export const PlatformDashboard: React.FC = () => {
                   <StatusChip label="POPULAR" variant="warning" size="xs" />
                 ) : null
               }
+              className={plan.popular ? 'ring-1 ring-[#FFA000]/30 shadow-[0_14px_30px_rgba(255,160,0,0.12)]' : ''}
             >
               <div className="space-y-3">
-                <div className="text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
+                <div className="text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED] leading-none">
                   ₹{(plan.priceMonthly ?? 0).toLocaleString('en-IN')}{' '}
                   <span className="text-xs font-normal text-[#5F6368] dark:text-[#9AA0A6]">/month</span>
                 </div>
-                <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed">
+                <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed min-h-[44px]">
                   {plan.description}
                 </p>
-                <div className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                <div className="text-xs text-[#5F6368] dark:text-[#9AA0A6] rounded-xl bg-[#F8F9FA] dark:bg-[#1A1B1C] px-2.5 py-2 border border-black/[0.04] dark:border-white/[0.06]">
                   Max Students: <strong className="text-[#202124] dark:text-white">{plan.maxStudents}</strong> · Branches: <strong className="text-[#202124] dark:text-white">{plan.maxBranches}</strong>
                 </div>
                 <ul className="text-xs space-y-1.5 text-[#5F6368] dark:text-[#9AA0A6] border-t border-[#DADCE0] dark:border-[#3C4043] pt-3">
@@ -315,14 +349,33 @@ export const PlatformDashboard: React.FC = () => {
       </div>
 
       {/* Onboard New Org Modal */}
-      {showNewOrgModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#1E1F20] w-full max-w-md rounded-2xl p-6 shadow-xl border border-[#DADCE0] dark:border-[#3C4043] space-y-4">
-            <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
-              Onboard New Coaching & Education Center
-            </h3>
-            <form onSubmit={handleCreateOrg} className="space-y-3 text-xs">
-              <div>
+      <AnimatePresence>
+        {showNewOrgModal && (
+          <motion.div
+            key="onboard-org-modal"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: easings.outQuart }}
+          >
+            <motion.div
+              variants={orgPanelVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-[#1E1F20] w-full max-w-md rounded-2xl p-6 shadow-xl border border-[#DADCE0] dark:border-[#3C4043] space-y-4"
+            >
+              <motion.h3 variants={fadeUp} className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+                Onboard New Coaching & Education Center
+              </motion.h3>
+              <motion.form
+                variants={staggerContainerFast}
+                onSubmit={handleCreateOrg}
+                className="space-y-3 text-xs"
+              >
+                <motion.div variants={fadeUp}>
                 <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
                   Institute / Center Name
                 </label>
@@ -334,9 +387,9 @@ export const PlatformDashboard: React.FC = () => {
                   onChange={e => setNewOrgName(e.target.value)}
                   className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
                 />
-              </div>
+                </motion.div>
 
-              <div className="grid grid-cols-2 gap-2">
+                <motion.div variants={fadeUp} className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
                     Director / Owner Name
@@ -363,11 +416,11 @@ export const PlatformDashboard: React.FC = () => {
                     className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
                   />
                 </div>
-              </div>
+                </motion.div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">City</label>
+                <motion.div variants={fadeUp} className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">City</label>
                   <input
                     type="text"
                     value={newOrgCity}
@@ -387,27 +440,28 @@ export const PlatformDashboard: React.FC = () => {
                     <option value="pro">Multi-Branch Pro (₹2,199/mo)</option>
                   </select>
                 </div>
-              </div>
+                </motion.div>
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
-                <ConsoleButton
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setShowNewOrgModal(false)}
-                >
-                  Cancel
-                </ConsoleButton>
-                <ConsoleButton
-                  type="submit"
-                  variant="primary"
-                >
-                  Create Organization
-                </ConsoleButton>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <motion.div variants={fadeUp} className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
+                  <ConsoleButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setShowNewOrgModal(false)}
+                  >
+                    Cancel
+                  </ConsoleButton>
+                  <ConsoleButton
+                    type="submit"
+                    variant="primary"
+                  >
+                    Create Organization
+                  </ConsoleButton>
+                </motion.div>
+              </motion.form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

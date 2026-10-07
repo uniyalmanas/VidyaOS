@@ -10,26 +10,75 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const searchRateLimits = new Map<string, { count: number; windowStartedAt: number }>();
+const SEARCH_RATE_LIMIT = 20;
+const SEARCH_RATE_WINDOW_MS = 60_000;
+
+function allowSearchRequest(key: string): boolean {
+  const now = Date.now();
+  const current = searchRateLimits.get(key);
+  if (!current || now - current.windowStartedAt >= SEARCH_RATE_WINDOW_MS) {
+    searchRateLimits.set(key, { count: 1, windowStartedAt: now });
+    return true;
+  }
+  if (current.count >= SEARCH_RATE_LIMIT) return false;
+  current.count += 1;
+  return true;
+}
+
+async function verifyFirebaseIdToken(idToken: string): Promise<string | null> {
+  const apiKey = process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
+  if (!apiKey) throw new Error('Firebase API key is not configured for server-side token verification.');
+
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+      signal: AbortSignal.timeout(5000)
+    }
+  );
+  if (!response.ok) return null;
+  const result = await response.json() as { users?: Array<{ localId?: string }> };
+  return result.users?.[0]?.localId || null;
+}
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json());
+  app.disable('x-powered-by');
+  app.use(express.json({ limit: '8kb' }));
 
-  // API endpoint for Google Search Grounding using gemini-3.5-flash
   app.post('/api/search-grounding', async (req, res) => {
     try {
-      const { query } = req.body;
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ error: 'Query string is required' });
+      const clientKey = req.ip || 'unknown-client';
+      if (!allowSearchRequest(`ip:${clientKey}`)) {
+        return res.status(429).json({ error: 'Search limit reached. Try again shortly.' });
       }
 
+      const authorization = req.header('authorization') || '';
+      const tokenMatch = authorization.match(/^Bearer\s+(\S+)$/i);
+      if (!tokenMatch) return res.status(401).json({ error: 'Authentication is required.' });
+
+      const userId = await verifyFirebaseIdToken(tokenMatch[1]);
+      if (!userId) return res.status(401).json({ error: 'Your session is invalid or expired. Sign in again.' });
+      if (!allowSearchRequest(`user:${userId}`)) {
+        return res.status(429).json({ error: 'Search limit reached. Try again shortly.' });
+      }
+
+      const queryText = typeof req.body?.query === 'string' ? req.body.query.trim() : '';
+      if (!queryText || queryText.length > 500) {
+        return res.status(400).json({ error: 'Query must contain between 1 and 500 characters.' });
+      }
       const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-      const ai = new GoogleGenAI(apiKey ? { apiKey } : undefined);
+      if (!apiKey) return res.status(503).json({ error: 'Search service is not configured.' });
+      const ai = new GoogleGenAI({ apiKey });
 
       const prompt = `You are the VidyaOS Academic & Board Examination Intelligence Assistant for Indian coaching & education centers, teachers, and parents.
 Provide accurate, up-to-date, and concise information for the following query regarding Indian educational boards (CBSE, CISCE/ICSE, State Boards), competitive exams (JEE Main/Advanced, NEET, CUET, NDA), syllabus updates, or coaching institute guidelines.
-Query: "${query}"`;
+Query: "${queryText}"`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.5-flash',
@@ -59,7 +108,7 @@ Query: "${query}"`;
       });
     } catch (err: any) {
       console.error('Error during search grounding:', err);
-      res.status(500).json({ error: err.message || 'Internal Search Grounding Error' });
+      res.status(500).json({ error: 'Search is temporarily unavailable. Please try again.' });
     }
   });
 

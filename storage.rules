@@ -6,8 +6,58 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isPlatformOwner() {
+      return isSignedIn() && (
+        request.auth.token.role == 'PLATFORM_OWNER' ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) && getUserData().role == 'PLATFORM_OWNER')
+      );
+    }
+
+    function isTenantMember(orgId) {
+      return isSignedIn() && (
+        isPlatformOwner() ||
+        request.auth.token.orgId == orgId ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) && getUserData().orgId == orgId)
+      );
+    }
+
+    function isTenantAdmin(orgId) {
+      return isSignedIn() && (
+        isPlatformOwner() ||
+        (request.auth.token.role == 'CENTER_ADMIN' && request.auth.token.orgId == orgId) ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+         getUserData().orgId == orgId &&
+         (getUserData().role == 'CENTER_ADMIN' || getUserData().role == 'PLATFORM_OWNER'))
+      );
+    }
+
+    function isTenantStaffOrAdmin(orgId) {
+      return isTenantMember(orgId) && (
+        isPlatformOwner() ||
+        (request.auth.token.role in ['CENTER_ADMIN', 'STAFF'] &&
+          request.auth.token.orgId == orgId) ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+          getUserData().orgId == orgId &&
+          getUserData().role in ['CENTER_ADMIN', 'STAFF', 'PLATFORM_OWNER'])
+      );
+    }
+
+    function isTenantInstructorOrAdmin(orgId) {
+      return isTenantMember(orgId) && (
+        isTenantStaffOrAdmin(orgId) ||
+        (request.auth.token.role == 'TEACHER' && request.auth.token.orgId == orgId) ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+          getUserData().orgId == orgId &&
+          getUserData().role == 'TEACHER')
+      );
+    }
+
     function isValidFileSize() {
-      return request.resource.size < 15 * 1024 * 1024; // 15MB limit
+      return request.resource.size < 25 * 1024 * 1024; // 25MB limit
     }
 
     function isPermittedContentType() {
@@ -15,76 +65,76 @@ service firebase.storage {
              request.resource.contentType.matches('application/pdf') ||
              request.resource.contentType.matches('application/vnd.*') ||
              request.resource.contentType.matches('application/msword') ||
+             request.resource.contentType.matches('application/zip') ||
+             request.resource.contentType.matches('video/mp4') ||
              request.resource.contentType.matches('text/plain');
     }
 
     // ------------------------------------------------------------------------
-    // TENANT-SCOPED STORAGE: /{orgId}/{category}/{fileName}
+    // TENANT-SCOPED STORAGE: Study Materials, Assignments, Receipts & Logos
     // ------------------------------------------------------------------------
     
-    // Study materials & digital library (Authenticated users, scoped per center)
+    // Study materials & digital library (Scoped per coaching center)
+    match /study-materials/{orgId}/{fileName} {
+      allow read: if isTenantMember(orgId);
+      allow create, update: if isTenantInstructorOrAdmin(orgId) && isValidFileSize() && isPermittedContentType();
+      allow delete: if isTenantAdmin(orgId);
+    }
     match /{orgId}/study-materials/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidFileSize() && isPermittedContentType();
-      allow delete: if isSignedIn();
+      allow read: if isTenantMember(orgId);
+      allow create, update: if isTenantInstructorOrAdmin(orgId) && isValidFileSize() && isPermittedContentType();
+      allow delete: if isTenantAdmin(orgId);
     }
 
     // Homework assignments and student submissions
+    match /assignments/{orgId}/{fileName} {
+      allow read: if isTenantMember(orgId);
+      allow create, update: if isTenantInstructorOrAdmin(orgId) && isValidFileSize() && isPermittedContentType();
+      allow delete: if isTenantAdmin(orgId);
+    }
     match /{orgId}/assignments/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidFileSize() && isPermittedContentType();
-      allow delete: if isSignedIn();
+      allow read: if isTenantMember(orgId);
+      allow create, update: if isTenantInstructorOrAdmin(orgId) && isValidFileSize() && isPermittedContentType();
+      allow delete: if isTenantAdmin(orgId);
     }
 
     // Institute logos and branding assets
+    match /logos/{orgId}/{fileName} {
+      allow read: if true; // Public for website and fee invoices
+      allow write: if isTenantAdmin(orgId) && isValidFileSize() && request.resource.contentType.matches('image/.*');
+      allow delete: if isTenantAdmin(orgId);
+    }
     match /{orgId}/logos/{fileName} {
-      allow read: if true; // Public for website and invoices
-      allow write: if isSignedIn() && isValidFileSize() && request.resource.contentType.matches('image/.*');
-      allow delete: if isSignedIn();
+      allow read: if true;
+      allow write: if isTenantAdmin(orgId) && isValidFileSize() && request.resource.contentType.matches('image/.*');
+      allow delete: if isTenantAdmin(orgId);
     }
 
-    // User profile avatars (Supports /avatars/{userId}/{fileName} and /avatars/{fileName})
+    // Private Receipts & Fee Invoices (Authenticated center members only)
+    match /receipts/{orgId}/{fileName} {
+      allow read: if isTenantMember(orgId);
+      allow create, update: if isTenantStaffOrAdmin(orgId) && isValidFileSize() && isPermittedContentType();
+      allow delete: if isTenantAdmin(orgId);
+    }
+    match /{orgId}/receipts/{fileName} {
+      allow read: if isTenantMember(orgId);
+      allow create, update: if isTenantStaffOrAdmin(orgId) && isValidFileSize() && isPermittedContentType();
+      allow delete: if isTenantAdmin(orgId);
+    }
+
+    // User profile avatars
     match /avatars/{userId}/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidFileSize() && request.resource.contentType.matches('image/.*');
-      allow delete: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isPlatformOwner()) && isValidFileSize() && request.resource.contentType.matches('image/.*');
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isPlatformOwner());
     }
 
     match /avatars/{fileName} {
       allow read: if true;
-      allow write: if isSignedIn() && isValidFileSize() && request.resource.contentType.matches('image/.*');
-      allow delete: if isSignedIn();
+      allow write, delete: if false;
     }
 
-    // Private Receipts & Fee Invoices (Authenticated staff & parents only)
-    match /{orgId}/receipts/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidFileSize() && isPermittedContentType();
-      allow delete: if isSignedIn();
-    }
-
-    // Legacy fallback paths with auth & size constraints
-    match /study-materials/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidFileSize() && isPermittedContentType();
-    }
-
-    match /assignments/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidFileSize() && isPermittedContentType();
-    }
-
-    match /logos/{allPaths=**} {
-      allow read: if true;
-      allow write: if isSignedIn() && isValidFileSize() && request.resource.contentType.matches('image/.*');
-    }
-
-    match /receipts/{allPaths=**} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidFileSize() && isPermittedContentType();
-    }
-
-    // Default deny for unmatched storage paths
+    // Default deny for all unmatched storage paths
     match /{allPaths=**} {
       allow read: if false;
       allow write: if false;

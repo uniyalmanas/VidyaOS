@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { FeeInvoice, PaymentRecord, Organization, User } from '../../types';
+import { FeeInvoice, PaymentRecord, PaymentSubmission, Organization, User } from '../../types';
 import { MOCK_INVOICES } from '../../data/mockData';
-import { subscribeToInvoices, persistInvoiceToFirestore, recordPaymentAtomically } from '../../lib/firestoreService';
+import {
+  createPaymentSubmission,
+  rejectPaymentSubmission,
+  subscribeToInvoices,
+  subscribeToPaymentSubmissions,
+  persistInvoiceToFirestore,
+  recordPaymentAtomically,
+  verifyPaymentSubmission
+} from '../../lib/firestoreService';
 
 export interface FeeContextType {
   invoices: FeeInvoice[];
-  recordPayment: (invoiceId: string, paymentData: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }) => PaymentRecord;
+  pendingPaymentSubmissions: PaymentSubmission[];
+  recordPayment: (invoiceId: string, paymentData: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }) => Promise<PaymentRecord>;
+  submitPendingPayment: (invoiceId: string, paymentData: { amount: number; paymentMethod: 'UPI'; transactionRef: string; upiApp?: PaymentRecord['upiApp'] }) => Promise<PaymentSubmission>;
+  verifyPayment: (submissionId: string) => Promise<void>;
+  rejectPayment: (submissionId: string, reason?: string) => Promise<void>;
   createInvoice: (invoice: Omit<FeeInvoice, 'id' | 'orgId' | 'invoiceNo' | 'payments' | 'createdAt'>) => FeeInvoice;
   activeReceiptInvoice: FeeInvoice | null;
   setActiveReceiptInvoice: (inv: FeeInvoice | null) => void;
@@ -31,15 +43,23 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
   children
 }) => {
   const [invoices, setInvoices] = useState<FeeInvoice[]>(() => {
-    const saved = localStorage.getItem('vidyaos_invoices');
-    return saved ? JSON.parse(saved) : MOCK_INVOICES;
+    // The localStorage mirror is DEV-only. Production hydrates from Firestore
+    // alone (see the subscription below and the persistent cache in firebase.ts)
+    // so a browser that a tenant has logged out of can never replay their
+    // invoices back on the next boot.
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_invoices') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_INVOICES : []);
   });
 
   const [activeReceiptInvoice, setActiveReceiptInvoice] = useState<FeeInvoice | null>(null);
   const [activeUpiModalInvoice, setActiveUpiModalInvoice] = useState<FeeInvoice | null>(null);
+  const [pendingPaymentSubmissions, setPendingPaymentSubmissions] = useState<PaymentSubmission[]>([]);
 
-  // Sync to localStorage
+  // DEV-only mirror, so mock-mode invoices survive a reload. In production
+  // Firestore is the single source of truth — writing a second, unauthenticated
+  // copy of every invoice here would only leave PII behind after logout.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_invoices', JSON.stringify(invoices));
   }, [invoices]);
 
@@ -64,42 +84,81 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
     };
   }, [currentOrg.id, isPlatformOwner]);
 
+  useEffect(() => {
+    const canReviewPayments = ['CENTER_ADMIN', 'STAFF', 'PLATFORM_OWNER'].includes(currentUser.role);
+    if (!canReviewPayments || !currentOrg.id) {
+      setPendingPaymentSubmissions([]);
+      return;
+    }
+    return subscribeToPaymentSubmissions(setPendingPaymentSubmissions, currentOrg.id);
+  }, [currentOrg.id, currentUser.role]);
+
   // Multi-Tenant Isolation: Filtered data views
   const tenantInvoices = useMemo(() => {
     if (isPlatformOwner) return invoices;
     return invoices.filter(i => i.orgId === currentOrg.id && (selectedBranchId === 'all' || i.branchId === selectedBranchId));
   }, [invoices, currentOrg.id, isPlatformOwner, selectedBranchId]);
 
-  const recordPayment = (invoiceId: string, paymentData: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }): PaymentRecord => {
+  const recordPayment = async (invoiceId: string, paymentData: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }): Promise<PaymentRecord> => {
+    if (paymentData.paymentMethod === 'UPI' && !/^\d{12}$/.test(paymentData.transactionRef || '')) {
+      throw new Error('Enter the 12-digit UPI UTR before recording this payment.');
+    }
     const newPayment: PaymentRecord = {
       id: `pay-${Date.now()}`,
       invoiceId,
       amount: paymentData.amount,
       paymentDate: new Date().toISOString().split('T')[0],
       paymentMethod: paymentData.paymentMethod,
-      transactionRef: paymentData.transactionRef || `REF/${Date.now().toString().slice(-8)}`,
+      transactionRef: paymentData.transactionRef || `CASH-${Date.now()}`,
       receivedBy: currentUser.name,
-      receiptNo: `REC-${Date.now().toString().slice(-6)}`,
-      upiApp: paymentData.upiApp
+      receiptNo: `REC-${Date.now()}-${Math.random().toString(36).slice(-6)}`,
+      upiApp: paymentData.upiApp,
+      status: 'verified',
+      verifiedBy: currentUser.name,
+      verifiedAt: new Date().toISOString()
     };
 
-    setInvoices(prev => prev.map(inv => {
-      if (inv.id === invoiceId) {
-        const newPaidAmount = inv.paidAmount + paymentData.amount;
-        const newStatus = newPaidAmount >= inv.netAmount ? 'paid' : 'partially_paid';
-        const updatedInvoice: FeeInvoice = {
-          ...inv,
-          paidAmount: newPaidAmount,
-          status: newStatus,
-          payments: [...inv.payments, newPayment]
-        };
-        recordPaymentAtomically(invoiceId, updatedInvoice);
-        return updatedInvoice;
-      }
-      return inv;
-    }));
-
+    const updatedInvoice = await recordPaymentAtomically(invoiceId, newPayment);
+    setInvoices(prev => prev.map(invoice => invoice.id === invoiceId ? updatedInvoice : invoice));
     return newPayment;
+  };
+
+  const submitPendingPayment = async (
+    invoiceId: string,
+    paymentData: { amount: number; paymentMethod: 'UPI'; transactionRef: string; upiApp?: PaymentRecord['upiApp'] }
+  ): Promise<PaymentSubmission> => {
+    const invoice = tenantInvoices.find(item => item.id === invoiceId);
+    const transactionRef = paymentData.transactionRef.trim();
+    if (!invoice) throw new Error('Invoice not found in this center.');
+    if (!/^\d{12}$/.test(transactionRef)) throw new Error('Enter a valid 12-digit UPI UTR.');
+    const balance = invoice.netAmount - invoice.paidAmount;
+    if (!Number.isFinite(paymentData.amount) || paymentData.amount <= 0 || paymentData.amount > balance) {
+      throw new Error('Payment amount must be positive and cannot exceed the current balance.');
+    }
+    const submission: PaymentSubmission = {
+      id: `sub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      orgId: invoice.orgId,
+      invoiceId: invoice.id,
+      studentId: invoice.studentId,
+      amount: paymentData.amount,
+      paymentMethod: 'UPI',
+      transactionRef,
+      upiApp: paymentData.upiApp,
+      submittedBy: currentUser.id,
+      submittedByName: currentUser.name,
+      submittedAt: new Date().toISOString(),
+      status: 'pending_verification'
+    };
+    await createPaymentSubmission(submission);
+    return submission;
+  };
+
+  const verifyPayment = async (submissionId: string): Promise<void> => {
+    await verifyPaymentSubmission(submissionId, currentUser.id, currentUser.name);
+  };
+
+  const rejectPayment = async (submissionId: string, reason?: string): Promise<void> => {
+    await rejectPaymentSubmission(submissionId, currentUser.id, reason || '');
   };
 
   const createInvoice = (data: Omit<FeeInvoice, 'id' | 'orgId' | 'invoiceNo' | 'payments' | 'createdAt'>): FeeInvoice => {
@@ -121,7 +180,11 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
     <FeeContext.Provider
       value={{
         invoices: tenantInvoices,
+        pendingPaymentSubmissions,
         recordPayment,
+        submitPendingPayment,
+        verifyPayment,
+        rejectPayment,
         createInvoice,
         activeReceiptInvoice,
         setActiveReceiptInvoice,

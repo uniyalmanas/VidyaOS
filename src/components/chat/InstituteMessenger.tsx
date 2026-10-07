@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ChatChannel, ChatMessage, ChatMessageTag, UserRole } from '../../types';
 import { ConsoleButton, ConsoleCard, StatusChip } from '../ui';
+import { uploadFileToStorage } from '../../lib/firebase';
 
 interface InstituteMessengerProps {
   initialChannelId?: string;
@@ -49,11 +50,12 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
     sendChatMessage,
     addChatReaction,
     createChatChannel,
-    batches
+    batches,
+    showToast
   } = useApp();
 
   const [activeChannelId, setLocalActiveChannelId] = useState<string>(
-    initialChannelId || activeChatChannelId || chatChannels[0]?.id || 'chan-c10-math'
+    initialChannelId || activeChatChannelId || chatChannels[0]?.id || ''
   );
 
   const [messageInput, setMessageInput] = useState<string>('');
@@ -62,7 +64,8 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
   const [tagFilter, setTagFilter] = useState<ChatMessageTag | 'all'>('all');
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const [showNewChannelModal, setShowNewChannelModal] = useState<boolean>(false);
-  const [attachedFile, setAttachedFile] = useState<{ name: string; size: string; type: 'pdf' | 'image' | 'doc' } | null>(null);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; size: string; type: 'pdf' | 'image' | 'doc'; url?: string } | null>(null);
+  const [isUploadingFile, setIsUploadingFile] = useState<boolean>(false);
 
   // New channel form state
   const [newChannelName, setNewChannelName] = useState<string>('');
@@ -73,6 +76,7 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync active channel
   useEffect(() => {
@@ -83,7 +87,12 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
     }
   }, [initialChannelId, activeChatChannelId, currentOrg.id]);
 
-  const activeChannel = chatChannels.find(c => c.id === activeChannelId && c.orgId === currentOrg.id) || chatChannels.find(c => c.orgId === currentOrg.id) || chatChannels[0];
+  // Resolve to the active channel for this org only. Falls back to the first
+  // channel once Firestore has streamed them in; may legitimately be undefined
+  // while loading, so callers must null-check.
+  const activeChannel =
+    chatChannels.find(c => c.id === activeChannelId && c.orgId === currentOrg.id) ||
+    chatChannels.find(c => c.orgId === currentOrg.id);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -110,12 +119,20 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
   const directChannels = filteredChannels.filter(c => c.type === 'direct');
   const facultyChannels = filteredChannels.filter(c => c.type === 'faculty');
 
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!activeChannel) return;
     if (!messageInput.trim() && !attachedFile) return;
 
     const attachments = attachedFile ? [attachedFile] : undefined;
-    sendChatMessage(activeChannel.id, messageInput.trim(), selectedTag, attachments);
+    const saved = await sendChatMessage(activeChannel.id, messageInput.trim(), selectedTag, attachments);
+
+    // Keep the draft if the cloud write failed so the message isn't lost.
+    if (!saved) {
+      if (inputRef.current) inputRef.current.focus();
+      return;
+    }
+
     setMessageInput('');
     setAttachedFile(null);
     setSelectedTag('general');
@@ -128,6 +145,50 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  /**
+   * Real attachment upload. The paperclip used to fabricate a hard-coded file
+   * ("Class_..._FormulaNotes.pdf", 412 KB) without ever opening a picker — so a
+   * message claimed to carry a PDF that did not exist and could not be
+   * downloaded by anyone. Now it opens a picker and uploads for real.
+   */
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (!activeChannel || !currentOrg.id) return;
+
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const type: 'pdf' | 'image' | 'doc' =
+      ext === 'pdf' ? 'pdf' : ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext) ? 'image' : 'doc';
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Attachments must be under 10 MB.', 'error');
+      return;
+    }
+
+    setIsUploadingFile(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `chat/${currentOrg.id}/${Date.now()}_${safeName}`;
+      const url = await uploadFileToStorage(path, file, file.type || undefined);
+      setAttachedFile({
+        name: file.name,
+        size: `${Math.max(1, Math.round(file.size / 1024))} KB`,
+        type,
+        url
+      });
+      if (inputRef.current) inputRef.current.focus();
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Attachment upload failed:', error);
+      showToast(
+        'Attachment upload failed. Cloud Storage may not be enabled for this project yet.',
+        'error'
+      );
+    } finally {
+      setIsUploadingFile(false);
     }
   };
 
@@ -538,19 +599,41 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
                   {/* Attachments */}
                   {msg.attachments && msg.attachments.length > 0 && (
                     <div className="pt-1.5 flex flex-wrap gap-2">
-                      {msg.attachments.map((att, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-2 p-2 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20] text-xs hover:border-[#FFA000] transition cursor-pointer shadow-2xs"
-                        >
-                          <FileText className="w-4 h-4 text-rose-500" />
-                          <div>
-                            <div className="font-semibold text-xs text-[#202124] dark:text-[#E8EAED]">{att.name}</div>
-                            {att.size && <div className="text-[10px] text-[#80868B]">{att.size}</div>}
+                      {msg.attachments.map((att, idx) => {
+                        const card = (
+                          <>
+                            <FileText className="w-4 h-4 text-rose-500" />
+                            <div>
+                              <div className="font-semibold text-xs text-[#202124] dark:text-[#E8EAED]">{att.name}</div>
+                              {att.size && <div className="text-[10px] text-[#80868B]">{att.size}</div>}
+                            </div>
+                            <Download className="w-3.5 h-3.5 text-[#5F6368] ml-2" />
+                          </>
+                        );
+                        const cardClass =
+                          'flex items-center gap-2 p-2 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20] text-xs hover:border-[#FFA000] transition shadow-2xs';
+
+                        return att.url ? (
+                          <a
+                            key={idx}
+                            href={att.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`${cardClass} cursor-pointer`}
+                            title={`Open ${att.name}`}
+                          >
+                            {card}
+                          </a>
+                        ) : (
+                          <div
+                            key={idx}
+                            className={`${cardClass} opacity-70 cursor-not-allowed`}
+                            title="File link unavailable"
+                          >
+                            {card}
                           </div>
-                          <Download className="w-3.5 h-3.5 text-[#5F6368] ml-2" />
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -660,20 +743,22 @@ export const InstituteMessenger: React.FC<InstituteMessengerProps> = ({
 
             <div className="flex items-center justify-between px-3 py-2 border-t border-[#DADCE0]/50 dark:border-[#3C4043]/50">
               <div className="flex items-center gap-1.5 relative">
-                {/* Simulated File Attachment */}
+                {/* Real file attachment — opens a picker and uploads to Cloud Storage */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.svg,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx"
+                  onChange={handleFileSelect}
+                />
                 <button
                   type="button"
-                  onClick={() => {
-                    setAttachedFile({
-                      name: `Class_${activeChannel?.name || 'Doc'}_FormulaNotes.pdf`,
-                      size: '412 KB',
-                      type: 'pdf'
-                    });
-                  }}
-                  className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer"
-                  title="Attach Study Material / Solution PDF"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingFile || !activeChannel}
+                  className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={isUploadingFile ? 'Uploading…' : 'Attach a file (PDF, image or document)'}
                 >
-                  <Paperclip className="w-4 h-4" />
+                  <Paperclip className={`w-4 h-4 ${isUploadingFile ? 'animate-pulse' : ''}`} />
                 </button>
 
                 {/* Emoji Bar Dropdown */}

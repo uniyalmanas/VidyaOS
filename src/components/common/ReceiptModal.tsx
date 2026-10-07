@@ -1,22 +1,52 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Printer, Download, Share2, X, CheckCircle } from 'lucide-react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { easings, tSpring, tDefault, fadeUp } from '../../lib/motion';
+
+/** Modal shell: spring pop-in that cascades header → receipt → actions. */
+const receiptPanelVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 12 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { ...tSpring, delayChildren: 0.05, staggerChildren: 0.07 }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    y: 6,
+    transition: { duration: 0.16, ease: easings.inOut }
+  }
+};
+
+/** Subtle paper "settle" for the printable slip — only opacity/transform. */
+const paperSettleVariants: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { ...tDefault, duration: 0.36 } },
+  exit: { opacity: 0, transition: { duration: 0.12, ease: easings.inOut } }
+};
 
 export const ReceiptModal: React.FC = () => {
   const { activeReceiptInvoice, setActiveReceiptInvoice, currentOrg, students, batches, setActiveWhatsappModal } = useApp();
 
-  if (!activeReceiptInvoice) return null;
-
-  const student = students.find(s => s.id === activeReceiptInvoice.studentId);
-  const batch = batches.find(b => b.id === activeReceiptInvoice.batchId);
-  const lastPayment = activeReceiptInvoice.payments[activeReceiptInvoice.payments.length - 1];
+  const student = activeReceiptInvoice
+    ? students.find(s => s.id === activeReceiptInvoice.studentId)
+    : undefined;
+  const batch = activeReceiptInvoice
+    ? batches.find(b => b.id === activeReceiptInvoice.batchId)
+    : undefined;
+  const lastPayment = activeReceiptInvoice
+    ? activeReceiptInvoice.payments[activeReceiptInvoice.payments.length - 1]
+    : undefined;
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleShareWhatsApp = () => {
-    if (!student) return;
+    if (!activeReceiptInvoice || !student) return;
     const phone = student.guardian.fatherPhone || student.phone;
     const text = `*FEE PAYMENT RECEIPT - ${currentOrg.name}*\n` +
       `Receipt No: ${lastPayment?.receiptNo || activeReceiptInvoice.invoiceNo}\n` +
@@ -36,40 +66,55 @@ export const ReceiptModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8">
-        {/* Modal Actions Header */}
-        <div className="px-6 py-3 bg-slate-900 text-white flex items-center justify-between no-print">
-          <div className="flex items-center space-x-2 text-sm font-semibold">
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
-            <span>Digital Fee Receipt Verified</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handlePrint}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 transition text-slate-200"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print / PDF</span>
-            </button>
-            <button
-              onClick={handleShareWhatsApp}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 transition text-white"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Share WhatsApp</span>
-            </button>
-            <button
-              onClick={() => setActiveReceiptInvoice(null)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+    <AnimatePresence>
+      {activeReceiptInvoice && (
+        <motion.div
+          key="receipt-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: easings.outQuart }}
+        >
+          <motion.div
+            variants={receiptPanelVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8"
+          >
+            {/* Modal Actions Header */}
+            <motion.div variants={fadeUp} className="px-6 py-3 bg-slate-900 text-white flex items-center justify-between no-print">
+              <div className="flex items-center space-x-2 text-sm font-semibold">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span>Digital Fee Receipt Verified</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handlePrint}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 hover:shadow-[var(--fb-glow-primary)] transition text-slate-200"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print / PDF</span>
+                </button>
+                <button
+                  onClick={handleShareWhatsApp}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 hover:shadow-[var(--fb-glow-primary)] transition text-white"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share WhatsApp</span>
+                </button>
+                <button
+                  onClick={() => setActiveReceiptInvoice(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </motion.div>
 
-        {/* Printable Area */}
-        <div className="p-8 printable-area bg-white text-slate-900">
+            {/* Printable Area */}
+            <motion.div variants={paperSettleVariants} className="p-8 printable-area bg-white text-slate-900">
           {/* Institute Header */}
           <div className="border-b-2 border-slate-900 pb-5 mb-6 flex justify-between items-start">
             <div>
@@ -172,18 +217,20 @@ export const ReceiptModal: React.FC = () => {
               <div className="text-[10px] text-slate-400">{currentOrg.name}</div>
             </div>
           </div>
-        </div>
+          </motion.div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end no-print">
-          <button
-            onClick={() => setActiveReceiptInvoice(null)}
-            className="px-5 py-2 bg-slate-900 text-white font-medium text-xs rounded-xl hover:bg-slate-800 transition"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+          {/* Modal Footer */}
+          <motion.div variants={fadeUp} className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end no-print">
+            <button
+              onClick={() => setActiveReceiptInvoice(null)}
+              className="px-5 py-2 bg-slate-900 text-white font-medium text-xs rounded-xl hover:bg-slate-800 hover:shadow-[var(--fb-glow-primary)] transition"
+            >
+              Done
+            </button>
+          </motion.div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

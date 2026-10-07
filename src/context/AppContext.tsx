@@ -12,6 +12,7 @@ import {
   Exam,
   ExamResult,
   Assignment,
+  PaymentSubmission,
   StudyMaterial,
   TimetableSlot,
   Announcement,
@@ -84,6 +85,7 @@ export interface AppContextType {
   batches: Batch[];
   attendanceRecords: AttendanceRecord[];
   invoices: FeeInvoice[];
+  pendingPaymentSubmissions: PaymentSubmission[];
   exams: Exam[];
   examResults: ExamResult[];
   assignments: Assignment[];
@@ -104,11 +106,15 @@ export interface AppContextType {
   addTeacher: (teacher: Omit<Teacher, 'id' | 'orgId' | 'userId' | 'joiningDate'> & Partial<Pick<Teacher, 'userId' | 'joiningDate'>>) => Teacher;
   updateTeacher: (teacherId: string, updates: Partial<Teacher>) => void;
   deleteTeacher: (teacherId: string) => void;
+  deduplicateTeachers: () => { removedCount: number; mergedCount: number };
   
   markAttendance: (record: { batchId: string; studentId: string; date: string; status: AttendanceStatus; remarks?: string }) => void;
   markBatchAllPresent: (batchId: string, date: string) => void;
   
-  recordPayment: (invoiceId: string, payment: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }) => PaymentRecord;
+  recordPayment: (invoiceId: string, payment: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }) => Promise<PaymentRecord>;
+  submitPendingPayment: (invoiceId: string, payment: { amount: number; paymentMethod: 'UPI'; transactionRef: string; upiApp?: PaymentRecord['upiApp'] }) => Promise<PaymentSubmission>;
+  verifyPayment: (submissionId: string) => Promise<void>;
+  rejectPayment: (submissionId: string, reason?: string) => Promise<void>;
   createInvoice: (invoice: Omit<FeeInvoice, 'id' | 'orgId' | 'invoiceNo' | 'payments' | 'createdAt'>) => FeeInvoice;
   
   createExam: (exam: Omit<Exam, 'id' | 'orgId'>) => Exam;
@@ -123,7 +129,7 @@ export interface AppContextType {
   // Platform Owner & Center Admin actions
   toggleOrgStatus: (orgId: string, newStatus: Organization['subscriptionStatus']) => void;
   changeOrgPlan: (orgId: string, planId: Organization['planId']) => void;
-  createNewOrganization: (orgData: Partial<Organization>) => Organization;
+  createNewOrganization: (orgData: Partial<Organization>) => Promise<Organization>;
   updateOrganization: (orgId: string, updates: Partial<Organization>) => void;
 
   // Modals & triggers
@@ -147,12 +153,46 @@ export interface AppContextType {
   chatMessages: ChatMessage[];
   activeChatChannelId: string;
   setActiveChatChannelId: (channelId: string) => void;
-  sendChatMessage: (channelId: string, content: string, tag?: ChatMessageTag, attachments?: ChatMessageAttachment[]) => ChatMessage;
-  addChatReaction: (messageId: string, emoji: string) => void;
+  sendChatMessage: (channelId: string, content: string, tag?: ChatMessageTag, attachments?: ChatMessageAttachment[]) => Promise<ChatMessage | null>;
+  addChatReaction: (messageId: string, emoji: string) => Promise<void>;
   createChatChannel: (channel: Omit<ChatChannel, 'id' | 'orgId'>) => ChatChannel;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const EMPTY_ORGANIZATION: Organization = {
+  id: '',
+  ownerUid: '',
+  name: '',
+  slug: '',
+  tagline: '',
+  logoText: '',
+  ownerName: '',
+  phone: '',
+  email: '',
+  address: '',
+  city: '',
+  state: '',
+  upiId: '',
+  upiMerchantName: '',
+  branches: [],
+  planId: 'starter',
+  subscriptionStatus: 'trial',
+  trialEndsAt: '',
+  currentCycleEnd: '',
+  createdAt: '',
+  maxStudents: 0,
+  maxBranches: 0
+};
+
+const EMPTY_USER: User = {
+  id: '',
+  orgId: '',
+  role: 'STUDENT',
+  name: '',
+  phone: '',
+  email: ''
+};
 
 // Inner Composer to assemble domain slices and provide composite AppContextType
 interface CompositeProps {
@@ -172,7 +212,7 @@ interface CompositeProps {
   setMobileViewActive: (v: boolean) => void;
   toggleOrgStatus: (orgId: string, newStatus: Organization['subscriptionStatus']) => void;
   changeOrgPlan: (orgId: string, planId: Organization['planId']) => void;
-  createNewOrganization: (orgData: Partial<Organization>) => Organization;
+  createNewOrganization: (orgData: Partial<Organization>) => Promise<Organization>;
   updateOrganization: (orgId: string, updates: Partial<Organization>) => void;
   activeWhatsappModal: { title: string; phone: string; message: string } | null;
   setActiveWhatsappModal: (data: { title: string; phone: string; message: string } | null) => void;
@@ -302,7 +342,11 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
 
     // Fee domain
     invoices: feeSlice.invoices,
+    pendingPaymentSubmissions: feeSlice.pendingPaymentSubmissions,
     recordPayment: feeSlice.recordPayment,
+    submitPendingPayment: feeSlice.submitPendingPayment,
+    verifyPayment: feeSlice.verifyPayment,
+    rejectPayment: feeSlice.rejectPayment,
     createInvoice: feeSlice.createInvoice,
 
     // Attendance domain
@@ -320,6 +364,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     addTeacher: academicSlice.addTeacher,
     updateTeacher: academicSlice.updateTeacher,
     deleteTeacher: academicSlice.deleteTeacher,
+    deduplicateTeachers: academicSlice.deduplicateTeachers,
     createExam: academicSlice.createExam,
     saveExamResults: academicSlice.saveExamResults,
     createAssignment: academicSlice.createAssignment,
@@ -350,22 +395,22 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [organizations, setOrganizations] = useState<Organization[]>(() => {
     const saved = localStorage.getItem('vidyaos_orgs');
-    return saved ? JSON.parse(saved) : MOCK_ORGANIZATIONS;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_ORGANIZATIONS : []);
   });
 
   const [currentOrgId, setCurrentOrgIdState] = useState<string>(() => {
-    return localStorage.getItem('vidyaos_current_org_id') || 'org-apex';
+    return localStorage.getItem('vidyaos_current_org_id') || (import.meta.env.DEV ? 'org-apex' : '');
   });
 
   const currentOrg = useMemo(() => {
-    return organizations.find(o => o.id === currentOrgId) || organizations[0];
+    return organizations.find(o => o.id === currentOrgId) || organizations[0] || EMPTY_ORGANIZATION;
   }, [organizations, currentOrgId]);
 
   const { currentUser: authUser, loginAsDemoUser } = useAuth();
-  const [allUsers, setAllUsers] = useState<User[]>(MOCK_USERS);
+  const [allUsers, setAllUsers] = useState<User[]>(import.meta.env.DEV ? MOCK_USERS : []);
   
   const currentUser: User = useMemo(() => {
-    return authUser || MOCK_USERS[1];
+    return authUser || (import.meta.env.DEV ? MOCK_USERS[1] : EMPTY_USER);
   }, [authUser]);
 
   const setCurrentUser = (user: User) => {
@@ -397,16 +442,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     seedInitialFirestoreDataIfEmpty();
 
-    const unsubOrgs = subscribeToOrganizations(data => {
-      if (data && data.length > 0) setOrganizations(data);
-    });
-
     const isPlatform = currentUser.role === 'PLATFORM_OWNER';
-    const targetOrg = isPlatform ? undefined : currentOrgId;
+    const unsubOrgs = subscribeToOrganizations(data => {
+      setOrganizations(data);
+    }, currentOrgId, isPlatform);
 
-    const unsubUsers = subscribeToUsers(data => {
-      if (data) setAllUsers(data);
-    }, targetOrg);
+    const targetOrg = isPlatform ? undefined : currentOrgId;
+    const canListUsers = isPlatform || currentUser.role === 'CENTER_ADMIN';
+    const unsubUsers = canListUsers
+      ? subscribeToUsers(data => setAllUsers(data), targetOrg)
+      : (() => {
+          setAllUsers(currentUser.id ? [currentUser] : []);
+          return () => {};
+        })();
 
     return () => {
       unsubOrgs();
@@ -437,7 +485,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('vidyaos_current_org_id', currentOrgId);
   }, [currentOrgId]);
 
-  // Switch role helper
+  // Switch role helper.
+  // Persona swapping is development-only: `loginAsDemoUser` is a no-op outside DEV
+  // and never has Firebase Auth behind it. In production this only moves the UI
+  // between portals — the route guard decides whether the signed-in account may
+  // actually enter one.
   const switchRole = (role: UserRole, specificUserId?: string) => {
     if (authUser && authUser.role === role && !specificUserId) {
       if (role === 'PLATFORM_OWNER') setActiveTab('platform-overview');
@@ -449,38 +501,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (role === 'PLATFORM_OWNER') {
-      const ownerUser = allUsers.find(u => u.role === 'PLATFORM_OWNER');
-      if (ownerUser) loginAsDemoUser(ownerUser.id);
+      if (import.meta.env.DEV) {
+        const ownerUser = allUsers.find(u => u.role === 'PLATFORM_OWNER');
+        if (ownerUser) loginAsDemoUser(ownerUser.id);
+      }
       setActiveTab('platform-overview');
       return;
     }
 
     if (role === 'PARENT') {
-      const parentUser = allUsers.find(u => u.id === (specificUserId || 'user-parent-rajesh'));
-      if (parentUser) {
-        loginAsDemoUser(parentUser.id);
+      if (import.meta.env.DEV) {
+        const parentUser = allUsers.find(u => u.id === (specificUserId || 'user-parent-rajesh'));
+        if (parentUser) loginAsDemoUser(parentUser.id);
       }
       setActiveTab('parent-dashboard');
       return;
     }
 
     if (role === 'TEACHER') {
-      const teacherUser = allUsers.find(u => u.id === (specificUserId || 'user-teacher-sharma'));
-      if (teacherUser) loginAsDemoUser(teacherUser.id);
+      if (import.meta.env.DEV) {
+        const teacherUser = allUsers.find(u => u.id === (specificUserId || 'user-teacher-sharma'));
+        if (teacherUser) loginAsDemoUser(teacherUser.id);
+      }
       setActiveTab('teacher-batches');
       return;
     }
 
     if (role === 'STUDENT') {
-      const studentUser = allUsers.find(u => u.id === (specificUserId || 'user-stud-rahul'));
-      if (studentUser) loginAsDemoUser(studentUser.id);
+      if (import.meta.env.DEV) {
+        const studentUser = allUsers.find(u => u.id === (specificUserId || 'user-stud-rahul'));
+        if (studentUser) loginAsDemoUser(studentUser.id);
+      }
       setActiveTab('student-home');
       return;
     }
 
-    // Default to Center Admin
-    const adminUser = allUsers.find(u => u.role === 'CENTER_ADMIN' && u.orgId === currentOrg.id) || allUsers[1];
-    loginAsDemoUser(adminUser.id);
+    // Default to Center Admin. `allUsers[1]` can legitimately be undefined in a
+    // freshly provisioned org, so the lookup is guarded — dereferencing it threw
+    // and dumped users on the ErrorBoundary.
+    if (import.meta.env.DEV) {
+      const adminUser = allUsers.find(u => u.role === 'CENTER_ADMIN' && u.orgId === currentOrg.id) || allUsers[1];
+      if (adminUser) loginAsDemoUser(adminUser.id);
+    }
     setActiveTab('overview');
   };
 
@@ -518,12 +580,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const createNewOrganization = (orgData: Partial<Organization>): Organization => {
-    const id = `org-${Date.now()}`;
+  const createNewOrganization = async (orgData: Partial<Organization>): Promise<Organization> => {
+    const id = orgData.id || `org-${Date.now()}`;
     const resolvedPlanId = (orgData.planId as any) || 'starter';
     const selectedPlan = SUBSCRIPTION_PLANS.find(p => p.id === resolvedPlanId);
     const newOrg: Organization = {
       id,
+      ownerUid: orgData.ownerUid || currentUser.id,
       name: orgData.name || 'New Academy',
       slug: orgData.name?.toLowerCase().replace(/\s+/g, '-') || 'new-academy',
       tagline: orgData.tagline || 'Excellence in Tutoring',
@@ -555,8 +618,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       ]
     };
-    setOrganizations(prev => [...prev, newOrg]);
-    persistOrganizationToFirestore(newOrg);
+    await persistOrganizationToFirestore(newOrg);
+    setOrganizations(prev => [...prev.filter(org => org.id !== id), newOrg]);
 
     return newOrg;
   };

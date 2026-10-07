@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useApp } from '../../context/AppContext';
+import { getIndiaDayName } from '../../lib/date';
 import {
   Calendar,
   CreditCard,
@@ -27,10 +28,14 @@ import {
   MetricCard,
   ConsoleCard,
   ConsoleButton,
-  StatusChip
+  StatusChip,
+  Reveal,
+  CountUp
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { motion } from 'motion/react';
+import { easings } from '../../lib/motion';
 
 export const ParentPortal: React.FC = () => {
   const { currentPath, navigate } = useRouter();
@@ -50,10 +55,12 @@ export const ParentPortal: React.FC = () => {
     timetableSlots,
     announcements,
     batches,
+    chatChannels,
     setActiveUpiModalInvoice,
     setActiveReceiptInvoice,
     setActiveWhatsappModal,
     sendChatMessage,
+    showToast,
     mobileViewActive
   } = useApp();
 
@@ -99,9 +106,14 @@ export const ParentPortal: React.FC = () => {
 
   if (!selectedChild) {
     return (
-      <div className="p-8 text-center text-slate-500">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: easings.outQuart }}
+        className="p-8 text-center text-slate-500"
+      >
         No linked student found for this parent account.
-      </div>
+      </motion.div>
     );
   }
 
@@ -126,12 +138,33 @@ export const ParentPortal: React.FC = () => {
     return !sub || sub.status === 'pending';
   });
 
-  const todayDay = 'Monday'; // Default preview day
+  // Real weekday in India. Hardcoding 'Monday' meant the "Today's Classes" strip
+  // showed Monday's timetable no matter what day it actually was.
+  const todayDay = getIndiaDayName();
   const todayClasses = timetableSlots.filter(t => selectedChild.batchIds.includes(t.batchId) && t.dayOfWeek === todayDay);
 
-  const handleSendAdminMessage = () => {
+  const handleSendAdminMessage = async () => {
     if (!directMsgText.trim()) return;
-    sendChatMessage('chan-parent-desk', directMsgText.trim(), 'general');
+
+    // Resolve this institute's parent-desk channel. It was hard-coded to
+    // 'chan-parent-desk', which only exists for one demo org — every other
+    // institute got a "Cross-institute messaging is strictly prohibited" error
+    // while the UI still claimed the message had been dispatched.
+    const deskChannel =
+      chatChannels.find(c => c.orgId === currentOrg.id && c.id === `chan-${currentOrg.id}-parent-desk`) ||
+      chatChannels.find(c => c.orgId === currentOrg.id && c.id === 'chan-parent-desk') ||
+      chatChannels.find(c => c.orgId === currentOrg.id && c.name === 'parent-teacher-connect');
+
+    if (!deskChannel) {
+      showToast('The institute desk channel is unavailable right now. Please try again later.', 'error');
+      return;
+    }
+
+    const saved = await sendChatMessage(deskChannel.id, directMsgText.trim(), 'general');
+
+    // Only claim success once Firestore has actually accepted the message.
+    if (!saved) return;
+
     setMsgSentNotice(true);
     setDirectMsgText('');
     setTimeout(() => setMsgSentNotice(false), 3000);
@@ -249,10 +282,17 @@ export const ParentPortal: React.FC = () => {
       </div>
 
       {/* TAB 1: OVERVIEW / QUICK ANSWERS */}
+      <motion.div
+        key={activeParentTab}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.26, ease: easings.outQuart }}
+        className="space-y-6"
+      >
       {activeParentTab === 'overview' && (
         <div className="space-y-6">
           {/* Quick Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Reveal className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <MetricCard
               label="Attendance Rate"
               value={`${attendanceRate}%`}
@@ -292,11 +332,11 @@ export const ParentPortal: React.FC = () => {
               actionText="Report card"
               onClick={() => handleSelectTab('results')}
             />
-          </div>
+          </Reveal>
 
           {/* Pending Fee Callout Banner if applicable */}
           {pendingInvoices.length > 0 && (
-            <div className="bg-white dark:bg-[#1C1C1E] border-l-4 border-l-amber-500 border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+            <Reveal className="bg-white dark:bg-[#1C1C1E] border-l-4 border-l-amber-500 border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
               <div>
                 <div className="flex items-center space-x-2">
                   <StatusChip label="PAYMENT DUE" variant="warning" size="xs" />
@@ -305,10 +345,10 @@ export const ParentPortal: React.FC = () => {
                   </span>
                 </div>
                 <h3 className="font-apple-display font-bold text-base text-slate-900 dark:text-white mt-1 tabular-nums">
-                  Coaching Fee Due: ₹{(totalPendingFee ?? 0).toLocaleString('en-IN')}
+                  Coaching Fee Due: <CountUp value={totalPendingFee} prefix="₹" />
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-neutral-400">
-                  {pendingInvoices[0].title} · Instant digital fee receipt generated upon payment
+                  {pendingInvoices[0].title} · A paid receipt is issued after the center verifies your transfer.
                 </p>
               </div>
               <ConsoleButton
@@ -319,7 +359,7 @@ export const ParentPortal: React.FC = () => {
               >
                 Pay via UPI / GPay
               </ConsoleButton>
-            </div>
+            </Reveal>
           )}
 
           {/* Schedule & Announcements Grid */}
@@ -510,14 +550,16 @@ export const ParentPortal: React.FC = () => {
                           Pay UPI
                         </ConsoleButton>
                       )}
-                      <ConsoleButton
-                        variant="secondary"
-                        size="xs"
-                        icon={<FileText className="w-3 h-3" />}
-                        onClick={() => setActiveReceiptInvoice(inv)}
-                      >
-                        Receipt
-                      </ConsoleButton>
+                      {(inv.paidAmount ?? 0) > 0 && (
+                        <ConsoleButton
+                          variant="secondary"
+                          size="xs"
+                          icon={<FileText className="w-3 h-3" />}
+                          onClick={() => setActiveReceiptInvoice(inv)}
+                        >
+                          Receipt
+                        </ConsoleButton>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -629,6 +671,7 @@ export const ParentPortal: React.FC = () => {
       {activeParentTab === 'discussions' && (
         <InstituteMessenger className="mt-2" />
       )}
+      </motion.div>
 
       {/* Edit Profile Modal */}
       {showEditProfileModal && (

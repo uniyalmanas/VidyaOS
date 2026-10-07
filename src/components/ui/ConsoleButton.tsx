@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, type HTMLMotionProps } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 
 export interface ConsoleButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -8,6 +9,8 @@ export interface ConsoleButtonProps extends React.ButtonHTMLAttributes<HTMLButto
   icon?: React.ReactNode;
   iconRight?: React.ReactNode;
 }
+
+type MotionButtonProps = Omit<HTMLMotionProps<'button'>, 'children' | 'className' | 'disabled'>;
 
 export const ConsoleButton: React.FC<ConsoleButtonProps> = ({
   variant = 'secondary',
@@ -21,15 +24,15 @@ export const ConsoleButton: React.FC<ConsoleButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    "inline-flex items-center justify-center font-medium font-apple-text tracking-tight transition-all duration-150 rounded-full select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0071E3]/35 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.97] ease-out";
+    "inline-flex items-center justify-center font-medium font-apple-text tracking-tight rounded-full select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--fb-primary-border)] disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none ease-out";
 
   const variantClasses = {
     primary:
-      "bg-gradient-to-b from-[#FFA726] to-[#F57C00] hover:from-[#FFB74D] hover:to-[#FFA000] text-slate-950 font-semibold shadow-[0_2px_8px_rgba(255,160,0,0.3)] border border-amber-400/40 dark:from-[#FFCA28] dark:to-[#FFA000] dark:text-[#121314]",
+      "bg-gradient-to-b from-[var(--fb-primary)] to-[var(--fb-primary-hover)] hover:brightness-110 hover:shadow-[var(--fb-glow-primary)] text-white font-semibold shadow-[0_2px_12px_rgba(79,70,229,0.28)] border border-black/10 dark:border-white/15",
     secondary:
       "bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] text-[#1D1D1F] dark:text-[#F5F5F7] border border-black/[0.06] dark:border-white/[0.1] shadow-2xs backdrop-blur-md",
     blue:
-      "bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium shadow-[0_2px_8px_rgba(0,113,227,0.3)] border border-blue-400/30",
+      "bg-[var(--fb-primary)] hover:brightness-110 hover:shadow-[var(--fb-glow-primary)] text-white font-medium shadow-[0_2px_12px_rgba(79,70,229,0.28)] border border-black/10 dark:border-white/15",
     ghost:
       "bg-transparent hover:bg-black/[0.04] dark:hover:bg-white/[0.08] text-[#86868B] hover:text-[#1D1D1F] dark:text-[#86868B] dark:hover:text-[#F5F5F7] border border-transparent",
     danger:
@@ -43,11 +46,19 @@ export const ConsoleButton: React.FC<ConsoleButtonProps> = ({
     lg: "text-sm sm:text-base px-6 py-2.5 gap-2.5 h-10 font-semibold"
   };
 
+  // Motion drives transform, so CSS only transitions color/opacity/filter.
+  const motionProps = {
+    whileHover: disabled || loading ? undefined : { y: -1 },
+    whileTap: disabled || loading ? undefined : { scale: 0.96 },
+    transition: { type: 'spring' as const, stiffness: 500, damping: 32, mass: 0.6 },
+  } satisfies MotionButtonProps;
+
   return (
-    <button
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    <motion.button
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} transition-[color,background-color,border-color,box-shadow,filter] duration-150 ${className}`}
       disabled={disabled || loading}
-      {...props}
+      {...motionProps}
+      {...(props as MotionButtonProps)}
     >
       {loading ? (
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -56,6 +67,6 @@ export const ConsoleButton: React.FC<ConsoleButtonProps> = ({
       ) : null}
       {children}
       {!loading && iconRight && <span className="flex-shrink-0">{iconRight}</span>}
-    </button>
+    </motion.button>
   );
 };

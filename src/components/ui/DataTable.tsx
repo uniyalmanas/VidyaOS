@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter, RefreshCw } from 'lucide-react';
+import { motion } from 'motion/react';
 import { ConsoleButton } from './ConsoleButton';
+import { fadeIn, staggerContainerFast } from '../../lib/motion';
 
 export interface Column<T> {
   key: string;
@@ -120,7 +122,13 @@ export function DataTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-black/[0.06] dark:divide-white/[0.08]">
+          <motion.tbody
+            key={`rows-${currentPage}-${sortKey ?? 'none'}-${sortOrder}-${searchQuery}`}
+            className="divide-y divide-black/[0.06] dark:divide-white/[0.08]"
+            initial="hidden"
+            animate="visible"
+            variants={staggerContainerFast}
+          >
             {currentRows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="py-12 text-center text-[#86868B]">
@@ -148,12 +156,13 @@ export function DataTable<T>({
               currentRows.map((row, idx) => {
                 const rowKey = keyExtractor(row);
                 return (
-                  <tr
+                  <motion.tr
                     key={rowKey}
+                    variants={fadeIn}
                     onClick={() => onRowClick && onRowClick(row)}
                     className={`transition-colors duration-100 ${
                       onRowClick ? 'cursor-pointer' : ''
-                    } hover:bg-black/[0.02] dark:hover:bg-white/[0.04] text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text`}
+                    } hover:bg-[var(--fb-primary-subtle)] dark:hover:bg-white/[0.04] text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text`}
                   >
                     {columns.map(col => {
                       const val = (row as any)[col.key];
@@ -168,11 +177,11 @@ export function DataTable<T>({
                         </td>
                       );
                     })}
-                  </tr>
+                  </motion.tr>
                 );
               })
             )}
-          </tbody>
+          </motion.tbody>
         </table>
       </div>
 

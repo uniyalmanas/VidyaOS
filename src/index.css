@@ -4,23 +4,33 @@
 
 @layer base {
   :root {
-    /* Apple Primary Accent & Vidya Emblem */
-    --fb-primary: #FFA000;
-    --fb-primary-hover: #F57C00;
-    --fb-primary-active: #E65100;
-    --fb-primary-subtle: #FFF8E1;
-    --fb-primary-border: #FFE082;
-    --fb-primary-text: #1d1d1f;
+    color-scheme: light;
+    /* ============================================================
+       VidyaOS Brand System — Indigo primary + Saffron accent
+       ============================================================ */
+    --fb-primary: #4F46E5;
+    --fb-primary-hover: #4338CA;
+    --fb-primary-active: #3730A3;
+    --fb-primary-subtle: rgba(79, 70, 229, 0.09);
+    --fb-primary-border: rgba(79, 70, 229, 0.24);
+    --fb-primary-text: #111827;
 
-    /* Apple Key Blue (HIG Standard) */
-    --fb-blue: #0071E3;
-    --fb-blue-hover: #0077ED;
-    --fb-blue-subtle: rgba(0, 113, 227, 0.08);
-    --apple-blue: #0071E3;
-    --apple-blue-hover: #0077ED;
+    --fb-blue: #4F46E5;
+    --fb-blue-hover: #4338CA;
+    --fb-blue-subtle: rgba(79, 70, 229, 0.09);
+    --apple-blue: #4F46E5;
+    --apple-blue-hover: #4338CA;
+
+    /* Saffron accent — warm secondary highlight (CTAs, badges, highlights) */
+    --fb-accent: #EA580C;
+    --fb-accent-hover: #C2410C;
+    --fb-accent-subtle: rgba(234, 88, 12, 0.10);
+    --fb-accent-border: rgba(234, 88, 12, 0.26);
+    --fb-saffron: #FF9933;
+    --fb-accent-text: #9A3412;
 
     /* Apple Surfaces & Backgrounds */
-    --fb-bg-app: #F5F5F7;
+    --fb-bg-app: #F3F4F8;
     --fb-bg-surface: #FFFFFF;
     --fb-bg-surface-hover: rgba(0, 0, 0, 0.04);
     --fb-bg-surface-active: rgba(0, 0, 0, 0.08);
@@ -40,67 +50,133 @@
     --fb-status-success: #34C759;
     --fb-status-success-bg: rgba(52, 199, 89, 0.12);
     --fb-status-success-border: rgba(52, 199, 89, 0.25);
-    --fb-status-warning: #FF9F0A;
-    --fb-status-warning-bg: rgba(255, 159, 10, 0.12);
-    --fb-status-warning-border: rgba(255, 159, 10, 0.25);
+    --fb-status-warning: #B7791F;
+    --fb-status-warning-bg: rgba(183, 121, 31, 0.12);
+    --fb-status-warning-border: rgba(183, 121, 31, 0.24);
     --fb-status-error: #FF3B30;
     --fb-status-error-bg: rgba(255, 59, 48, 0.12);
     --fb-status-error-border: rgba(255, 59, 48, 0.25);
-    --fb-status-info: #0071E3;
-    --fb-status-info-bg: rgba(0, 113, 227, 0.12);
-    --fb-status-info-border: rgba(0, 113, 227, 0.25);
+    --fb-status-info: #5E5E63;
+    --fb-status-info-bg: rgba(60, 60, 67, 0.08);
+    --fb-status-info-border: rgba(60, 60, 67, 0.18);
 
     /* Apple Diffused Ambient Shadows */
-    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
-    --fb-shadow-sm: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
-    --fb-shadow-md: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+    --fb-shadow-xs: 0 1px 2px 0 rgba(17, 24, 39, 0.04);
+    --fb-shadow-sm: 0 2px 8px 0 rgba(17, 24, 39, 0.06);
+    --fb-shadow-md: 0 4px 16px 0 rgba(17, 24, 39, 0.08);
+    --fb-shadow-lg: 0 12px 32px -8px rgba(17, 24, 39, 0.14);
+    --fb-glow-primary: 0 4px 20px -4px rgba(79, 70, 229, 0.45);
+    --fb-glow-accent: 0 4px 20px -4px rgba(234, 88, 12, 0.40);
+
+    /* Motion tokens — consistent easing & durations across the app */
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-fast: 140ms;
+    --dur-base: 220ms;
+    --dur-slow: 380ms;
+  }
+
+  html {
+    background: #F3F4F8;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--fb-bg-app, #F3F4F8);
+    color: var(--fb-text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  html, body, #root {
+    background-color: var(--fb-bg-app, #F3F4F8);
+    background-image: none;
+  }
+
+  #root {
+    min-height: 100vh;
   }
 
   .dark {
-    --fb-primary: #FFCA28;
-    --fb-primary-hover: #FFB300;
-    --fb-primary-active: #FFA000;
-    --fb-primary-subtle: rgba(255, 160, 0, 0.12);
-    --fb-primary-border: rgba(255, 202, 40, 0.25);
+    color-scheme: dark;
+    --fb-primary: #818CF8;
+    --fb-primary-hover: #A5B4FC;
+    --fb-primary-active: #C7D2FE;
+    --fb-primary-subtle: rgba(129, 140, 248, 0.16);
+    --fb-primary-border: rgba(129, 140, 248, 0.34);
     --fb-primary-text: #F5F5F7;
 
-    --fb-blue: #2997FF;
-    --fb-blue-hover: #40A4FF;
-    --fb-blue-subtle: rgba(41, 151, 255, 0.15);
-    --apple-blue: #2997FF;
-    --apple-blue-hover: #40A4FF;
+    --fb-blue: #818CF8;
+    --fb-blue-hover: #A5B4FC;
+    --fb-blue-subtle: rgba(129, 140, 248, 0.16);
+    --apple-blue: #818CF8;
+    --apple-blue-hover: #A5B4FC;
 
-    /* Apple Dark Surfaces (OLED Pure Black & Deep Space Gray) */
-    --fb-bg-app: #000000;
-    --fb-bg-surface: #1C1C1E;
-    --fb-bg-surface-hover: #2C2C2E;
-    --fb-bg-surface-active: #3A3A3C;
+    --fb-accent: #FB923C;
+    --fb-accent-hover: #FDBA74;
+    --fb-accent-subtle: rgba(251, 146, 60, 0.16);
+    --fb-accent-border: rgba(251, 146, 60, 0.34);
+    --fb-saffron: #FFB25C;
+    --fb-accent-text: #FDBA74;
 
-    --fb-border: rgba(255, 255, 255, 0.12);
-    --fb-border-subtle: rgba(255, 255, 255, 0.06);
-    --fb-border-strong: rgba(255, 255, 255, 0.24);
+    /* Simple, mature dark surfaces (subtle indigo cast) */
+    --fb-bg-app: #111116;
+    --fb-bg-surface: #1B1B22;
+    --fb-bg-surface-hover: #2A2A33;
+    --fb-bg-surface-active: #383844;
+
+    --fb-border: rgba(255, 255, 255, 0.08);
+    --fb-border-subtle: rgba(255, 255, 255, 0.05);
+    --fb-border-strong: rgba(255, 255, 255, 0.12);
 
     --fb-text-primary: #F5F5F7;
-    --fb-text-secondary: #86868B;
-    --fb-text-muted: #6E6E73;
+    --fb-text-secondary: #A8ACB4;
+    --fb-text-muted: #7D838D;
     --fb-text-inverse: #000000;
 
     --fb-status-success: #30D158;
     --fb-status-success-bg: rgba(48, 209, 88, 0.16);
     --fb-status-success-border: rgba(48, 209, 88, 0.3);
-    --fb-status-warning: #FFD60A;
-    --fb-status-warning-bg: rgba(255, 214, 10, 0.16);
-    --fb-status-warning-border: rgba(255, 214, 10, 0.3);
+    --fb-status-warning: #E5B15B;
+    --fb-status-warning-bg: rgba(229, 177, 91, 0.14);
+    --fb-status-warning-border: rgba(229, 177, 91, 0.28);
     --fb-status-error: #FF453A;
     --fb-status-error-bg: rgba(255, 69, 58, 0.16);
     --fb-status-error-border: rgba(255, 69, 58, 0.3);
-    --fb-status-info: #2997FF;
-    --fb-status-info-bg: rgba(41, 151, 255, 0.16);
-    --fb-status-info-border: rgba(41, 151, 255, 0.3);
+    --fb-status-info: #D1D1D6;
+    --fb-status-info-bg: rgba(209, 209, 214, 0.12);
+    --fb-status-info-border: rgba(209, 209, 214, 0.24);
 
-    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
-    --fb-shadow-sm: 0 4px 12px 0 rgba(0, 0, 0, 0.6);
-    --fb-shadow-md: 0 8px 24px 0 rgba(0, 0, 0, 0.7);
+    --fb-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.45);
+    --fb-shadow-sm: 0 4px 12px 0 rgba(0, 0, 0, 0.55);
+    --fb-shadow-md: 0 8px 24px 0 rgba(0, 0, 0, 0.6);
+    --fb-shadow-lg: 0 16px 48px -12px rgba(0, 0, 0, 0.75);
+    --fb-glow-primary: 0 4px 24px -4px rgba(129, 140, 248, 0.5);
+    --fb-glow-accent: 0 4px 24px -4px rgba(251, 146, 60, 0.42);
+  }
+
+  .dark,
+  .dark body,
+  body[data-theme="dark"],
+  html[data-theme="dark"] {
+    background-color: #111116 !important;
+    background-image: none !important;
+    color: var(--fb-text-primary);
+  }
+
+  .dark .bg-white,
+  .dark .bg-slate-50,
+  .dark .bg-slate-100,
+  .dark .bg-zinc-50,
+  .dark .bg-gray-50 {
+    background-color: var(--fb-bg-surface) !important;
   }
 }
 
@@ -124,17 +200,188 @@
     font-family: 'JetBrains Mono', monospace;
   }
 
-  /* Firebase Vibrant Flame Gradients */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  [class*="bg-amber-"],
+  [class*="dark:bg-amber-"],
+  [class*="text-amber-"],
+  [class*="dark:text-amber-"],
+  [class*="border-amber-"],
+  [class*="bg-orange-"],
+  [class*="dark:bg-orange-"],
+  [class*="text-orange-"],
+  [class*="dark:text-orange-"],
+  [class*="border-orange-"],
+  [class*="text-[#FFA000]"],
+  [class*="text-[#E65100]"],
+  [class*="text-[#FFCA28]"],
+  [class*="text-[#F57C00]"],
+  [class*="text-[#FF9500]"],
+  [class*="text-[#FF9F0A]"],
+  [class*="text-[#C96B00]"],
+  [class*="text-[#B06000]"],
+  [class*="text-[#B45309]"],
+  [class*="text-[#E65100]"],
+  [class*="text-[#FF6D00]"],
+  [class*="text-[#FFAB00]"],
+  [class*="text-[#FF9100]"],
+  [class*="bg-[#FFF4E5]"],
+  [class*="bg-[#FFF8E1]"],
+  [class*="bg-[#F8F0D9]"],
+  [class*="from-[#FFA000]"],
+  [class*="to-[#F57C00]"],
+  [class*="from-[#FFCA28]"],
+  [class*="to-[#FFA000]"],
+  [class*="from-[#FF9500]"],
+  [class*="via-[#FF9500]"],
+  [class*="via-[#FF2D55]"] {
+    color: var(--fb-accent) !important;
+  }
+
+  [class*="text-blue-"]:not([class*="selection:"]),
+  [class*="dark:text-blue-"]:not([class*="selection:"]),
+  [class*="text-[#0071E3]"]:not([class*="selection:"]),
+  [class*="text-[#005ECF]"]:not([class*="selection:"]),
+  [class*="text-[#0053B3]"]:not([class*="selection:"]),
+  [class*="text-[#2997FF]"]:not([class*="selection:"]),
+  [class*="text-[#40A4FF]"]:not([class*="selection:"]),
+  [class*="text-[#5AC8FA]"]:not([class*="selection:"]),
+  [class*="text-[#1A73E8]"]:not([class*="selection:"]),
+  [class*="text-[#1967D2]"]:not([class*="selection:"]),
+  [class*="text-[#174EA6]"]:not([class*="selection:"]),
+  [class*="text-[#8AB4F8]"]:not([class*="selection:"]),
+  [class*="text-[#AECBFA]"]:not([class*="selection:"]) {
+    color: var(--fb-primary) !important;
+  }
+
+  [class*="border-amber-"],
+  [class*="border-orange-"],
+  [class*="border-[#FFA000]"],
+  [class*="border-[#FF9500]"],
+  [class*="border-[#FF9F0A]"],
+  [class*="border-[#F2C66D]"],
+  [class*="focus:ring-[#FFA000]"],
+  [class*="focus:ring-amber-"],
+  [class*="focus:ring-orange-"] {
+    --tw-ring-color: var(--fb-accent-border) !important;
+    border-color: var(--fb-accent-border) !important;
+  }
+
+  [class*="border-blue-"],
+  [class*="dark:border-blue-"],
+  [class*="border-[#0071E3]"],
+  [class*="border-[#005ECF]"],
+  [class*="border-[#2997FF]"],
+  [class*="border-[#5AC8FA]"],
+  [class*="focus:ring-[#0071E3]"],
+  [class*="focus:ring-[#2997FF]"],
+  [class*="focus:ring-blue-"] {
+    --tw-ring-color: var(--fb-primary-border) !important;
+    border-color: var(--fb-primary-border) !important;
+  }
+
+  [class*="bg-amber-"],
+  [class*="dark:bg-amber-"],
+  [class*="bg-orange-"],
+  [class*="dark:bg-orange-"],
+  [class*="bg-[#FFF4E5]"],
+  [class*="bg-[#FFF8E1]"],
+  [class*="bg-[#F8F0D9]"],
+  [class*="bg-[#FF9500]"],
+  [class*="bg-[#FF9F0A]"],
+  [class*="bg-[#FFA000]/"],
+  [class*="from-[#FFA000]"],
+  [class*="to-[#F57C00]"],
+  [class*="from-[#FFCA28]"],
+  [class*="to-[#FFA000]"],
+  [class*="from-[#FF9500]"],
+  [class*="via-[#FF9500]"],
+  [class*="via-[#FF2D55]"] {
+    background-color: var(--fb-accent-subtle) !important;
+    background-image: none !important;
+  }
+
+  [class*="bg-blue-"]:not([class*="selection:"]),
+  [class*="dark:bg-blue-"]:not([class*="selection:"]),
+  [class*="bg-[#EAF4FF]"]:not([class*="selection:"]),
+  [class*="bg-[#E8F0FE]"]:not([class*="selection:"]),
+  [class*="bg-[#D2E3FC]"]:not([class*="selection:"]),
+  [class*="bg-[#112A43]"]:not([class*="selection:"]),
+  [class*="bg-[#1A73E8]/"]:not([class*="selection:"]),
+  [class*="bg-[#0071E3]/"]:not([class*="selection:"]),
+  [class*="bg-[#005ECF]/"]:not([class*="selection:"]),
+  [class*="bg-[#2997FF]/"]:not([class*="selection:"]),
+  [class*="bg-[#5AC8FA]/"]:not([class*="selection:"]) {
+    background-color: var(--fb-primary-subtle) !important;
+    background-image: none !important;
+  }
+
+  [class*="bg-[#0071E3]"]:not([class*="bg-[#0071E3]/"]),
+  [class*="bg-[#005ECF]"]:not([class*="bg-[#005ECF]/"]),
+  [class*="bg-[#2997FF]"]:not([class*="bg-[#2997FF]/"]),
+  [class*="bg-[#5AC8FA]"]:not([class*="bg-[#5AC8FA]/"]),
+  [class*="bg-blue-500"],
+  [class*="bg-blue-600"],
+  [class*="bg-blue-700"] {
+    background-color: var(--fb-primary) !important;
+    color: var(--fb-text-inverse) !important;
+  }
+
+  [class*="from-[#0071E3]"],
+  [class*="to-[#0071E3]"],
+  [class*="from-[#005ECF]"],
+  [class*="to-[#005ECF]"],
+  [class*="from-[#2997FF]"],
+  [class*="to-[#2997FF]"],
+  [class*="from-blue-"],
+  [class*="to-blue-"] {
+    --tw-gradient-from: var(--fb-primary) var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: color-mix(in srgb, var(--fb-primary-hover), transparent) var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+  }
+
+  [class*="ring-blue-"],
+  [class*="focus:ring-blue-"] {
+    --tw-ring-color: var(--fb-primary-border) !important;
+  }
+
+  [class*="bg-[#FFA000]"]:not([class*="bg-[#FFA000]/"]),
+  [class*="bg-[#FF8F00]"]:not([class*="bg-[#FF8F00]/"]) {
+    background-color: var(--fb-accent) !important;
+    color: #FFFFFF !important;
+  }
+
+  /* VidyaOS Indigo → Saffron Brand Gradients */
   .bg-firebase-flame {
-    background: linear-gradient(135deg, #FFCA28 0%, #FFA000 45%, #F57C00 100%);
+    background: linear-gradient(135deg, #EEF2FF 0%, #C7D2FE 45%, #4F46E5 100%);
+  }
+  .dark .bg-firebase-flame {
+    background: linear-gradient(135deg, #312E81 0%, #4338CA 55%, #7C3AED 100%);
   }
   .bg-firebase-flame-subtle {
-    background: linear-gradient(135deg, rgba(255, 202, 40, 0.15) 0%, rgba(255, 160, 0, 0.12) 50%, rgba(245, 124, 0, 0.15) 100%);
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.10) 0%, rgba(234, 88, 12, 0.12) 50%, rgba(79, 70, 229, 0.06) 100%);
   }
   .text-firebase-flame {
-    background: linear-gradient(135deg, #FFCA28 0%, #FFA000 50%, #F57C00 100%);
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 45%, #EA580C 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-brand {
+    background-image: linear-gradient(135deg, #6366F1 0%, #4F46E5 50%, #7C3AED 100%);
+  }
+  .gradient-accent {
+    background-image: linear-gradient(135deg, #F97316 0%, #EA580C 55%, #DC2626 100%);
+  }
+  .text-gradient-brand {
+    background-image: linear-gradient(120deg, #4F46E5 0%, #7C3AED 45%, #EA580C 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
   }
 
   /* Google-style subtle scrollbar */
@@ -260,6 +507,21 @@
     border-color: rgba(255, 255, 255, 0.2);
   }
 
+  @media (max-width: 767px) {
+    body {
+      background: linear-gradient(180deg, #F5F6FA 0%, #EEF0F7 100%);
+    }
+
+    .dark body {
+      background: linear-gradient(180deg, #0E0E13 0%, #14141B 100%);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+  }
+
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -316,10 +578,255 @@
 
   /* Subtle Warm Glow */
   .glow-saffron {
-    box-shadow: 0 0 24px -4px rgba(255, 107, 0, 0.35);
+    box-shadow: 0 0 24px -4px rgba(234, 88, 12, 0.4);
   }
   .glow-indigo {
-    box-shadow: 0 0 24px -4px rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 24px -4px rgba(79, 70, 229, 0.45);
+  }
+
+  /* ============================================================
+     MOTION LAYER — scroll reveal, entrances, micro-interactions
+     ============================================================ */
+
+  /* Reveal-on-scroll (paired with <Reveal> / whileInView in motion) */
+  .reveal-up {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+    transition: opacity var(--dur-slow) var(--ease-out-quart), transform var(--dur-slow) var(--ease-out-quart);
+    will-change: opacity, transform;
+  }
+  .reveal-up.is-visible {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  .reveal-scale {
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity var(--dur-slow) var(--ease-out-quart), transform var(--dur-slow) var(--ease-spring);
+  }
+  .reveal-scale.is-visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Shared enter/exit keyframes — implements the tailwindcss-animate
+     contract so existing `animate-in fade-in slide-in-*` classes work.
+     (These were previously dead/no-op classes across the app.) */
+  @keyframes fb-enter {
+    from {
+      opacity: var(--tw-enter-opacity, 1);
+      transform: translate3d(var(--tw-enter-x, 0), var(--tw-enter-y, 0), 0) scale(var(--tw-enter-scale, 1));
+      filter: blur(var(--tw-enter-blur, 0));
+    }
+    to {
+      opacity: var(--tw-exit-opacity, 1);
+      transform: translate3d(var(--tw-exit-x, 0), var(--tw-exit-y, 0), 0) scale(var(--tw-exit-scale, 1));
+      filter: blur(var(--tw-exit-blur, 0));
+    }
+  }
+  @keyframes fb-exit {
+    from {
+      opacity: var(--tw-exit-opacity, 1);
+      transform: translate3d(var(--tw-exit-x, 0), var(--tw-exit-y, 0), 0) scale(var(--tw-exit-scale, 1));
+      filter: blur(var(--tw-exit-blur, 0));
+    }
+    to {
+      opacity: var(--tw-enter-opacity, 1);
+      transform: translate3d(var(--tw-enter-x, 0), var(--tw-enter-y, 0), 0) scale(var(--tw-enter-scale, 1));
+      filter: blur(var(--tw-enter-blur, 0));
+    }
+  }
+
+  .animate-in {
+    animation-name: fb-enter;
+    animation-duration: 220ms;
+    animation-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
+    animation-fill-mode: both;
+  }
+  .animate-out {
+    animation-name: fb-exit;
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+    animation-fill-mode: both;
+  }
+
+  .fade-in,
+  .fade-in-0 { --tw-enter-opacity: 0; }
+  .fade-out,
+  .fade-out-0 { --tw-exit-opacity: 0; }
+
+  .slide-in-from-top-1 { --tw-enter-y: -0.25rem; }
+  .slide-in-from-top-2 { --tw-enter-y: -0.5rem; }
+  .slide-in-from-top-4 { --tw-enter-y: -1rem; }
+  .slide-in-from-bottom-1 { --tw-enter-y: 0.25rem; }
+  .slide-in-from-bottom-2 { --tw-enter-y: 0.5rem; }
+  .slide-in-from-bottom-3 { --tw-enter-y: 0.75rem; }
+  .slide-in-from-bottom-4 { --tw-enter-y: 1rem; }
+  .slide-in-from-left-4 { --tw-enter-x: -1rem; }
+  .slide-in-from-right-4 { --tw-enter-x: 1rem; }
+  .slide-in-from-top-1\/2 { --tw-enter-y: -50%; }
+  .slide-in-from-bottom-1\/2 { --tw-enter-y: 50%; }
+
+  .zoom-in-95 { --tw-enter-scale: 0.95; }
+  .zoom-in-90 { --tw-enter-scale: 0.9; }
+  .zoom-in-105 { --tw-enter-scale: 1.05; }
+  .zoom-out-95 { --tw-exit-scale: 0.95; }
+
+  /* Staggered children reveal */
+  .stagger-children > * {
+    opacity: 0;
+    animation: fb-child-in var(--dur-slow) var(--ease-out-quart) both;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 45ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 90ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 135ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 225ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 270ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 315ms; }
+  .stagger-children > *:nth-child(n+9) { animation-delay: 360ms; }
+  @keyframes fb-child-in {
+    from { opacity: 0; transform: translate3d(0, 12px, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+
+  /* Interactive card lift */
+  .hover-lift {
+    transition: transform var(--dur-base) var(--ease-out-quart), box-shadow var(--dur-base) var(--ease-out-quart), border-color var(--dur-base) var(--ease-out-quart);
+  }
+  .hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--fb-shadow-lg);
+  }
+  .hover-lift:active {
+    transform: translateY(-1px) scale(0.995);
+  }
+
+  /* Animated gradient border sheen for hero/CTA surfaces */
+  @keyframes fb-shimmer {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+  .animate-shimmer {
+    background-size: 200% auto;
+    animation: fb-shimmer 6s linear infinite;
+  }
+
+  @keyframes fb-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  .animate-float {
+    animation: fb-float 5s ease-in-out infinite;
+  }
+
+  @keyframes fb-gradient-pan {
+    0% { transform: rotate(0deg) scale(1.6); }
+    50% { transform: rotate(180deg) scale(1.8); }
+    100% { transform: rotate(360deg) scale(1.6); }
+  }
+  .animate-gradient-pan {
+    animation: fb-gradient-pan 26s ease-in-out infinite;
+  }
+
+  /* Skeleton shimmer for loading states */
+  @keyframes fb-skeleton {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .animate-skeleton {
+    background-image: linear-gradient(90deg, transparent 0%, rgba(129, 140, 248, 0.14) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: fb-skeleton 1.4s ease-in-out infinite;
+  }
+
+  /* Tabular count-up / number flip helper */
+  .count-up {
+    font-variant-numeric: tabular-nums;
+    display: inline-block;
+  }
+
+  /* Respect reduced-motion preferences everywhere */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .reveal-up,
+    .reveal-scale {
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    .stagger-children > * {
+      opacity: 1 !important;
+      animation: none !important;
+    }
+  }
+
+  /* ============================================================
+     RANGE INPUTS (landing fee calculator) — branded track & thumb
+     ============================================================ */
+  input[type="range"].vidya-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    border-radius: 9999px;
+    background: var(--fb-primary-subtle);
+    border: 1px solid var(--fb-primary-border);
+    outline: none;
+    cursor: pointer;
+    transition: box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+  input[type="range"].vidya-range:hover,
+  input[type="range"].vidya-range:focus-visible {
+    box-shadow: var(--fb-glow-primary);
+  }
+  input[type="range"].vidya-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--fb-primary-hover), var(--fb-primary));
+    border: 3px solid #FFFFFF;
+    box-shadow: 0 2px 10px rgba(79, 70, 229, 0.5);
+    cursor: grab;
+    transition: transform var(--dur-fast) var(--ease-spring), box-shadow var(--dur-fast) var(--ease-out-quart);
+  }
+  input[type="range"].vidya-range::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 3px 16px rgba(79, 70, 229, 0.65);
+  }
+  input[type="range"].vidya-range::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.05);
+  }
+  input[type="range"].vidya-range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--fb-primary);
+    border: 3px solid #FFFFFF;
+    box-shadow: 0 2px 10px rgba(79, 70, 229, 0.5);
+    cursor: grab;
+  }
+  input[type="range"].vidya-range.accent-range {
+    background: var(--fb-accent-subtle);
+    border-color: var(--fb-accent-border);
+  }
+  input[type="range"].vidya-range.accent-range::-webkit-slider-thumb {
+    background: linear-gradient(145deg, var(--fb-accent-hover), var(--fb-accent));
+    box-shadow: 0 2px 10px rgba(234, 88, 12, 0.5);
+  }
+  input[type="range"].vidya-range.accent-range::-moz-range-thumb {
+    background: var(--fb-accent);
+    box-shadow: 0 2px 10px rgba(234, 88, 12, 0.5);
   }
 }
 

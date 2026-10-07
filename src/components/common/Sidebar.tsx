@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   LayoutDashboard,
   Users,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { staggerContainerFast, fadeUp, fadeIn, tSpring } from '../../lib/motion';
 
 export interface NavGroup {
   title: string;
@@ -39,17 +41,22 @@ interface SidebarProps {
   onSelectTab: (tabId: string) => void;
   isOpen: boolean;
   onToggle: () => void;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
-const DEFAULT_WIDTH = 256;
-const MIN_WIDTH = 190;
-const MAX_WIDTH = 480;
+const DEFAULT_WIDTH = 220;
+const MIN_WIDTH = 180;
+const MAX_WIDTH = 320;
+const COLLAPSED_WIDTH = 64;
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onSelectTab,
   isOpen,
-  onToggle
+  onToggle,
+  isCollapsed,
+  onToggleCollapsed
 }) => {
   const { students, batches, invoices, announcements, teachers } = useApp();
   const { currentUser } = useAuth();
@@ -60,8 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const saved = localStorage.getItem('vidyaos_sidebar_custom_width');
       if (saved) {
         const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
-          return parsed;
+        if (!isNaN(parsed) && parsed >= MIN_WIDTH) {
+          return parsed === 256 ? DEFAULT_WIDTH : Math.min(parsed, MAX_WIDTH);
         }
       }
     }
@@ -151,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Fees & Invoicing',
           icon: CreditCard,
           badge: pendingInvoicesCount > 0 ? `${pendingInvoicesCount} due` : undefined,
-          badgeColor: 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-300 font-bold'
+          badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 font-bold'
         }
       ]
     },
@@ -207,43 +214,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Mobile Off-Canvas Drawer Backdrop */}
-      {isOpen && (
-        <div
-          onClick={onToggle}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 md:hidden animate-in fade-in duration-200"
-          aria-hidden="true"
-        />
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="sidebar-backdrop"
+            onClick={onToggle}
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 md:hidden"
+            aria-hidden="true"
+          />
+        )}
+      </AnimatePresence>
 
       {/* ChatGPT-style Smooth & Resizable Navigation Sidebar */}
       <aside
         style={{
           width: isOpen
-            ? (typeof window !== 'undefined' && window.innerWidth >= 768 ? `${sidebarWidth || 256}px` : undefined)
+            ? (typeof window !== 'undefined' && window.innerWidth >= 768 ? `${isCollapsed ? COLLAPSED_WIDTH : sidebarWidth}px` : undefined)
             : '0px',
           minWidth: isOpen
-            ? (typeof window !== 'undefined' && window.innerWidth >= 768 ? `${sidebarWidth || 256}px` : undefined)
+            ? (typeof window !== 'undefined' && window.innerWidth >= 768 ? `${isCollapsed ? COLLAPSED_WIDTH : sidebarWidth}px` : undefined)
             : '0px'
         }}
         className={`bg-white dark:bg-[#1C1C1E] border-r border-black/[0.08] dark:border-white/[0.08] flex flex-col flex-shrink-0 select-none relative ${
           isResizing ? 'transition-none select-none' : 'transition-[width,opacity] duration-300 ease-in-out'
         } ${
           isOpen
-            ? 'fixed inset-y-0 left-0 z-50 w-72 md:w-auto shadow-2xl flex md:relative md:shadow-none md:z-auto opacity-100'
+            ? 'fixed inset-y-0 left-0 z-50 w-64 md:w-auto shadow-2xl flex md:relative md:shadow-none md:z-auto opacity-100'
             : 'w-0 opacity-0 pointer-events-none border-r-0 overflow-hidden'
         }`}
         aria-label="Application Navigation"
       >
         {/* Real-time Draggable Resize Handle on Right Border */}
-        {isOpen && (
+        {isOpen && !isCollapsed && (
           <div
             onMouseDown={handleMouseDown}
             onTouchStart={handleTouchStart}
             onDoubleClick={handleDoubleClick}
             className={`hidden md:flex items-center justify-center absolute top-0 -right-1 w-2.5 h-full cursor-col-resize z-30 group select-none transition-colors ${
-              isResizing ? 'bg-[#FFA000]' : 'hover:bg-[#FFA000]/40'
+              isResizing ? 'bg-[#0071E3]' : 'hover:bg-[#0071E3]/40'
             }`}
-            title="Drag to resize sidebar width · Double-click to reset (256px)"
+            title="Drag to resize sidebar width · Double-click to reset (220px)"
             aria-label="Drag to resize sidebar width"
           >
             {/* Grip indicator pill on hover/drag */}
@@ -251,19 +265,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={`w-1 h-8 rounded-full transition-all duration-150 ${
                 isResizing
                   ? 'bg-slate-900 dark:bg-white scale-y-125'
-                  : 'bg-transparent group-hover:bg-[#FFA000]'
+                  : 'bg-transparent group-hover:bg-[#0071E3]'
               }`}
             />
           </div>
         )}
 
-        {/* Mobile Close Button in Drawer Header */}
-        <div className="flex md:hidden items-center justify-between p-3 border-b border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04]">
-          <span className="text-xs font-bold text-[#86868B] font-apple-text tracking-wider">NAVIGATION</span>
+        <div className={`flex items-center border-b border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] ${isCollapsed ? 'justify-between md:justify-center px-3 md:px-2 py-2' : 'justify-between px-3 py-2'}`}>
+          <span className={`text-xs font-bold text-[#86868B] font-apple-text tracking-wider ${isCollapsed ? 'md:hidden' : ''}`}>NAVIGATION</span>
+          <button
+            onClick={onToggleCollapsed}
+            className="hidden md:block p-1.5 rounded-lg text-slate-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.1] transition cursor-pointer"
+            aria-label={isCollapsed ? 'Expand Navigation' : 'Collapse Navigation'}
+            title={isCollapsed ? 'Expand Navigation' : 'Collapse Navigation'}
+          >
+            <PanelLeft className={`w-4 h-4 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
+          </button>
           <button
             onClick={onToggle}
-            className="p-1 rounded-lg text-slate-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.1] transition cursor-pointer"
+            className="md:hidden p-1.5 rounded-lg text-slate-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.1] transition cursor-pointer"
             aria-label="Close Navigation"
+            title="Close Navigation"
           >
             <X className="w-4 h-4" />
           </button>
@@ -271,9 +293,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Front Desk Staff Workspace Pill (If logged in as staff) */}
         {isStaff && (
-          <div className="mx-2 mt-2.5 mb-1 px-3 py-2 bg-[#E8F0FE] dark:bg-[#1A73E8]/15 rounded-xl border border-[#D2E3FC] dark:border-[#1A73E8]/30 flex items-center space-x-2">
+          <div className={`mx-2 mt-2.5 mb-1 px-3 py-2 bg-[#E8F0FE] dark:bg-[#1A73E8]/15 rounded-xl border border-[#D2E3FC] dark:border-[#1A73E8]/30 flex items-center space-x-2 ${isCollapsed ? 'md:justify-center md:px-2' : ''}`}>
             <span className="w-2 h-2 rounded-full bg-[#1A73E8] animate-pulse shrink-0" />
-            <div className="text-[11px] leading-tight text-[#174EA6] dark:text-[#8AB4F8]">
+            <div className={`text-[11px] leading-tight text-[#174EA6] dark:text-[#8AB4F8] ${isCollapsed ? 'md:hidden' : ''}`}>
               <span className="font-bold block">Front Desk Counter</span>
               <span className="text-[10px] text-[#1967D2] dark:text-[#AECBFA]">Limited Staff Mode</span>
             </div>
@@ -281,25 +303,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Scrollable Navigation Groups */}
-        <div className="flex-1 overflow-y-auto py-2.5 px-2 custom-scrollbar space-y-3">
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainerFast}
+          className={`flex-1 overflow-y-auto py-2.5 custom-scrollbar space-y-3 ${isCollapsed ? 'px-1.5' : 'px-2'}`}
+        >
           {visibleNavGroups.map((group) => (
-            <div key={group.title} className="space-y-0.5">
+            <motion.div key={group.title} variants={fadeUp} className="space-y-0.5">
               {/* Group Title */}
-              <div className="flex items-center justify-between px-3 py-1">
+              <div className={`flex items-center justify-between px-3 py-1 ${isCollapsed ? 'md:hidden' : ''}`}>
                 <div className="flex items-center space-x-1.5">
                   <span className="text-[10px] font-bold tracking-wider text-[#86868B] uppercase font-apple-text">
                     {group.title}
                   </span>
-                  {group.title === 'CORE OPERATIONS' && (
-                    <button
-                      onClick={onToggle}
-                      className="p-1 rounded-md text-[#86868B] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#1D1D1F] dark:hover:text-white transition-all cursor-pointer group/toggle inline-flex items-center justify-center"
-                      title="Collapse sidebar"
-                      aria-label="Collapse sidebar"
-                    >
-                      <PanelLeft className="w-3.5 h-3.5 transition-transform group-hover/toggle:scale-110" />
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -309,7 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 const isActive = currentTab === item.id;
 
                 return (
-                  <button
+                  <motion.button
                     key={item.id}
                     onClick={() => {
                       onSelectTab(item.id);
@@ -317,49 +334,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onToggle();
                       }
                     }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                     aria-label={item.label}
-                    className={`w-full flex items-center transition-all duration-150 relative text-left group cursor-pointer px-3 py-2 rounded-xl space-x-3 text-xs ${
+                    title={isCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center transition-[color,background-color,box-shadow] duration-150 relative text-left group cursor-pointer rounded-xl text-xs px-3 py-2 space-x-3 ${
+                      isCollapsed ? 'md:justify-center md:px-2 md:py-2.5 md:space-x-0' : ''
+                    } ${
                       isActive
-                        ? 'bg-[#FFF8E1] dark:bg-[#FFA000]/15 text-[#E65100] dark:text-[#FFCA28] font-bold shadow-2xs'
+                        ? 'bg-[#EAF4FF] dark:bg-[#112A43] text-[#005ECF] dark:text-[#5AC8FA] font-bold shadow-2xs'
                         : 'text-[#86868B] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-[#1D1D1F] dark:hover:text-white font-medium'
                     }`}
                   >
-                    {/* Active Left Indicator Bar */}
+                    {/* Active Left Indicator Bar — slides between items via shared layoutId */}
                     {isActive && (
-                      <span className="absolute left-1 top-2 bottom-2 w-1 rounded-full bg-[#FFA000]" />
+                      <motion.span
+                        layoutId="sidebar-active"
+                        transition={tSpring}
+                        className="absolute left-1 top-2 bottom-2 w-1 rounded-full bg-[#0071E3]"
+                        aria-hidden="true"
+                      />
                     )}
 
                     <Icon
                       className={`w-4 h-4 flex-shrink-0 transition-colors ${
                         isActive
-                          ? 'text-[#FFA000]'
+                          ? 'text-[#0071E3] dark:text-[#5AC8FA]'
                           : 'text-[#86868B] group-hover:text-[#1D1D1F] dark:group-hover:text-white'
                       }`}
                     />
 
-                    <span className="flex-1 truncate tracking-tight text-xs font-apple-text">
+                    <span className={`flex-1 truncate tracking-tight text-xs font-apple-text ${isCollapsed ? 'md:hidden' : ''}`}>
                       {item.label}
                     </span>
 
-                    {item.badge !== undefined && (
+                    {item.badge !== undefined && !isCollapsed && (
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums ${
                           item.badgeColor
                             ? item.badgeColor
                             : isActive
-                            ? 'bg-[#FFA000]/25 text-[#B06000] dark:text-[#FFD54F]'
+                            ? 'bg-[#EAF4FF] text-[#005ECF] dark:text-[#5AC8FA]'
                             : 'bg-black/[0.04] text-[#86868B] dark:bg-white/[0.08] dark:text-[#86868B]'
                         }`}
                       >
                         {item.badge}
                       </span>
                     )}
-                  </button>
+                  </motion.button>
                 );
               })}
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </aside>
     </>
   );
