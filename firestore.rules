@@ -438,6 +438,25 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // AUDIT LOG (F1) — append-only, staff/admin visibility only
+    // ------------------------------------------------------------------------
+    match /auditLogs/{entryId} {
+      // Only center staff/admins (and the platform owner) may read the change
+      // history. Teachers, students and parents never see audit frames.
+      allow read: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+
+      // The app writes audit frames as the signed-in actor; spoofing another
+      // user's attribution is rejected.
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        request.resource.data.actorUserId == request.auth.uid;
+
+      // Immutable history — an audit entry can never be edited or deleted.
+      allow update, delete: if false;
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

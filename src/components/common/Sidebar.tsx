@@ -19,7 +19,8 @@ import {
   Settings,
   ShieldCheck,
   PanelLeft,
-  X
+  X,
+  History
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -196,14 +197,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: 'analytics', label: 'Analytics', icon: BarChart3 },
         { id: 'reports', label: 'Reports Export', icon: FileSpreadsheet },
+        { id: 'audit', label: 'Audit Trail', icon: History },
         { id: 'settings', label: 'Center Settings', icon: Settings },
         { id: 'subscription', label: 'Billing & Plan', icon: ShieldCheck }
       ]
     }
   ];
 
-  // Role-based navigation filtering: Front Desk Staff cannot access faculty salaries/mgmt, center P&L analytics, reports, settings, or SaaS billing
-  const STAFF_RESTRICTED_TABS = ['teachers', 'analytics', 'reports', 'settings', 'subscription'];
+  // Role-based navigation filtering: Front Desk Staff cannot access faculty salaries/mgmt, center P&L analytics, reports, audit, settings, or SaaS billing
+  const STAFF_RESTRICTED_TABS = ['teachers', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
   const isStaff = currentUser?.role === 'STAFF';
 
   const visibleNavGroups = navGroups.map(group => ({

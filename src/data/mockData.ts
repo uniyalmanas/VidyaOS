@@ -12,7 +12,8 @@ import {
   StudyMaterial,
   TimetableSlot,
   Announcement,
-  SubscriptionPlan
+  SubscriptionPlan,
+  AuditLogEntry
 } from '../types';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -1108,5 +1109,83 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     createdBy: 'Er. Manoj Verma',
     channel: ['in-app', 'whatsapp', 'sms'],
     whatsappTemplate: 'Dear Parent, October monthly course fee is due by 10th Oct. Tap the link to view invoice & pay via UPI.'
+  }
+];
+
+/**
+ * DEV-only demo seed for the Audit Trail (F1). These entries are NOT written to
+ * Firestore during seeding — `subscribeToAuditLogs` serves them directly as the
+ * demo-persona fallback, exactly like the other MOCK_* collections.
+ */
+export const MOCK_AUDIT_LOGS: AuditLogEntry[] = [
+  {
+    id: 'audit-mock-1',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    actorUserId: 'user-apex-admin',
+    actorName: 'Er. Manoj Verma',
+    actorRole: 'CENTER_ADMIN',
+    action: 'create',
+    targetType: 'student',
+    targetId: 'stud-rahul-10',
+    summary: 'Admitted Rahul Sharma (Class 10 CBSE) and provisioned student + parent logins.',
+    createdAt: '2026-09-18T10:12:00.000Z',
+    createdAtMs: new Date('2026-09-18T10:12:00.000Z').getTime()
+  },
+  {
+    id: 'audit-mock-2',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    actorUserId: 'user-apex-admin',
+    actorName: 'Er. Manoj Verma',
+    actorRole: 'CENTER_ADMIN',
+    action: 'create',
+    targetType: 'invoice',
+    targetId: 'inv-rahul-oct',
+    summary: 'Generated October 2026 monthly fee invoice of ₹3,200 for Rahul Sharma.',
+    createdAt: '2026-09-25T09:05:00.000Z',
+    createdAtMs: new Date('2026-09-25T09:05:00.000Z').getTime()
+  },
+  {
+    id: 'audit-mock-3',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    actorUserId: 'user-apex-staff',
+    actorName: 'Pooja Verma',
+    actorRole: 'STAFF',
+    action: 'verify',
+    targetType: 'payment',
+    targetId: 'inv-rahul-oct',
+    summary: 'Verified UPI payment ₹3,200 (ref 4073 1029 8811) — invoice now fully paid.',
+    createdAt: '2026-09-28T17:40:00.000Z',
+    createdAtMs: new Date('2026-09-28T17:40:00.000Z').getTime()
+  },
+  {
+    id: 'audit-mock-4',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    actorUserId: 'user-teacher-sharma',
+    actorName: 'Prof. Anjali Sharma',
+    actorRole: 'TEACHER',
+    action: 'create',
+    targetType: 'exam',
+    targetId: 'exam-c10-math-1',
+    summary: 'Scheduled "Class 10 Monthly Math Diagnostic" for 5 October 2026 (max 80 marks).',
+    createdAt: '2026-09-29T08:30:00.000Z',
+    createdAtMs: new Date('2026-09-29T08:30:00.000Z').getTime()
+  },
+  {
+    id: 'audit-mock-5',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    actorUserId: 'user-apex-admin',
+    actorName: 'Er. Manoj Verma',
+    actorRole: 'CENTER_ADMIN',
+    action: 'update',
+    targetType: 'batch',
+    targetId: 'batch-c10-math',
+    summary: 'Enrolled Rahul Sharma into Class 10 Mathematics Batch A and synced the roster.',
+    createdAt: '2026-10-01T11:20:00.000Z',
+    createdAtMs: new Date('2026-10-01T11:20:00.000Z').getTime()
   }
 ];

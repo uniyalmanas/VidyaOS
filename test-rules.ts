@@ -1,9 +1,10 @@
 /**
- * VidyaOS — Firestore rules verification for faculty batch enrollment (feature #2)
+ * VidyaOS — Firestore rules verification (faculty batch enrollment #2 + audit log F1)
  *
  * Runs against the Auth + Firestore EMULATORS using the production
- * `firestore.rules`. Verifies the new `students` update clause:
+ * `firestore.rules`. Verifies:
  *
+ *   Batch enrollment (feature #2):
  *   1. A TEACHER may update ONLY `batchIds` on a student of their own org (the
  *      `student.batchIds` mirror that keeps enrollment in sync).
  *   2. A TEACHER may NOT change any other field — including pairing a
@@ -12,6 +13,11 @@
  *   3. The app's exact write path (a full-document `set()` where only
  *      `batchIds` differs) is allowed for a teacher.
  *   4. CENTER_ADMIN/STAFF keep full record-edit rights as before.
+ *
+ *   Audit log (F1):
+ *   5. Staff/admin may write + read `auditLogs`; teachers cannot (read or
+ *      write), an entry cannot claim another user as its actor, entries are
+ *      immutable (no update/delete), and history is tenant-isolated.
  *
  * Run: npx firebase emulators:exec --only auth,firestore --project vidyut-2bcb6 "npx tsx test-rules.ts"
  */
@@ -29,6 +35,8 @@ import {
   doc,
   setDoc,
   updateDoc,
+  deleteDoc,
+  getDoc,
   type Firestore
 } from 'firebase/firestore';
 
@@ -220,6 +228,88 @@ async function main(): Promise<void> {
     classGrade: 'Class 12'
   });
   check('center admin can still edit the full student record', true);
+
+  // ---------------------------------------------------------------- audit log (F1)
+  console.log('\nSuite 4: Audit log — append-only history, staff/admin visibility');
+  const auditId = `audit-rules-${stamp}`;
+  const auditRef = doc(admin.db, 'auditLogs', auditId);
+  await setDoc(auditRef, {
+    id: auditId,
+    orgId: ORG_ID,
+    branchId: 'branch-rules',
+    actorUserId: adminUid,
+    actorName: 'Rules Admin',
+    actorRole: 'CENTER_ADMIN',
+    action: 'create',
+    targetType: 'student',
+    targetId: 'stud-rules-1',
+    summary: 'Admitted rules student.',
+    createdAt: new Date().toISOString(),
+    createdAtMs: Date.now()
+  });
+  check('center admin can write an audit entry', true);
+
+  let adminRead = false;
+  try {
+    adminRead = (await getDoc(auditRef)).exists();
+  } catch {
+    adminRead = false;
+  }
+  check('center admin can read audit history', adminRead);
+
+  const teacherCreateDenied = await expectDenied('teacher writes an audit entry', () =>
+    setDoc(doc(teacher.db, 'auditLogs', `audit-teacher-${stamp}`), {
+      id: `audit-teacher-${stamp}`,
+      orgId: ORG_ID,
+      actorUserId: teacherUid,
+      actorName: 'Rules Teacher',
+      actorRole: 'TEACHER',
+      action: 'create',
+      targetType: 'student',
+      targetId: 'stud-rules-1',
+      summary: 'Not permitted.',
+      createdAt: new Date().toISOString(),
+      createdAtMs: Date.now()
+    })
+  );
+  check('teacher cannot create audit entries (staff/admin only)', teacherCreateDenied);
+
+  const teacherReadDenied = await expectDenied('teacher reads audit history', () =>
+    getDoc(doc(teacher.db, 'auditLogs', auditId))
+  );
+  check('teacher cannot read audit history', teacherReadDenied);
+
+  const spoofDenied = await expectDenied('actor spoofing is rejected', () =>
+    setDoc(doc(teacher.db, 'auditLogs', `audit-spoof-${stamp}`), {
+      id: `audit-spoof-${stamp}`,
+      orgId: ORG_ID,
+      actorUserId: adminUid,
+      actorName: 'Rules Admin',
+      actorRole: 'CENTER_ADMIN',
+      action: 'create',
+      targetType: 'student',
+      targetId: 'stud-rules-1',
+      summary: 'Spoofed attribution.',
+      createdAt: new Date().toISOString(),
+      createdAtMs: Date.now()
+    })
+  );
+  check('an entry cannot claim another user as its actor', spoofDenied);
+
+  const updateDenied = await expectDenied('audit entry is edited', () =>
+    updateDoc(auditRef, { summary: 'tampered' })
+  );
+  check('audit entries can never be updated', updateDenied);
+
+  const deleteDenied = await expectDenied('audit entry is deleted', () =>
+    deleteDoc(auditRef)
+  );
+  check('audit entries can never be deleted', deleteDenied);
+
+  const crossOrgReadDenied = await expectDenied('other-centre admin reads foreign audit', () =>
+    getDoc(doc(adminOther.db, 'auditLogs', auditId))
+  );
+  check('audit history is tenant-isolated', crossOrgReadDenied);
 
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);

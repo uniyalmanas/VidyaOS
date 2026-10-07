@@ -64,6 +64,7 @@ import {
   Column
 } from '../ui';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
+import { AuditTrailModule } from './AuditTrailModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -84,6 +85,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   messages: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
   analytics: { label: 'Coaching Center Analytics', breadcrumb: 'Analytics', subtitle: 'Detailed insights into student attendance, test score distribution, and fee recovery' },
   reports: { label: 'Academic & Fee Reports', breadcrumb: 'Reports', subtitle: 'Download audit trails, monthly fee collection ledgers, and student rosters' },
+  audit: { label: 'Audit Trail & Secure Backup', breadcrumb: 'Audit Trail', subtitle: 'Complete append-only change history with CSV export and one-click tenant backup' },
   settings: { label: 'Coaching Center Settings', breadcrumb: 'Settings', subtitle: 'Configure institute branding, UPI payment credentials, and SMS gateway details' },
   subscription: { label: 'VidyaOS SaaS Subscription', breadcrumb: 'Subscription', subtitle: 'Multi-tenant isolated coaching tier, active quotas, and resource limits' },
 };
@@ -131,13 +133,14 @@ export const AdminDashboard: React.FC = () => {
     updateOrganization,
     subscriptionPlans,
     changeOrgPlan,
-    showToast
+    showToast,
+    recordAudit
   } = useApp();
 
   const { navigate } = useRouter();
   const { currentUser, registerUserCredentials, linkStudentToParent } = useAuth();
   const isStaff = currentUser?.role === 'STAFF';
-  const STAFF_RESTRICTED_MODULES = ['teachers', 'analytics', 'reports', 'settings', 'subscription'];
+  const STAFF_RESTRICTED_MODULES = ['teachers', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
 
   const currentModule = (!activeTab || activeTab === 'dashboard' || !MODULE_META[activeTab]) ? 'overview' : activeTab;
   const setCurrentModule = (tab: string) => {
@@ -204,6 +207,12 @@ export const AdminDashboard: React.FC = () => {
       }
     });
     deleteTeacher(t.id);
+    recordAudit({
+      action: 'delete',
+      targetType: 'teacher',
+      targetId: t.id,
+      summary: `Removed faculty "${t.name}" from the directory and unassigned them from active batches.`
+    });
     showToast(`Faculty member "${t.name}" has been vacated and unassigned from active batches.`, 'success');
     setTeacherToVacate(null);
   };
@@ -212,6 +221,12 @@ export const AdminDashboard: React.FC = () => {
     if (!studentToVacate) return;
     const s = studentToVacate;
     deleteStudent(s.id);
+    recordAudit({
+      action: 'delete',
+      targetType: 'student',
+      targetId: s.id,
+      summary: `Vacated student "${s.name}" (${s.classGrade}) and removed them from the institute roster.`
+    });
     showToast(`Student "${s.name}" has been vacated and removed from institute roster.`, 'success');
     setStudentToVacate(null);
   };
@@ -240,7 +255,7 @@ export const AdminDashboard: React.FC = () => {
         downloadUrl = await uploadFileToStorage(path, materialFile, materialFile.type);
       }
 
-      addStudyMaterial({
+      const createdMaterial = addStudyMaterial({
         title: materialTitle.trim(),
         subject: materialSubject,
         type: materialType,
@@ -249,6 +264,13 @@ export const AdminDashboard: React.FC = () => {
         uploadedByTeacherId: teachers[0]?.id || 'teach-admin',
         chapterTopic: materialChapter.trim() || undefined,
         batchId: materialBatchId || undefined
+      });
+
+      recordAudit({
+        action: 'create',
+        targetType: 'material',
+        targetId: createdMaterial.id,
+        summary: `Uploaded study material "${materialTitle.trim()}" (${materialType}) for ${materialSubject}${materialBatchId ? ' to a batch' : ''}.`
       });
 
       showToast('Resource uploaded to Firebase Cloud Storage!', 'success');
@@ -387,6 +409,13 @@ export const AdminDashboard: React.FC = () => {
       logoText: (profileLogoText.trim() || cleanName.slice(0, 4)).toUpperCase()
     });
 
+    recordAudit({
+      action: 'update',
+      targetType: 'settings',
+      targetId: currentOrg.id,
+      summary: `Updated institute profile (name → "${cleanName}", owner → "${cleanOwner}", phone → ${cleanPhone}).`
+    });
+
     setTimeout(() => {
       setIsSavingProfile(false);
       setIsEditingProfile(false);
@@ -406,6 +435,13 @@ export const AdminDashboard: React.FC = () => {
     updateOrganization(currentOrg.id, {
       upiId: cleanUpi,
       upiMerchantName: upiMerchantName.trim() || currentOrg.name
+    });
+
+    recordAudit({
+      action: 'update',
+      targetType: 'settings',
+      targetId: currentOrg.id,
+      summary: `Updated desk UPI ID to ${cleanUpi} (merchant: ${upiMerchantName.trim() || currentOrg.name}).`
     });
 
     setTimeout(() => {
@@ -557,6 +593,13 @@ export const AdminDashboard: React.FC = () => {
         }
       }
 
+      recordAudit({
+        action: 'create',
+        targetType: 'student',
+        targetId: newStudent.id,
+        summary: `Admitted ${newStudent.name} (${stClass}, ${stBatchIds.length} batch allocation${stBatchIds.length === 1 ? '' : 's'})${studentAuthUid ? ' with a student login.' : '.'}`
+      });
+
       setShowAddStudentModal(false);
       resetStudentForm();
       if (parentLoginError) {
@@ -581,7 +624,7 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!batchName.trim()) return;
 
-    addBatch({
+    const newBatch = addBatch({
       branchId: currentOrg.branches[0]?.id || 'branch-1',
       name: batchName,
       subject: batchSubject,
@@ -595,6 +638,13 @@ export const AdminDashboard: React.FC = () => {
       feeAmountMonthly: batchFee,
       academicYear: '2026-2027',
       status: 'active'
+    });
+
+    recordAudit({
+      action: 'create',
+      targetType: 'batch',
+      targetId: newBatch.id,
+      summary: `Created batch "${batchName}" (${batchSubject}, ${batchClassGrade}) with monthly fee ₹${batchFee.toLocaleString('en-IN')} in ${batchRoom}.`
     });
 
     setShowAddBatchModal(false);
@@ -618,6 +668,16 @@ export const AdminDashboard: React.FC = () => {
           enrolled ? 'Student removed from the batch.' : 'Student enrolled in the batch.',
           'success'
         );
+        const student = students.find(s => s.id === studentId);
+        const batch = batches.find(b => b.id === batchId);
+        recordAudit({
+          action: 'update',
+          targetType: 'batch',
+          targetId: batchId,
+          summary: enrolled
+            ? `Removed ${student?.name || 'student'} from batch "${batch?.name || batchId}" (roster sync).`
+            : `Enrolled ${student?.name || 'student'} into batch "${batch?.name || batchId}" (roster sync).`
+        });
       } else {
         showToast(result.error, 'error');
       }
@@ -688,7 +748,7 @@ export const AdminDashboard: React.FC = () => {
 
     // Step 2: Create teacher profile document in the teachers collection.
     // This references the Firebase Auth UID — no password is ever stored here.
-    addTeacher({
+    const newTeacher = addTeacher({
       branchId: currentOrg.branches[0]?.id || 'branch-1',
       userId: authUid,
       name: teacherName.trim(),
@@ -700,6 +760,13 @@ export const AdminDashboard: React.FC = () => {
       assignedBatchIds: [], // Admin assigns batches separately to avoid unintended assignments
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(teacherName)}`,
       status: 'active'
+    });
+
+    recordAudit({
+      action: 'create',
+      targetType: 'teacher',
+      targetId: newTeacher.id,
+      summary: `Added faculty ${teacherName.trim()} (${assignedEmail}) with monthly salary ₹${(teacherSalary || 35000).toLocaleString('en-IN')}.`
     });
 
     setShowAddTeacherModal(false);
@@ -751,6 +818,13 @@ export const AdminDashboard: React.FC = () => {
         transactionRef: transactionRef || `CASH-${Date.now()}`
       });
       const paidAmount = inv.paidAmount + payment.amount;
+      const payerName = students.find(s => s.id === inv.studentId)?.name || 'student';
+      recordAudit({
+        action: 'verify',
+        targetType: 'payment',
+        targetId: inv.id,
+        summary: `Recorded ${collectMethod} payment of ₹${payment.amount.toLocaleString('en-IN')} on invoice ${inv.invoiceNo} for ${payerName} (${paidAmount >= inv.netAmount ? 'invoice settled' : 'partial payment'}).`
+      });
       setActiveReceiptInvoice({
         ...inv,
         paidAmount,
@@ -768,12 +842,19 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!noticeTitle.trim()) return;
 
-    createAnnouncement({
+    const newNotice = createAnnouncement({
       title: noticeTitle,
       content: noticeContent,
       targetAudience: noticeAudience,
       priority: 'normal',
       channel: ['in-app', 'whatsapp']
+    });
+
+    recordAudit({
+      action: 'create',
+      targetType: 'announcement',
+      targetId: newNotice.id,
+      summary: `Published notice "${noticeTitle}" to ${noticeAudience} audience.`
     });
 
     setShowNewNoticeModal(false);
@@ -1910,6 +1991,12 @@ export const AdminDashboard: React.FC = () => {
                                 if (!window.confirm('Confirm you have matched this UTR and amount in the center bank/UPI account.')) return;
                                 try {
                                   await verifyPayment(submission.id);
+                                  recordAudit({
+                                    action: 'verify',
+                                    targetType: 'payment',
+                                    targetId: submission.invoiceId,
+                                    summary: `Verified UPI payment of ₹${submission.amount.toLocaleString('en-IN')} (UTR ${submission.transactionRef}) submitted by ${submission.submittedByName}.`
+                                  });
                                   showToast('UPI transfer verified and invoice settled.', 'success');
                                 } catch (error) {
                                   showToast(error instanceof Error ? error.message : 'Could not verify payment.', 'error');
@@ -1924,6 +2011,12 @@ export const AdminDashboard: React.FC = () => {
                               onClick={async () => {
                                 try {
                                   await rejectPayment(submission.id);
+                                  recordAudit({
+                                    action: 'reject',
+                                    targetType: 'payment',
+                                    targetId: submission.invoiceId,
+                                    summary: `Rejected UPI payment report of ₹${submission.amount.toLocaleString('en-IN')} (UTR ${submission.transactionRef}) submitted by ${submission.submittedByName}.`
+                                  });
                                   showToast('Payment report rejected.', 'warning');
                                 } catch (error) {
                                   showToast(error instanceof Error ? error.message : 'Could not reject payment.', 'error');
@@ -2593,6 +2686,10 @@ export const AdminDashboard: React.FC = () => {
       {(currentModule === 'discussions' || currentModule === 'messages') && (
         <InstituteMessenger className="mt-2" />
       )}
+
+      {/* 15. ANALYTICS & REPORTS */}
+      {/* 14. AUDIT TRAIL & SECURE BACKUP (F1) */}
+      {!isStaff && currentModule === 'audit' && <AuditTrailModule />}
 
       {/* 15. ANALYTICS & REPORTS */}
       {!isStaff && (currentModule === 'analytics' || currentModule === 'reports') && (

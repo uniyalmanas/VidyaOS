@@ -23,7 +23,8 @@ import {
   ChatChannel,
   ChatMessage,
   ChatMessageTag,
-  ChatMessageAttachment
+  ChatMessageAttachment,
+  AuditLogEntry
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -44,6 +45,8 @@ import { FeeProvider, useFees } from './slices/FeeContext';
 import { AttendanceProvider, useAttendance } from './slices/AttendanceContext';
 import { AcademicProvider, useAcademics } from './slices/AcademicContext';
 import { CommunicationProvider, useCommunication } from './slices/CommunicationContext';
+import { AuditProvider, useAuditLog } from './slices/AuditContext';
+import { RecordAuditInput } from '../lib/audit';
 
 // Export domain hooks for direct fine-grained consumption
 export { useStudents } from './slices/StudentContext';
@@ -51,6 +54,7 @@ export { useFees } from './slices/FeeContext';
 export { useAttendance } from './slices/AttendanceContext';
 export { useAcademics } from './slices/AcademicContext';
 export { useCommunication, useChat } from './slices/CommunicationContext';
+export { useAuditLog } from './slices/AuditContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -78,6 +82,10 @@ export interface AppContextType {
   setActiveTab: (tab: string) => void;
   mobileViewActive: boolean;
   setMobileViewActive: (v: boolean) => void;
+
+  // Audit trail (F1) — append-only change history
+  auditLogs: AuditLogEntry[];
+  recordAudit: (input: RecordAuditInput) => void;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -274,7 +282,13 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
             isPlatformOwner={props.isPlatformOwner}
             onShowToast={props.showToast}
           >
-            <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+            <AuditProvider
+              currentOrg={props.currentOrg}
+              currentUser={props.currentUser}
+              isPlatformOwner={props.isPlatformOwner}
+            >
+              <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+            </AuditProvider>
           </CommunicationProvider>
         </AcademicProvider>
       </AttendanceProvider>
@@ -291,6 +305,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const attendanceSlice = useAttendance();
   const academicSlice = useAcademics();
   const commSlice = useCommunication();
+  const auditSlice = useAuditLog();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -380,6 +395,10 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     createAnnouncement: commSlice.createAnnouncement,
     subscriptionPlans: SUBSCRIPTION_PLANS,
     notifications: commSlice.notifications,
+
+    // Audit trail (F1) — append-only change history
+    auditLogs: auditSlice.auditLogs,
+    recordAudit: auditSlice.recordAudit,
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

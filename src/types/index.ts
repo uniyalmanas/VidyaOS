@@ -325,6 +325,39 @@ export interface NotificationItem {
   linkTab?: string;
 }
 
+export type AuditAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'verify'
+  | 'reject'
+  | 'approve'
+  | 'login';
+
+/**
+ * Append-only change-history record (F1). Written by the app on every
+ * significant mutation and never edited or deleted once created — the
+ * `auditLogs` Firestore rule forbids update/delete entirely.
+ */
+export interface AuditLogEntry {
+  id: string;
+  orgId: string;
+  branchId?: string;
+  actorUserId: string;
+  actorName: string;
+  actorRole: UserRole;
+  action: AuditAction;
+  /** Domain whose records changed, e.g. 'student' | 'batch' | 'fee' | 'teacher'. */
+  targetType: string;
+  targetId: string;
+  summary: string;
+  changes?: Record<string, unknown>;
+  /** ISO display string (UTC). */
+  createdAt: string;
+  /** Sortable epoch-ms timestamp so Firestore can order the log chronologically. */
+  createdAtMs: number;
+}
+
 export interface AuthSession {
   // NOTE: Firebase Auth owns the ID token. It is deliberately NOT part of the
   // session shape — persisting it to localStorage only created a stale,

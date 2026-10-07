@@ -33,7 +33,8 @@ import {
   StudyMaterial,
   Announcement,
   ChatChannel,
-  ChatMessage
+  ChatMessage,
+  AuditLogEntry
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -47,7 +48,8 @@ import {
   MOCK_EXAM_RESULTS,
   MOCK_ASSIGNMENTS,
   MOCK_STUDY_MATERIALS,
-  MOCK_ANNOUNCEMENTS
+  MOCK_ANNOUNCEMENTS,
+  MOCK_AUDIT_LOGS
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -563,6 +565,69 @@ export function subscribeToStudyMaterials(onData: (materials: StudyMaterial[]) =
     if (import.meta.env.DEV) console.error('Could not start study materials listener:', e);
     onData(fallback);
     return () => {};
+  }
+}
+
+// ----------------------------------------------------
+// AUDIT LOG (F1) — append-only change history
+// ----------------------------------------------------
+
+/**
+ * Newest-first off the wire (requires the auditLogs composite index declared in
+ * `firestore.indexes.json`), reversed below so the UI receives chronological
+ * order — the exact pattern used by `subscribeToChatMessages`.
+ */
+export function subscribeToAuditLogs(onData: (entries: AuditLogEntry[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_AUDIT_LOGS, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(
+          collection(db, 'auditLogs'),
+          where('orgId', '==', orgId),
+          orderBy('createdAtMs', 'desc'),
+          limit(1000)
+        )
+      : query(collection(db, 'auditLogs'), orderBy('createdAtMs', 'desc'), limit(1000));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as AuditLogEntry).reverse());
+        } else {
+          onData(developmentFallback(MOCK_AUDIT_LOGS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time audit logs', error);
+        onData(developmentFallback(MOCK_AUDIT_LOGS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_AUDIT_LOGS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start audit logs listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/**
+ * Best-effort append-only audit write. A failed audit frame must NEVER take
+ * down the primary mutation that triggered it, so unlike most persist helpers
+ * this never throws — it degrades to a console warning.
+ */
+export async function persistAuditLogToFirestore(entry: AuditLogEntry): Promise<void> {
+  try {
+    await setDoc(doc(db, 'auditLogs', entry.id), cleanFirestoreData(entry));
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn(`Audit entry kept locally only (${entry.id}):`, error);
+    } else {
+      console.warn(`Audit log write failed (${entry.id}).`);
+    }
   }
 }
 

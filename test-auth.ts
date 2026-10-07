@@ -5,6 +5,14 @@
 import { getIndiaDayName, getIndiaDateString } from './src/lib/date';
 import { selectTeacherBatches, filterToBatches } from './src/lib/teacherScope';
 import { reconcileBatchMembership } from './src/lib/rosterSync';
+import {
+  createAuditEntry,
+  upsertAuditEntry,
+  auditForOrg,
+  auditToCsv,
+  sortAuditNewestFirst,
+  AuditLogEntry
+} from './src/lib/audit';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -355,6 +363,103 @@ const mkEnrollStudent = (batchIds: string[]): any => ({
   );
   assert(batchesToUpdate.length === 1, 'Only real batches are touched by the write batch');
 }
+
+// -------------------------------------------------------------
+// Audit Trail (F1) — pure helpers that power the append-only log
+// -------------------------------------------------------------
+console.log('\n===== Audit trail core (F1) =====');
+
+const auditCtx = {
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  actorUserId: 'user-apex-admin',
+  actorName: 'Er. Manoj Verma',
+  actorRole: 'CENTER_ADMIN' as const
+};
+
+const e1 = createAuditEntry({
+  ...auditCtx,
+  action: 'create',
+  targetType: 'student',
+  targetId: 'stud-a',
+  summary: 'Admitted student A.'
+});
+const e2 = createAuditEntry({
+  ...auditCtx,
+  action: 'update',
+  targetType: 'batch',
+  targetId: 'batch-a',
+  summary: 'Updated batch A.'
+});
+
+assert(e1.id.startsWith('audit-'), 'Audit entry ids carry an audit- prefix');
+assert(e1.createdAtMs > 0, 'Audit entry carries a sortable epoch timestamp');
+assert(typeof e1.createdAt === 'string' && e1.createdAt.length > 0, 'Audit entry carries an ISO timestamp');
+assert(e1.actorUserId === 'user-apex-admin' && e1.actorRole === 'CENTER_ADMIN', 'Actor attribution is preserved');
+assert(e1.orgId === 'org-apex' && e1.branchId === 'branch-rajpur', 'Tenant + branch scope is preserved');
+assert(e1.changes === undefined, 'Empty changes are omitted, not stored as an empty object');
+
+const e3 = createAuditEntry({
+  ...auditCtx,
+  action: 'verify',
+  targetType: 'payment',
+  targetId: 'inv-1',
+  summary: 'Verified payment.',
+  changes: { paidAmount: 3200 }
+});
+assert(Boolean(e3.changes && e3.changes.paidAmount === 3200), 'Non-empty changes are preserved on the entry');
+
+// Upsert semantics: new entries land newest-first, the same id replaces in place.
+let auditList: AuditLogEntry[] = [];
+auditList = upsertAuditEntry(auditList, e1);
+auditList = upsertAuditEntry(auditList, e2);
+assert(auditList.length === 2 && auditList[0].id === e2.id, 'Newest entry is merged to the front');
+auditList = upsertAuditEntry(auditList, e1);
+assert(
+  auditList.length === 2 && auditList.filter(x => x.id === e1.id).length === 1,
+  'Re-firing the same entry does not duplicate it'
+);
+auditList = upsertAuditEntry(auditList, { ...e1, summary: 'Admitted student A (edited).' });
+assert(
+  auditList.find(x => x.id === e1.id)!.summary === 'Admitted student A (edited).',
+  'Same-id upsert replaces the record in place'
+);
+
+// Tenant isolation for the view layer.
+const foreign = createAuditEntry({
+  ...auditCtx,
+  orgId: 'org-bright',
+  action: 'create',
+  targetType: 'student',
+  targetId: 'stud-x',
+  summary: 'Foreign centre entry.'
+});
+const scoped = auditForOrg([...auditList, foreign], 'org-apex');
+assert(
+  scoped.length === 2 && !scoped.some(x => x.orgId === 'org-bright'),
+  'View layer filters entries to the current organisation'
+);
+
+// CSV export must survive hostile cells (commas, quotes, newlines, ₹).
+const messy = createAuditEntry({
+  ...auditCtx,
+  action: 'update',
+  targetType: 'settings',
+  targetId: 'org-apex',
+  summary: 'Updated name to "Vidya, Academy" & line\nbreak.'
+});
+const csv = auditToCsv([messy], false);
+assert(
+  csv.includes('"Updated name to ""Vidya, Academy"" & line\nbreak."'),
+  'CSV export quotes and escapes commas, quotes and newlines'
+);
+assert(auditToCsv([e1], true).split('\n')[0].startsWith('Timestamp'), 'CSV export includes a header row by default');
+
+// Ordering guarantee used by the dashboard.
+assert(
+  sortAuditNewestFirst([e1, e2]).every((x, i, arr) => i === 0 || arr[i - 1].createdAtMs >= x.createdAtMs),
+  'Audit list sorts newest-first'
+);
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);
