@@ -39,7 +39,26 @@ import {
   sortLeaveRequestsForReview,
   MAX_LEAVE_DAYS
 } from './src/lib/leave';
-import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord } from './src/types';
+import {
+  monthKeyFromDate,
+  monthYearFromKey,
+  monthYearFromDate,
+  currentMonthKey,
+  shiftMonthKey,
+  daysInMonthKey,
+  monthDayList,
+  workingDaysInMonthKey,
+  teacherAttendanceId,
+  upsertTeacherAttendance,
+  attendanceForDate,
+  summarizeTeacherMonth,
+  proratedSalaryHint,
+  computeSlipNet,
+  formatRupees,
+  slipsForMonth,
+  formatTimeHHMM
+} from './src/lib/staffOps';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip } from './src/types';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -762,6 +781,172 @@ assert(
   boardOrder.map(r => r.id).join(',') === 'ps,pl,dn,do',
   'Board shows pending first (soonest absence on top), decided newest-first below'
 );
+
+// ============================================================================
+// F4 — staff ops: month math, attendance idempotence, prorate & slip arithmetic
+// ============================================================================
+
+// Month helpers -----------------------------------------------------------------
+assert(monthKeyFromDate('2026-10-07') === '2026-10', 'Date → month key strips the day');
+assert(monthKeyFromDate('not-a-date') === '', 'Malformed dates yield an empty month key');
+assert(monthYearFromKey('2026-10') === 'October 2026', 'Month key → printable salary label');
+assert(monthYearFromKey('2026-13') === '', 'Month 13 is rejected');
+assert(monthYearFromDate('2026-10-07') === 'October 2026', 'Date → salary label in one step');
+assert(currentMonthKey('2026-10-07') === '2026-10', 'Current month key anchors on the India date');
+
+assert(shiftMonthKey('2026-10', -1) === '2026-09', 'Stepping back stays within the year');
+assert(shiftMonthKey('2026-10', 1) === '2026-11', 'Stepping forward stays within the year');
+assert(shiftMonthKey('2026-01', -1) === '2025-12', 'Stepping back across January lands in December');
+assert(shiftMonthKey('2026-12', 1) === '2027-01', 'Stepping forward across December lands in January');
+
+assert(daysInMonthKey('2026-10') === 31, 'October has 31 days');
+assert(daysInMonthKey('2026-02') === 28, 'February 2026 (not a leap year) has 28 days');
+
+// Calendar days (2026-10-07 is a Wednesday; 2026-10-11 a Sunday).
+const octoberDays = monthDayList('2026-10');
+assert(octoberDays.length === 31, 'The grid lists every day of the month');
+assert(octoberDays[6].date === '2026-10-07' && octoberDays[6].weekdayShort === 'Wed', 'Day 7 of October 2026 is a Wednesday');
+assert(octoberDays[10].isSunday, '11 October 2026 is a Sunday');
+assert(octoberDays[3].isSunday && !octoberDays[4].isSunday, '4 October is the first Sunday, 5 October a working day');
+
+// Working days: current month stops at today, future months are zero.
+assert(
+  workingDaysInMonthKey('2026-10', '2026-10-07') === 6,
+  '1–7 October minus the Sunday on the 4th = 6 elapsed working days'
+);
+assert(
+  workingDaysInMonthKey('2026-09', '2026-10-07') === 26,
+  'A past month counts all 30 days minus its 4 Sundays'
+);
+assert(
+  workingDaysInMonthKey('2026-11', '2026-10-07') === 0,
+  'A future month has no elapsed working days'
+);
+
+// Attendance idempotence (one doc per teacher per day) ---------------------------
+assert(
+  teacherAttendanceId('teach-anjali', '2026-10-07') === 'tatt-teach-anjali-2026-10-07',
+  'Doc ids are deterministic per (teacher, day)'
+);
+const makeAtt = (overrides: Partial<TeacherAttendance>): TeacherAttendance => ({
+  id: 'tatt-teach-anjali-2026-10-07',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  teacherId: 'teach-anjali',
+  date: '2026-10-07',
+  status: 'present',
+  markedByUserId: 'user-teacher-sharma',
+  markedAt: '2026-10-07T10:05:00.000Z',
+  ...overrides
+});
+const attList = upsertTeacherAttendance([], makeAtt({}));
+assert(attList.length === 1, 'The first stamp creates one row');
+const attList2 = upsertTeacherAttendance(
+  attList,
+  makeAtt({ status: 'half_day', checkOut: '13:00' })
+);
+assert(
+  attList2.length === 1 && attList2[0].status === 'half_day' && attList2[0].checkOut === '13:00',
+  'A second stamp on the same day REPLACES the row — never a duplicate'
+);
+const attList3 = upsertTeacherAttendance(
+  attList2,
+  makeAtt({ id: 'tatt-teach-anjali-2026-10-06', teacherId: 'teach-anjali', date: '2026-10-06' })
+);
+assert(attList3.length === 2, 'A different day adds a second row');
+assert(
+  attendanceForDate(attList3, 'teach-anjali', '2026-10-07')?.status === 'half_day',
+  'Lookup returns the row for the requested day'
+);
+assert(
+  attendanceForDate(attList3, 'teach-rohit', '2026-10-07') === undefined,
+  'Lookup misses cleanly for an unmarked teacher'
+);
+
+// Month summary + prorated salary hint -------------------------------------------
+// 6 rows across 1–7 Oct (skipping Sunday the 4th): 3 present, 1 half, 1 leave, 1 absent.
+const summaryRows: TeacherAttendance[] = [
+  makeAtt({ id: 'a1', date: '2026-10-01', status: 'present' }),
+  makeAtt({ id: 'a2', date: '2026-10-02', status: 'present' }),
+  makeAtt({ id: 'a3', date: '2026-10-03', status: 'present' }),
+  makeAtt({ id: 'a4', date: '2026-10-05', status: 'half_day' }),
+  makeAtt({ id: 'a5', date: '2026-10-06', status: 'on_leave' }),
+  makeAtt({ id: 'a6', date: '2026-10-07', status: 'absent' }),
+  // A different teacher and a different month must not leak into the tally.
+  makeAtt({ id: 'a7', date: '2026-10-02', status: 'absent', teacherId: 'teach-rohit' }),
+  makeAtt({ id: 'a8', date: '2026-09-30', status: 'absent' })
+];
+const octSummary = summarizeTeacherMonth(summaryRows, 'teach-anjali', '2026-10', '2026-10-07');
+assert(
+  octSummary.present === 3 && octSummary.halfDay === 1 && octSummary.onLeave === 1 && octSummary.absent === 1,
+  'The tally counts each status — and only this teacher in this month'
+);
+assert(octSummary.recorded === 6 && octSummary.workingDays === 6, 'Six rows over six elapsed working days');
+
+assert(
+  proratedSalaryHint(30000, octSummary) === 22500,
+  'Prorated hint: (3 present + 1 leave + 0.5 half) / 6 working days × basic'
+);
+assert(
+  proratedSalaryHint(30000, summarizeTeacherMonth([], 'teach-anjali', '2026-10', '2026-10-07')) === 30000,
+  'A month with no rows hints the FULL basic — never a scary near-zero default'
+);
+assert(
+  proratedSalaryHint(30000, summarizeTeacherMonth(summaryRows, 'teach-anjali', '2026-11', '2026-10-07')) === 30000,
+  'A month with zero working days hints the full basic'
+);
+const allAbsent = summarizeTeacherMonth(
+  [makeAtt({ id: 'b1', date: '2026-10-01', status: 'absent' })],
+  'teach-anjali',
+  '2026-10',
+  '2026-10-07'
+);
+assert(proratedSalaryHint(30000, allAbsent) === 0, 'A fully-absent month prorates to zero');
+assert(
+  proratedSalaryHint(30000, { ...octSummary, present: 999 }) <= 30000,
+  'The hint clamps at the full basic, never above it'
+);
+assert(proratedSalaryHint(-5, octSummary) === 0, 'A non-positive basic hints zero');
+
+// Slip arithmetic ------------------------------------------------------------------
+assert(computeSlipNet(30000, 2500, 1000) === 31500, 'Net = basic + allowances − deductions');
+assert(computeSlipNet(30000, 0, 0) === 30000, 'A plain slip nets exactly the basic');
+assert(computeSlipNet(2000, 0, 99999) === 0, 'Net floors at zero — never negative pay');
+assert(computeSlipNet(30000, NaN as number, (undefined as unknown) as number) === 30000, 'Garbage inputs degrade to zero allowances');
+assert(formatRupees(32500) === '₹32,500', 'Rupee formatting uses Indian grouping');
+assert(formatRupees(0) === '₹0', 'Zero rupees format cleanly');
+
+// One slip per month, newest issued first --------------------------------------------
+const makeSlip = (overrides: Partial<SalarySlip>): SalarySlip => ({
+  id: 'slip-x',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  teacherId: 'teach-anjali',
+  monthYear: 'October 2026',
+  basic: 30000,
+  allowances: 0,
+  deductions: 0,
+  netAmount: 30000,
+  paidAmount: 0,
+  status: 'issued',
+  issuedAt: '2026-10-07T10:00:00.000Z',
+  createdAt: '2026-10-07T10:00:00.000Z',
+  createdAtMs: 3,
+  ...overrides
+});
+const slipList = [
+  makeSlip({ id: 's-oct-old', monthYear: 'October 2026', createdAtMs: 1 }),
+  makeSlip({ id: 's-oct-new', monthYear: 'October 2026', createdAtMs: 9 }),
+  makeSlip({ id: 's-sep', monthYear: 'September 2026', createdAtMs: 5 })
+];
+const octSlips = slipsForMonth(slipList, '2026-10');
+assert(octSlips.length === 2 && octSlips.every(s => s.monthYear === 'October 2026'), 'The month list filters to that label');
+assert(octSlips[0].id === 's-oct-new', '…newest issued first');
+assert(slipsForMonth(slipList, '2026-11').length === 0, 'A month without slips lists nothing');
+
+// Clock stamp (HH:MM in India, regardless of the runner's timezone) -----------------
+assert(formatTimeHHMM(new Date('2026-10-07T10:05:00.000Z')) === '15:35', '10:05 UTC is 15:35 IST');
+assert(formatTimeHHMM(new Date('2026-10-06T18:30:00.000Z')) === '00:00', 'IST midnight formats as 00:00');
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

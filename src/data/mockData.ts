@@ -15,7 +15,9 @@ import {
   SubscriptionPlan,
   AuditLogEntry,
   Inquiry,
-  LeaveRequest
+  LeaveRequest,
+  TeacherAttendance,
+  SalarySlip
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
 
@@ -1366,5 +1368,87 @@ export const MOCK_LEAVE_REQUESTS: LeaveRequest[] = [
     status: 'pending',
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     createdAtMs: Date.now() - 2 * 60 * 60 * 1000
+  }
+];
+
+// ---------------------------------------------------------------------------
+// F4 — faculty self-attendance + salary slips (development fallback only;
+// no seeding entry exists, prod reads Firestore alone).
+// ---------------------------------------------------------------------------
+
+/** One demo row per (teacher, day) for the last few days of the Staff Ops grid. */
+const attendanceRow = (
+  id: string,
+  teacherId: string,
+  date: string,
+  status: TeacherAttendance['status'],
+  markedByUserId: string,
+  extra: Partial<TeacherAttendance> = {}
+): TeacherAttendance => ({
+  id,
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  teacherId,
+  date,
+  status,
+  markedByUserId,
+  markedAt: new Date().toISOString(),
+  ...extra
+});
+
+export const MOCK_TEACHER_ATTENDANCE: TeacherAttendance[] = [
+  attendanceRow('tatt-teach-anjali-today', 'teach-anjali', leaveDayOffset(0), 'present',
+    'user-teacher-sharma', { checkIn: '09:58' }),
+  attendanceRow('tatt-teach-rohit-today', 'teach-rohit', leaveDayOffset(0), 'present',
+    'user-teacher-negi', { checkIn: '16:02' }),
+  attendanceRow('tatt-teach-anjali-1', 'teach-anjali', leaveDayOffset(-1), 'present',
+    'user-teacher-sharma', { checkIn: '10:02', checkOut: '16:30' }),
+  attendanceRow('tatt-teach-rohit-1', 'teach-rohit', leaveDayOffset(-1), 'present',
+    'user-teacher-negi', { checkIn: '16:05', checkOut: '19:40' }),
+  attendanceRow('tatt-teach-anjali-2', 'teach-anjali', leaveDayOffset(-2), 'half_day',
+    'user-apex-admin', { checkIn: '10:00', checkOut: '13:00', remarks: 'Left after the morning batch.' }),
+  attendanceRow('tatt-teach-rohit-2', 'teach-rohit', leaveDayOffset(-2), 'on_leave',
+    'user-apex-admin', { remarks: 'Approved sick leave.' }),
+  attendanceRow('tatt-teach-anjali-4', 'teach-anjali', leaveDayOffset(-4), 'present',
+    'user-teacher-sharma', { checkIn: '09:55', checkOut: '16:25' }),
+  attendanceRow('tatt-teach-rohit-4', 'teach-rohit', leaveDayOffset(-4), 'absent',
+    'user-apex-admin', { remarks: 'No check-in, no notice.' })
+];
+
+export const MOCK_SALARY_SLIPS: SalarySlip[] = [
+  {
+    id: 'slip-mock-anjali-sep',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    teacherId: 'teach-anjali',
+    monthYear: 'September 2026',
+    basic: 30000,
+    allowances: 2500,
+    deductions: 0,
+    netAmount: 32500,
+    paidAmount: 32500,
+    status: 'paid',
+    paymentMethod: 'UPI',
+    paidAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    paidBy: 'Er. Manoj Verma',
+    issuedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAtMs: Date.now() - 5 * 24 * 60 * 60 * 1000
+  },
+  {
+    id: 'slip-mock-rohit-sep',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    teacherId: 'teach-rohit',
+    monthYear: 'September 2026',
+    basic: 24000,
+    allowances: 1500,
+    deductions: 1000,
+    netAmount: 24500,
+    paidAmount: 0,
+    status: 'issued',
+    issuedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAtMs: Date.now() - 2 * 24 * 60 * 60 * 1000
   }
 ];

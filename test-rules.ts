@@ -1,5 +1,5 @@
 /**
- * VidyaOS — Firestore rules verification (batch enrollment #2 + audit F1 + inquiries F2 + leaves F3)
+ * VidyaOS — Firestore rules verification (batch enrollment #2 + audit F1 + inquiries F2 + leaves F3 + staff ops F4)
  *
  * Runs against the Auth + Firestore EMULATORS using the production
  * `firestore.rules`. Verifies:
@@ -24,6 +24,15 @@
  *      staff file on anyone's behalf; requests are born pending, filers refine
  *      while pending, reviewers decide exactly once with their own attribution,
  *      deletion is desk-only, and the collection is tenant-isolated.
+ *
+ *   Staff ops (F4):
+ *   7. `teacherAttendance` — one row per teacher per day; a faculty member may
+ *      create/update only their OWN row (the join proves teachers/{id}.userId
+ *      is the caller), identity fields are pinned, `markedByUserId` cannot be
+ *      forged, and only the desk may clear a cell. `salarySlips` — every
+ *      tenant member reads, only staff/admin write; slips are born
+ *      draft/issued/paid, identity is pinned on update, and both collections
+ *      are tenant-isolated.
  *
  * Run: npx firebase emulators:exec --only auth,firestore --project vidyut-2bcb6 "npx tsx test-rules.ts"
  */
@@ -669,6 +678,259 @@ async function main(): Promise<void> {
     check('leave register is tenant-isolated on write', crossOrgLeaveWriteDenied);
   } catch (err) {
     console.error(`\nSuite 6 failed at step: "${suite6Step}"`);
+    throw err;
+  }
+
+  // ---------------------------------------------------------------- staff ops (F4)
+  console.log('\nSuite 7: Staff ops — faculty self-attendance, desk-only salary slips');
+  let suite7Step = 'provision a colleague faculty record';
+
+  try {
+    // `teach-rules-1` (linked to teacherUid) was provisioned in Suite 6. Add a
+    // second faculty record linked to a DIFFERENT uid — the "touch somebody
+    // else's row" negative target.
+    await setDoc(doc(admin.db, 'teachers', 'teach-rules-2'), {
+      id: 'teach-rules-2',
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      userId: `someone-else-${stamp}`,
+      name: 'Colleague Faculty',
+      phone: '+91 9000000066',
+      email: 'colleague@example.com',
+      avatar: '',
+      qualification: 'B.Ed',
+      subjects: ['Physics'],
+      assignedBatchIds: [],
+      joiningDate: '2026-04-01',
+      status: 'active'
+    });
+    check('admin provisions a second faculty record (linked elsewhere)', true);
+
+    const attDoc = (id: string, teacherId: string, uid: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      teacherId,
+      date: '2026-10-07',
+      status: 'present',
+      checkIn: '10:05',
+      markedByUserId: uid,
+      markedAt: '2026-10-07T04:35:00.000Z',
+      ...extra
+    });
+
+    // --- faculty self-attendance ----------------------------------------------
+    suite7Step = 'teacher stamps own row';
+    const ownAttId = `tatt-teach-rules-1-${stamp}`;
+    const ownAttRef = doc(teacher.db, 'teacherAttendance', ownAttId);
+    await setDoc(ownAttRef, attDoc(ownAttId, 'teach-rules-1', teacherUid));
+    check('faculty may stamp their own attendance row', true);
+
+    suite7Step = 'teacher reads own row';
+    const ownAttRead = await getDoc(ownAttRef);
+    check('faculty can read the attendance register (tenant member)', ownAttRead.exists());
+
+    suite7Step = 'teacher checks out (app full-overwrite path)';
+    await setDoc(ownAttRef, attDoc(ownAttId, 'teach-rules-1', teacherUid, { checkOut: '13:30' }));
+    check('faculty may update their own row (check-out overwrite)', true);
+
+    suite7Step = 'teacher stamps colleague row';
+    const colleagueAttDenied = await expectDenied("teacher stamps a colleague's attendance row", () =>
+      setDoc(doc(teacher.db, 'teacherAttendance', `tatt-colleague-${stamp}`),
+        attDoc(`tatt-colleague-${stamp}`, 'teach-rules-2', teacherUid))
+    );
+    check("faculty cannot write another teacher's row", colleagueAttDenied);
+
+    suite7Step = 'admin stamps colleague row';
+    const colleagueAttId = `tatt-colleague-${stamp}`;
+    await setDoc(doc(admin.db, 'teacherAttendance', colleagueAttId),
+      attDoc(colleagueAttId, 'teach-rules-2', adminUid));
+    check('the desk may stamp any faculty row', true);
+
+    suite7Step = 'teacher updates colleague row';
+    const colleagueUpdateDenied = await expectDenied("teacher updates a colleague's row", () =>
+      updateDoc(doc(teacher.db, 'teacherAttendance', colleagueAttId), { remarks: 'not mine' })
+    );
+    check("faculty cannot update another teacher's row", colleagueUpdateDenied);
+
+    suite7Step = 'teacher spoofs markedByUserId';
+    const spoofAttDenied = await expectDenied('teacher stamps a row attributed to the admin', () =>
+      setDoc(doc(teacher.db, 'teacherAttendance', `tatt-spoof-${stamp}`),
+        attDoc(`tatt-spoof-${stamp}`, 'teach-rules-1', adminUid))
+    );
+    check('faculty cannot forge the marking user', spoofAttDenied);
+
+    suite7Step = 'teacher re-points own row date';
+    const moveDateDenied = await expectDenied('teacher moves their row to another date', () =>
+      updateDoc(ownAttRef, { date: '2026-10-08' })
+    );
+    check('the (teacher, day) identity is pinned on update', moveDateDenied);
+
+    suite7Step = 'teacher re-attributes own row';
+    const reattributeDenied = await expectDenied('teacher re-attributes their row to the admin', () =>
+      updateDoc(ownAttRef, { markedByUserId: adminUid })
+    );
+    check('a faculty update cannot hand the row to somebody else', reattributeDenied);
+
+    suite7Step = 'teacher deletes own row';
+    const teacherAttDeleteDenied = await expectDenied('teacher deletes their own row', () =>
+      deleteDoc(ownAttRef)
+    );
+    check('only the desk can clear an attendance cell', teacherAttDeleteDenied);
+
+    suite7Step = 'staff stamps a row';
+    const staffAttId = `tatt-staff-${stamp}`;
+    const staffAttRef = doc(staff.db, 'teacherAttendance', staffAttId);
+    await setDoc(staffAttRef, attDoc(staffAttId, 'teach-rules-1', staffUid, { status: 'half_day' }));
+    check('front desk may stamp attendance on a teacher\'s behalf', true);
+
+    suite7Step = 'staff corrects a row';
+    await updateDoc(staffAttRef, { status: 'absent', remarks: 'Left early — half day corrected' });
+    check('front desk may correct a row', true);
+
+    suite7Step = 'staff clears a cell';
+    await deleteDoc(staffAttRef);
+    check('front desk may clear an attendance cell', true);
+
+    // --- salary slips ----------------------------------------------------------
+    suite7Step = 'teacher composes a slip';
+    const teacherSlipDenied = await expectDenied('teacher creates a salary slip', () =>
+      setDoc(doc(teacher.db, 'salarySlips', `slip-teacher-${stamp}`), {
+        id: `slip-teacher-${stamp}`,
+        orgId: ORG_ID,
+        branchId: 'branch-rules',
+        teacherId: 'teach-rules-1',
+        monthYear: 'October 2026',
+        basic: 30000,
+        allowances: 0,
+        deductions: 0,
+        netAmount: 30000,
+        paidAmount: 0,
+        status: 'issued',
+        issuedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        createdAtMs: Date.now()
+      })
+    );
+    check('faculty cannot create salary slips', teacherSlipDenied);
+
+    suite7Step = 'admin composes an invalid slip';
+    const badSlipDenied = await expectDenied('slip is created with an unknown status', () =>
+      setDoc(doc(admin.db, 'salarySlips', `slip-bad-${stamp}`), {
+        id: `slip-bad-${stamp}`,
+        orgId: ORG_ID,
+        branchId: 'branch-rules',
+        teacherId: 'teach-rules-1',
+        monthYear: 'October 2026',
+        basic: 30000,
+        allowances: 0,
+        deductions: 0,
+        netAmount: 30000,
+        paidAmount: 0,
+        status: 'pending_payment',
+        issuedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        createdAtMs: Date.now()
+      })
+    );
+    check('slips can only be born draft / issued / paid', badSlipDenied);
+
+    suite7Step = 'staff composes a draft slip';
+    const slipId = `slip-rules-${stamp}`;
+    const slipRef = doc(staff.db, 'salarySlips', slipId);
+    await setDoc(slipRef, {
+      id: slipId,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      teacherId: 'teach-rules-1',
+      monthYear: 'October 2026',
+      basic: 30000,
+      allowances: 2000,
+      deductions: 500,
+      netAmount: 31500,
+      paidAmount: 0,
+      status: 'draft',
+      issuedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      createdAtMs: Date.now()
+    });
+    check('front desk may compose a draft salary slip', true);
+
+    suite7Step = 'teacher reads the slip';
+    let teacherSlipRead = false;
+    try {
+      teacherSlipRead = (await getDoc(doc(teacher.db, 'salarySlips', slipId))).exists();
+    } catch {
+      teacherSlipRead = false;
+    }
+    check('faculty can read their own salary slip (tenant member view)', teacherSlipRead);
+
+    suite7Step = 'teacher updates the slip';
+    const teacherSlipUpdateDenied = await expectDenied('teacher marks their own slip paid', () =>
+      updateDoc(doc(teacher.db, 'salarySlips', slipId), {
+        status: 'paid',
+        paidAmount: 31500,
+        paidAt: new Date().toISOString(),
+        paidBy: teacherUid
+      })
+    );
+    check('faculty cannot touch salary slips', teacherSlipUpdateDenied);
+
+    suite7Step = 'teacher deletes the slip';
+    const teacherSlipDeleteDenied = await expectDenied('teacher deletes a salary slip', () =>
+      deleteDoc(doc(teacher.db, 'salarySlips', slipId))
+    );
+    check('faculty cannot delete salary slips', teacherSlipDeleteDenied);
+
+    suite7Step = 'staff issues the draft';
+    await updateDoc(slipRef, { status: 'issued', issuedAt: new Date().toISOString() });
+    check('draft → issued is a valid desk transition', true);
+
+    suite7Step = 'staff pays the slip';
+    await updateDoc(slipRef, {
+      status: 'paid',
+      paidAmount: 31500,
+      paymentMethod: 'UPI',
+      paidAt: new Date().toISOString(),
+      paidBy: staffUid
+    });
+    check('issued → paid records the settlement', true);
+
+    suite7Step = 'staff rewrites slip identity';
+    const slipIdentityDenied = await expectDenied('staff re-points a paid slip at another teacher', () =>
+      updateDoc(slipRef, { teacherId: 'teach-rules-2' })
+    );
+    check('slip identity (teacher/month) is pinned on update', slipIdentityDenied);
+
+    // --- tenant isolation ------------------------------------------------------
+    suite7Step = 'cross-org attendance read';
+    const crossOrgAttReadDenied = await expectDenied('other-centre admin reads foreign attendance', () =>
+      getDoc(doc(adminOther.db, 'teacherAttendance', colleagueAttId))
+    );
+    check('attendance register is tenant-isolated on read', crossOrgAttReadDenied);
+
+    suite7Step = 'cross-org slip write';
+    const crossOrgSlipWriteDenied = await expectDenied('other-centre admin writes a foreign slip', () =>
+      setDoc(doc(adminOther.db, 'salarySlips', `slip-foreign-${stamp}`), {
+        id: `slip-foreign-${stamp}`,
+        orgId: ORG_ID,
+        branchId: 'branch-rules',
+        teacherId: 'teach-rules-1',
+        monthYear: 'October 2026',
+        basic: 30000,
+        allowances: 0,
+        deductions: 0,
+        netAmount: 30000,
+        paidAmount: 0,
+        status: 'issued',
+        issuedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        createdAtMs: Date.now()
+      })
+    );
+    check('salary slips are tenant-isolated on write', crossOrgSlipWriteDenied);
+  } catch (err) {
+    console.error(`\nSuite 7 failed at step: "${suite7Step}"`);
     throw err;
   }
 

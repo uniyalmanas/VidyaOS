@@ -22,7 +22,8 @@ import {
   X,
   History,
   PhoneIncoming,
-  CalendarDays
+  CalendarDays,
+  Wallet
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -185,6 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'inquiries', label: 'Inquiries', icon: PhoneIncoming, badge: freshLeadsCount > 0 ? freshLeadsCount : undefined, badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 font-bold' },
         { id: 'leaves', label: 'Leaves', icon: CalendarDays, badge: pendingLeaveCount > 0 ? `${pendingLeaveCount} due` : undefined, badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 font-bold' },
         { id: 'teachers', label: 'Faculty', icon: UserCheck, badge: teachers.length },
+        { id: 'staffops', label: 'Staff Ops', icon: Wallet },
         { id: 'parents', label: 'Parents', icon: HeartHandshake }
       ]
     },
@@ -214,7 +216,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   // Role-based navigation filtering: Front Desk Staff cannot access faculty salaries/mgmt, center P&L analytics, reports, audit, settings, or SaaS billing
-  const STAFF_RESTRICTED_TABS = ['teachers', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
+  // ('staffops' joins 'teachers' — salary slips stay owner/admin-only in the UI; the Firestore rules still allow staff writes per spec.)
+  const STAFF_RESTRICTED_TABS = ['teachers', 'staffops', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
   const isStaff = currentUser?.role === 'STAFF';
 
   const visibleNavGroups = navGroups.map(group => ({

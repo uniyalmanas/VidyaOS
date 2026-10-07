@@ -36,7 +36,9 @@ import {
   ChatMessage,
   AuditLogEntry,
   Inquiry,
-  LeaveRequest
+  LeaveRequest,
+  TeacherAttendance,
+  SalarySlip
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -53,7 +55,9 @@ import {
   MOCK_ANNOUNCEMENTS,
   MOCK_AUDIT_LOGS,
   MOCK_INQUIRIES,
-  MOCK_LEAVE_REQUESTS
+  MOCK_LEAVE_REQUESTS,
+  MOCK_TEACHER_ATTENDANCE,
+  MOCK_SALARY_SLIPS
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -756,6 +760,130 @@ export async function deleteLeaveRequestFromFirestore(requestId: string): Promis
     await deleteDoc(doc(db, 'leaveRequests', requestId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `leaveRequests/${requestId}`);
+  }
+}
+
+// ----------------------------------------------------
+// STAFF OPS (F4) — faculty self-attendance rows + salary slips
+// ----------------------------------------------------
+
+/**
+ * Faculty attendance rows, newest day first (requires the `teacherAttendance`
+ * composite index: orgId ASC, date DESC). One doc per (teacher, day), so a
+ * month grid renders by filtering this list — no per-month re-subscribe.
+ */
+export function subscribeToTeacherAttendance(
+  onData: (records: TeacherAttendance[]) => void,
+  orgId?: string
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      onData(developmentFallback(MOCK_TEACHER_ATTENDANCE, orgId));
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(
+          collection(db, 'teacherAttendance'),
+          where('orgId', '==', orgId),
+          orderBy('date', 'desc'),
+          limit(1000)
+        )
+      : query(collection(db, 'teacherAttendance'), orderBy('date', 'desc'), limit(1000));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as TeacherAttendance));
+        } else {
+          onData(developmentFallback(MOCK_TEACHER_ATTENDANCE, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time teacher attendance', error);
+        onData(developmentFallback(MOCK_TEACHER_ATTENDANCE, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_TEACHER_ATTENDANCE, orgId);
+    if (import.meta.env.DEV) console.error('Could not start teacherAttendance listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/** Upserts the single (teacher, day) row — `setDoc` overwrites, same doc id. */
+export async function persistTeacherAttendanceToFirestore(
+  record: TeacherAttendance
+): Promise<void> {
+  try {
+    await setDoc(doc(db, 'teacherAttendance', record.id), cleanFirestoreData(record));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `teacherAttendance/${record.id}`);
+  }
+}
+
+/** Clears one cell on the admin grid (staff/admin only, mirrors the rules). */
+export async function deleteTeacherAttendanceFromFirestore(recordId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'teacherAttendance', recordId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `teacherAttendance/${recordId}`);
+  }
+}
+
+/**
+ * Salary slips, newest issued first (requires the `salarySlips` composite
+ * index: orgId ASC, createdAtMs DESC) — same shape as the leave listener.
+ */
+export function subscribeToSalarySlips(onData: (slips: SalarySlip[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      onData(developmentFallback(MOCK_SALARY_SLIPS, orgId));
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(
+          collection(db, 'salarySlips'),
+          where('orgId', '==', orgId),
+          orderBy('createdAtMs', 'desc'),
+          limit(500)
+        )
+      : query(collection(db, 'salarySlips'), orderBy('createdAtMs', 'desc'), limit(500));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as SalarySlip));
+        } else {
+          onData(developmentFallback(MOCK_SALARY_SLIPS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time salary slips', error);
+        onData(developmentFallback(MOCK_SALARY_SLIPS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_SALARY_SLIPS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start salarySlips listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+export async function persistSalarySlipToFirestore(slip: SalarySlip): Promise<void> {
+  try {
+    await setDoc(doc(db, 'salarySlips', slip.id), cleanFirestoreData(slip));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `salarySlips/${slip.id}`);
+  }
+}
+
+export async function deleteSalarySlipFromFirestore(slipId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'salarySlips', slipId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `salarySlips/${slipId}`);
   }
 }
 

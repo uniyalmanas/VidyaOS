@@ -319,7 +319,7 @@ export interface NotificationItem {
   userId: string;
   title: string;
   message: string;
-  type: 'attendance' | 'fee' | 'exam' | 'schedule' | 'announcement' | 'system' | 'leave';
+  type: 'attendance' | 'fee' | 'exam' | 'schedule' | 'announcement' | 'system' | 'leave' | 'salary';
   timestamp: string;
   read: boolean;
   linkTab?: string;
@@ -441,6 +441,59 @@ export interface LeaveRequest {
   /** Sortable epoch-ms timestamp for the Firestore listener ordering. */
   createdAtMs: number;
   updatedAt?: string;
+}
+
+export type TeacherAttendanceStatus = 'present' | 'absent' | 'half_day' | 'on_leave';
+
+/**
+ * Faculty self-attendance row (F4) — one per teacher per calendar day.
+ * `teacherId` points at the `Teacher` doc whose `userId` links to the auth
+ * account (same join the F3 leave filing uses), so rules can verify a teacher
+ * only ever writes their own row.
+ */
+export interface TeacherAttendance {
+  id: string;
+  orgId: string;
+  branchId: string;
+  teacherId: string;
+  /** YYYY-MM-DD (India). */
+  date: string;
+  status: TeacherAttendanceStatus;
+  /** "HH:MM" 24h — set when the teacher checks in / out. */
+  checkIn?: string;
+  checkOut?: string;
+  /** Firebase Auth uid of whoever stamped this row (self or the desk). */
+  markedByUserId: string;
+  markedAt: string;
+  remarks?: string;
+}
+
+export type SalarySlipStatus = 'draft' | 'issued' | 'paid';
+
+/**
+ * Monthly salary slip (F4) — issued by the desk from `Teacher.salary`,
+ * then marked paid. `netAmount = basic + allowances - deductions`.
+ */
+export interface SalarySlip {
+  id: string;
+  orgId: string;
+  branchId: string;
+  teacherId: string;
+  /** e.g. "October 2026". */
+  monthYear: string;
+  basic: number;
+  allowances: number;
+  deductions: number;
+  netAmount: number;
+  paidAmount: number;
+  status: SalarySlipStatus;
+  paymentMethod?: PaymentRecord['paymentMethod'];
+  paidAt?: string;
+  paidBy?: string;
+  issuedAt: string;
+  createdAt: string;
+  /** Sortable epoch-ms timestamp for the Firestore listener ordering. */
+  createdAtMs: number;
 }
 
 export interface AuthSession {

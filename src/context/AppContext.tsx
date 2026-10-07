@@ -26,7 +26,9 @@ import {
   ChatMessageAttachment,
   AuditLogEntry,
   Inquiry,
-  LeaveRequest
+  LeaveRequest,
+  TeacherAttendance,
+  SalarySlip
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -56,6 +58,12 @@ import {
   NewLeaveInput,
   LeaveReviewDecision
 } from './slices/LeaveContext';
+import {
+  StaffOpsProvider,
+  useStaffOps,
+  NewSalarySlipInput,
+  MarkAttendanceOptions
+} from './slices/StaffOpsContext';
 
 // Export domain hooks for direct fine-grained consumption
 export { useStudents } from './slices/StudentContext';
@@ -66,6 +74,7 @@ export { useCommunication, useChat } from './slices/CommunicationContext';
 export { useAuditLog } from './slices/AuditContext';
 export { useInquiries } from './slices/InquiryContext';
 export { useLeaveRequests } from './slices/LeaveContext';
+export { useStaffOps } from './slices/StaffOpsContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -115,6 +124,20 @@ export interface AppContextType {
   ) => void;
   reviewLeaveRequest: (leaveId: string, decision: LeaveReviewDecision, reviewNote?: string) => void;
   deleteLeaveRequest: (leaveId: string) => void;
+
+  // Staff ops (F4) — faculty self-attendance + salary slips
+  teacherAttendance: TeacherAttendance[];
+  salarySlips: SalarySlip[];
+  markTeacherAttendance: (
+    teacherId: string,
+    status: TeacherAttendance['status'],
+    options?: MarkAttendanceOptions
+  ) => void;
+  clearTeacherAttendance: (teacherId: string, date: string) => void;
+  issueSalarySlip: (input: NewSalarySlipInput) => SalarySlip | null;
+  issueDraftSlip: (slipId: string) => void;
+  markSlipPaid: (slipId: string, method: PaymentRecord['paymentMethod']) => void;
+  deleteSalarySlip: (slipId: string) => void;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -326,7 +349,13 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
                   currentUser={props.currentUser}
                   isPlatformOwner={props.isPlatformOwner}
                 >
-                  <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                  <StaffOpsProvider
+                    currentOrg={props.currentOrg}
+                    currentUser={props.currentUser}
+                    isPlatformOwner={props.isPlatformOwner}
+                  >
+                    <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                  </StaffOpsProvider>
                 </LeaveProvider>
               </InquiryProvider>
             </AuditProvider>
@@ -349,6 +378,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const auditSlice = useAuditLog();
   const inquirySlice = useInquiries();
   const leaveSlice = useLeaveRequests();
+  const staffOpsSlice = useStaffOps();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -455,6 +485,15 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     updateLeaveRequest: leaveSlice.updateLeaveRequest,
     reviewLeaveRequest: leaveSlice.reviewLeaveRequest,
     deleteLeaveRequest: leaveSlice.deleteLeaveRequest,
+    // Staff ops (F4) — faculty self-attendance + salary slips
+    teacherAttendance: staffOpsSlice.teacherAttendance,
+    salarySlips: staffOpsSlice.salarySlips,
+    markTeacherAttendance: staffOpsSlice.markTeacherAttendance,
+    clearTeacherAttendance: staffOpsSlice.clearTeacherAttendance,
+    issueSalarySlip: staffOpsSlice.issueSalarySlip,
+    issueDraftSlip: staffOpsSlice.issueDraftSlip,
+    markSlipPaid: staffOpsSlice.markSlipPaid,
+    deleteSalarySlip: staffOpsSlice.deleteSalarySlip,
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

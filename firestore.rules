@@ -567,6 +567,116 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // FACULTY ATTENDANCE (F4) — self check-in/out rows, one per teacher per day
+    // ------------------------------------------------------------------------
+    match /teacherAttendance/{attId} {
+      function attTeacherDoc(tid) {
+        return get(/databases/$(database)/documents/teachers/$(tid)).data;
+      }
+
+      // Any tenant member may view the day grid (families never need it, but
+      // the extra read is harmless and keeps the query rules simple).
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // Stamping. The actor must always be the signed-in user, the row must
+      // be born well-formed, and a faculty member may only ever create their
+      // OWN row — the join proves teachers/{teacherId} belongs to this org
+      // AND links to this exact auth uid. Staff/admin short-circuit first, so
+      // desk writes never pay for the get() joins below.
+      allow create: if isSignedIn() &&
+        isTenantMember(request.resource.data.orgId) &&
+        request.resource.data.markedByUserId == request.auth.uid &&
+        request.resource.data.teacherId is string &&
+        request.resource.data.date is string &&
+        request.resource.data.status in ['present', 'absent', 'half_day', 'on_leave'] &&
+        (
+          isCenterStaffOrAdmin(request.resource.data.orgId)
+          ||
+          (
+            isTeacher() &&
+            attTeacherDoc(request.resource.data.teacherId).orgId == request.resource.data.orgId &&
+            attTeacherDoc(request.resource.data.teacherId).userId == request.auth.uid
+          )
+        );
+
+      // Corrections. The identity pins + field allowlist run FIRST for every
+      // actor — so even a desk session cannot re-point a row at another org
+      // (tenant pollution) or smuggle in unknown fields. Then the role gate:
+      // desk sessions may rewrite any row inside their centre; faculty may
+      // only touch their own row (teacher doc join), with `markedByUserId`
+      // either staying put or becoming their own uid — never somebody else's.
+      // The get() joins below only evaluate for non-desk actors (`||` short
+      // circuits), and only after `isTeacher()` passes (`&&` short circuits).
+      allow update: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.teacherId == resource.data.teacherId &&
+        request.resource.data.date == resource.data.date &&
+        request.resource.data.status in ['present', 'absent', 'half_day', 'on_leave'] &&
+        request.resource.data.markedByUserId is string &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'checkIn', 'checkOut', 'remarks', 'markedAt', 'markedByUserId']) &&
+        (
+          isCenterStaffOrAdmin(resource.data.orgId)
+          ||
+          (
+            isTeacher() &&
+            attTeacherDoc(resource.data.teacherId).orgId == resource.data.orgId &&
+            attTeacherDoc(resource.data.teacherId).userId == request.auth.uid &&
+            (
+              request.resource.data.markedByUserId == request.auth.uid ||
+              request.resource.data.markedByUserId == resource.data.markedByUserId
+            )
+          )
+        );
+
+      // Clearing a cell is a desk action only — a teacher cannot erase the
+      // record of their own (mis)behaviour through delete.
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
+    // SALARY SLIPS (F4) — desk composes & pays; every tenant member reads
+    // ------------------------------------------------------------------------
+    match /salarySlips/{slipId} {
+      // Read = tenant member. The My Day card scopes faculty to their own
+      // slips in the product; rules stay org-wide like the leave board.
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // Born at the desk, well-formed. Teachers/students never write money.
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        request.resource.data.status in ['draft', 'issued', 'paid'] &&
+        request.resource.data.teacherId is string &&
+        request.resource.data.monthYear is string &&
+        request.resource.data.netAmount is number;
+
+      // Updates follow the app's exact lifecycle: draft → issued (status +
+      // issuedAt) and issued → paid (status + payment fields), with the
+      // tenant/teacher/month identity pinned immutable. Amounts are NEVER
+      // editable in place — a correction means delete + recompose, so a paid
+      // figure can't be quietly rewritten after the fact.
+      allow update: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.teacherId == resource.data.teacherId &&
+        request.resource.data.monthYear == resource.data.monthYear &&
+        request.resource.data.status in ['draft', 'issued', 'paid'] &&
+        request.resource.data.netAmount == resource.data.netAmount &&
+        request.resource.data.basic == resource.data.basic &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'issuedAt', 'paidAmount', 'paymentMethod', 'paidAt', 'paidBy']);
+
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

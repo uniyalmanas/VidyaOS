@@ -67,6 +67,7 @@ import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { AuditTrailModule } from './AuditTrailModule';
 import { InquiriesModule } from './InquiriesModule';
 import { LeavesModule } from './LeavesModule';
+import { StaffOpsModule } from '../staffops/StaffOpsModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -83,6 +84,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   teachers: { label: 'Faculty & Teachers Directory', breadcrumb: 'Teachers', subtitle: 'Instructor profiles, assigned subjects, contact details, and teaching schedules' },
   inquiries: { label: 'Admission Leads Pipeline', breadcrumb: 'Inquiries', subtitle: 'Walk-ins, calls & WhatsApp enquiries tracked from first hello to final admission' },
   leaves: { label: 'Leave Requests & Absences', breadcrumb: 'Leaves', subtitle: 'Absence asks from students & faculty — review, decide, and keep the centre register' },
+  staffops: { label: 'Staff Operations & Salary', breadcrumb: 'Staff Ops', subtitle: 'Faculty daily attendance grid, month-end salary slips, and pay-now settlement' },
   parents: { label: 'Parents & Guardians Directory', breadcrumb: 'Parents', subtitle: 'Direct communication channels, child linkages, and fee receipt sharing' },
   announcements: { label: 'Announcements & Broadcast System', breadcrumb: 'Announcements', subtitle: 'Publish urgent notices, holiday schedules, and WhatsApp broadcast templates' },
   discussions: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
@@ -145,7 +147,10 @@ export const AdminDashboard: React.FC = () => {
   const { navigate } = useRouter();
   const { currentUser, registerUserCredentials, linkStudentToParent } = useAuth();
   const isStaff = currentUser?.role === 'STAFF';
-  const STAFF_RESTRICTED_MODULES = ['teachers', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
+  // Staff see faculty salaries? No — pay stays owner/admin-only at the UI level
+  // (the rules still permit staff writes per spec; this is product philosophy
+  // matching the 'teachers' directory restriction).
+  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
 
   const currentModule = (!activeTab || activeTab === 'dashboard' || !MODULE_META[activeTab]) ? 'overview' : activeTab;
   const setCurrentModule = (tab: string) => {
@@ -2742,6 +2747,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 17. LEAVE REQUESTS & ABSENCES (F3) — staff + admin desk function */}
       {currentModule === 'leaves' && <LeavesModule />}
+
+      {/* 18. STAFF OPS (F4) — faculty self-attendance grid + salary slips (admin only) */}
+      {!isStaff && currentModule === 'staffops' && <StaffOpsModule />}
 
       {/* 15. ANALYTICS & REPORTS */}
       {!isStaff && (currentModule === 'analytics' || currentModule === 'reports') && (

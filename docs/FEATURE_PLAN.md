@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 shipped ✅ · F4–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 shipped ✅ · F5–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -185,7 +185,7 @@ for the span (nice touch).
 
 ---
 
-## F4 — Teacher self-attendance + salary slips
+## F4 — Teacher self-attendance + salary slips — ✅ SHIPPED (2026-10-07)
 
 **Simple words:** Teachers check in/out daily; at month end the owner issues a salary slip —
 base ₹ + extras − deductions — and marks paid.
