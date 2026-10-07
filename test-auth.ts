@@ -3,6 +3,8 @@
  */
 
 import { getIndiaDayName, getIndiaDateString } from './src/lib/date';
+import { selectTeacherBatches, filterToBatches } from './src/lib/teacherScope';
+import { reconcileBatchMembership } from './src/lib/rosterSync';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -174,6 +176,185 @@ assert(
   produced.size === 7,
   'All 7 weekday names are reachable — no slot day is permanently unreachable'
 );
+
+// -------------------------------------------------------------
+// Faculty batch scoping — a faculty member must never see another
+// member's batches, and must fail closed when no record matches.
+// -------------------------------------------------------------
+console.log('\n===== Faculty batch scoping =====');
+
+const mkBatch = (id: string, teacherId: string): any => ({
+  id,
+  teacherId,
+  orgId: 'org-1',
+  branchId: 'branch-1',
+  name: id,
+  subject: 'Mathematics',
+  classGrade: 'Class 10',
+  classroom: 'Room 1',
+  scheduleDays: ['Mon', 'Wed', 'Fri'],
+  timeSlot: '05:00 PM - 06:30 PM',
+  capacity: 30,
+  studentIds: [],
+  feeAmountMonthly: 2000,
+  academicYear: '2026-2027',
+  status: 'active'
+});
+
+const mkTeacher = (id: string, userId: string, assignedBatchIds: string[] = []): any => ({
+  id,
+  userId,
+  assignedBatchIds,
+  orgId: 'org-1',
+  branchId: 'branch-1',
+  name: id,
+  phone: '+910000000000',
+  email: `${id}@example.com`,
+  avatar: '',
+  qualification: 'Graduate',
+  subjects: ['Mathematics'],
+  joiningDate: '2026-01-01',
+  status: 'active'
+});
+
+const teacherOne = mkTeacher('teach-1', 'uid-teacher-1', ['batch-legacy']);
+const teacherTwo = mkTeacher('teach-2', 'uid-teacher-2');
+const allBatches = [
+  mkBatch('batch-a', 'teach-1'),        // matched via Batch.teacherId
+  mkBatch('batch-legacy', 'teach-9'),   // matched via Teacher.assignedBatchIds
+  mkBatch('batch-b', 'teach-2')         // belongs to somebody else
+];
+
+const idsOf = (list: any[]) => list.map(b => b.id).sort().join(',');
+
+assert(
+  idsOf(selectTeacherBatches(allBatches, [teacherOne, teacherTwo], 'uid-teacher-1')) === 'batch-a,batch-legacy',
+  'Faculty sees the batch they teach plus the one claimed in assignedBatchIds'
+);
+assert(
+  idsOf(selectTeacherBatches(allBatches, [teacherOne, teacherTwo], 'uid-teacher-2')) === 'batch-b',
+  "Faculty sees only their own batches, never another member's"
+);
+assert(
+  selectTeacherBatches(allBatches, [teacherOne, teacherTwo], 'uid-stranger').length === 0,
+  'Fails closed: an unmatched account sees zero batches, not all of them'
+);
+assert(
+  selectTeacherBatches(allBatches, [teacherOne, teacherTwo], '').length === 0,
+  'Fails closed: a missing userId sees zero batches'
+);
+assert(
+  selectTeacherBatches([], [teacherOne], 'uid-teacher-1').length === 0,
+  'Returns an empty list when the institute has no batches yet'
+);
+assert(
+  idsOf(selectTeacherBatches(allBatches, [], 'uid-teacher-1')) === '',
+  'Fails closed: with no faculty records loaded, nothing is visible'
+);
+
+// Batch-scoped child collections (tests, coursework).
+const mkExam = (id: string, batchId: string): any => ({ id, batchId });
+const myBatchIds = new Set(['batch-a']);
+const mixedExams = [mkExam('exam-a', 'batch-a'), mkExam('exam-b', 'batch-b')];
+
+assert(
+  filterToBatches(mixedExams, myBatchIds).map(e => e.id).join(',') === 'exam-a',
+  'Tests from another batch are filtered out of the mark sheet'
+);
+assert(
+  filterToBatches(mixedExams, new Set()).length === 0,
+  'With no batches assigned, no tests or coursework are visible'
+);
+
+// -------------------------------------------------------------
+// Batch enrollment roster sync — the two mirrors of a student's
+// membership must move together, never one side alone.
+// -------------------------------------------------------------
+console.log('\n===== Batch enrollment roster sync =====');
+
+const mkEnrollBatch = (id: string, roster: string[] = []): any => ({
+  id,
+  teacherId: 'teach-1',
+  orgId: 'org-1',
+  branchId: 'branch-1',
+  name: id,
+  subject: 'Mathematics',
+  classGrade: 'Class 10',
+  classroom: 'Room 1',
+  scheduleDays: ['Mon', 'Wed', 'Fri'],
+  timeSlot: '05:00 PM - 06:30 PM',
+  capacity: 30,
+  studentIds: roster,
+  feeAmountMonthly: 2000,
+  academicYear: '2026-2027',
+  status: 'active'
+});
+
+const mkEnrollStudent = (batchIds: string[]): any => ({
+  id: 'stud-1',
+  userId: 'user-stud-1',
+  orgId: 'org-1',
+  batchIds,
+  name: 'Test Student',
+  phone: '+910000000000'
+});
+
+// Enrolling adds the student to the batch roster AND the student's batchIds.
+{
+  const student = mkEnrollStudent([]);
+  const batch = mkEnrollBatch('batch-a');
+  const { nextStudent, batchesToUpdate } = reconcileBatchMembership(student, [batch], ['batch-a']);
+
+  assert(
+    JSON.stringify(nextStudent.batchIds) === JSON.stringify(['batch-a']),
+    'Enrollment writes the batch id onto the student record'
+  );
+  assert(
+    batchesToUpdate.length === 1 && batchesToUpdate[0].studentIds.includes('stud-1'),
+    'Enrollment adds the student to the batch roster'
+  );
+}
+
+// Unenrolling removes from both sides, and only from the affected batch.
+{
+  const student = mkEnrollStudent(['batch-a', 'batch-b']);
+  const batches = [mkEnrollBatch('batch-a', ['stud-1']), mkEnrollBatch('batch-b', ['stud-1'])];
+  const { nextStudent, batchesToUpdate } = reconcileBatchMembership(student, batches, ['batch-b']);
+
+  assert(
+    JSON.stringify(nextStudent.batchIds) === JSON.stringify(['batch-b']),
+    'Unenrollment removes the batch id from the student record'
+  );
+  assert(
+    batchesToUpdate.length === 1 &&
+      batchesToUpdate[0].id === 'batch-a' &&
+      !batchesToUpdate[0].studentIds.includes('stud-1'),
+    'Unenrollment removes the student from the roster of exactly the dropped batch'
+  );
+}
+
+// Repeating the same membership yields zero batch writes (idempotent).
+{
+  const student = mkEnrollStudent(['batch-a']);
+  const batches = [mkEnrollBatch('batch-a', ['stud-1'])];
+  const { nextStudent, batchesToUpdate } = reconcileBatchMembership(student, batches, ['batch-a']);
+
+  assert(nextStudent.batchIds.length === 1, 'Idempotent enrollment keeps a clean batchIds array');
+  assert(batchesToUpdate.length === 0, 'No-op membership changes write nothing');
+}
+
+// Unknown batch ids are dropped, never stored as dangling references.
+{
+  const student = mkEnrollStudent([]);
+  const batches = [mkEnrollBatch('batch-a')];
+  const { nextStudent, batchesToUpdate } = reconcileBatchMembership(student, batches, ['batch-a', 'batch-ghost']);
+
+  assert(
+    JSON.stringify(nextStudent.batchIds) === JSON.stringify(['batch-a']),
+    'Unknown batch ids are not persisted onto the student'
+  );
+  assert(batchesToUpdate.length === 1, 'Only real batches are touched by the write batch');
+}
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

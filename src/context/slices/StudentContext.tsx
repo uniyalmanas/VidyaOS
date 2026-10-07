@@ -11,6 +11,28 @@ import {
   persistStudentWithBatchAtomically,
   deleteStudentAtomically
 } from '../../lib/firestoreService';
+import { reconcileBatchMembership } from '../../lib/rosterSync';
+import { auth } from '../../lib/firebase';
+
+/** Outcome of a roster change. `error` is safe to show verbatim in a toast. */
+export type EnrollmentResult = { ok: true } | { ok: false; error: string };
+
+/** `handleFirestoreError` rethrows a JSON blob — pull out the readable cause. */
+function describePersistError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  try {
+    const detail = String(JSON.parse(raw)?.error || raw);
+    if (/permission|insufficient/i.test(detail)) {
+      return 'You do not have permission to change this roster.';
+    }
+    if (/unavailable|network|failed to connect/i.test(detail)) {
+      return 'Could not reach the database. Please try again.';
+    }
+  } catch {
+    // Not the JSON envelope — fall through to the generic message.
+  }
+  return 'The roster could not be saved. Please try again.';
+}
 
 export interface StudentContextType {
   students: Student[];
@@ -20,6 +42,8 @@ export interface StudentContextType {
   deleteStudent: (studentId: string) => void;
   addBatch: (batch: Omit<Batch, 'id' | 'orgId'>) => Batch;
   updateBatch: (batchId: string, updates: Partial<Batch>) => void;
+  enrollStudentInBatch: (studentId: string, batchId: string) => Promise<EnrollmentResult>;
+  removeStudentFromBatch: (studentId: string, batchId: string) => Promise<EnrollmentResult>;
   selectedChildId: string;
   setSelectedChildId: (studentId: string) => void;
   selectedChild: Student | undefined;
@@ -293,6 +317,29 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
   };
 
   const updateStudent = (studentId: string, updates: Partial<Student>) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    // If the caller carries a `batchIds` change, that is a roster move: both
+    // mirrors (`student.batchIds` AND every `batch.studentIds`) must change
+    // together or they drift. A plain field merge here would silently break
+    // the relationship on the batch side.
+    if (updates.batchIds && updates.batchIds.join(',') !== student.batchIds.join(',')) {
+      const { nextStudent, batchesToUpdate } = reconcileBatchMembership(student, batches, updates.batchIds);
+      setStudents(prev => prev.map(s => (s.id === studentId ? nextStudent : s)));
+      setBatches(prev => prev.map(b => {
+        const updated = batchesToUpdate.find(up => up.id === b.id);
+        return updated || b;
+      }));
+      if (auth.currentUser) {
+        persistStudentWithBatchAtomically(nextStudent, batchesToUpdate).catch(() => {
+          // Logged by handleFirestoreError; local state stays in sync for the session.
+        });
+      }
+      return;
+    }
+
+    // Plain field merge for everything else (name, phone, avatar, ...).
     setStudents(prev => prev.map(s => {
       if (s.id === studentId) {
         const updated = { ...s, ...updates };
@@ -344,6 +391,79 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
     }));
   };
 
+  /**
+   * One code path for every batch-membership change: locate the student + batch,
+   * validate, reconcile BOTH mirrors, commit them as a single writeBatch and only
+   * then reflect the change in local state — so a rules denial surfaces as an
+   * error instead of a roster that silently reverts on reload.
+   *
+   * The DEV demo persona is the exception: `loginAsDemoUser` never signs into
+   * Firebase, so that write cannot succeed there. In that mode the change applies
+   * locally and the (expected) Firestore refusal is swallowed exactly like every
+   * other demo mutation in this provider.
+   */
+  const setStudentBatchMembership = async (
+    studentId: string,
+    batchId: string,
+    enrolled: boolean
+  ): Promise<EnrollmentResult> => {
+    const student = students.find(s => s.id === studentId);
+    const targetBatch = batches.find(b => b.id === batchId);
+
+    if (!student || !targetBatch) {
+      return { ok: false, error: 'That student or batch could not be found. It may have been deleted just now.' };
+    }
+
+    const alreadyIn = student.batchIds.includes(batchId);
+    const onRoster = targetBatch.studentIds.includes(studentId);
+
+    if (enrolled && alreadyIn && onRoster) {
+      return { ok: false, error: `${student.name} is already enrolled in ${targetBatch.name}.` };
+    }
+    if (!enrolled && !alreadyIn && !onRoster) {
+      return { ok: false, error: `${student.name} is not currently enrolled in ${targetBatch.name}.` };
+    }
+
+    const targetBatchIds = enrolled
+      ? [...student.batchIds, batchId]
+      : student.batchIds.filter(id => id !== batchId);
+
+    const { nextStudent, batchesToUpdate } = reconcileBatchMembership(student, batches, targetBatchIds);
+
+    // Local update is always safe (idempotent deltas applied to `prev`), so it can
+    // run in the demo path where the commit below intentionally never runs.
+    const applyLocal = () => {
+      setStudents(prev => prev.map(s => (s.id === studentId ? nextStudent : s)));
+      setBatches(prev => prev.map(b => {
+        const updated = batchesToUpdate.find(up => up.id === b.id);
+        return updated || b;
+      }));
+    };
+
+    if (!auth.currentUser) {
+      applyLocal();
+      persistStudentWithBatchAtomically(nextStudent, batchesToUpdate).catch(() => {
+        // handleFirestoreError already logged the refusal; demo stays functional.
+      });
+      return { ok: true };
+    }
+
+    try {
+      await persistStudentWithBatchAtomically(nextStudent, batchesToUpdate);
+    } catch (error) {
+      return { ok: false, error: describePersistError(error) };
+    }
+
+    applyLocal();
+    return { ok: true };
+  };
+
+  const enrollStudentInBatch = (studentId: string, batchId: string): Promise<EnrollmentResult> =>
+    setStudentBatchMembership(studentId, batchId, true);
+
+  const removeStudentFromBatch = (studentId: string, batchId: string): Promise<EnrollmentResult> =>
+    setStudentBatchMembership(studentId, batchId, false);
+
   return (
     <StudentContext.Provider
       value={{
@@ -354,6 +474,8 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
         deleteStudent,
         addBatch,
         updateBatch,
+        enrollStudentInBatch,
+        removeStudentFromBatch,
         selectedChildId,
         setSelectedChildId,
         selectedChild,

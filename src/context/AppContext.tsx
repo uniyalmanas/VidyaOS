@@ -39,7 +39,7 @@ import {
 } from '../lib/firestoreService';
 
 // Domain Slices
-import { StudentProvider, useStudents } from './slices/StudentContext';
+import { StudentProvider, useStudents, EnrollmentResult } from './slices/StudentContext';
 import { FeeProvider, useFees } from './slices/FeeContext';
 import { AttendanceProvider, useAttendance } from './slices/AttendanceContext';
 import { AcademicProvider, useAcademics } from './slices/AcademicContext';
@@ -102,6 +102,8 @@ export interface AppContextType {
   
   addBatch: (batch: Omit<Batch, 'id' | 'orgId'>) => Batch;
   updateBatch: (batchId: string, updates: Partial<Batch>) => void;
+  enrollStudentInBatch: (studentId: string, batchId: string) => Promise<EnrollmentResult>;
+  removeStudentFromBatch: (studentId: string, batchId: string) => Promise<EnrollmentResult>;
   
   addTeacher: (teacher: Omit<Teacher, 'id' | 'orgId' | 'userId' | 'joiningDate'> & Partial<Pick<Teacher, 'userId' | 'joiningDate'>>) => Teacher;
   updateTeacher: (teacherId: string, updates: Partial<Teacher>) => void;
@@ -335,6 +337,8 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     deleteStudent: studentSlice.deleteStudent,
     addBatch: studentSlice.addBatch,
     updateBatch: studentSlice.updateBatch,
+    enrollStudentInBatch: studentSlice.enrollStudentInBatch,
+    removeStudentFromBatch: studentSlice.removeStudentFromBatch,
     selectedChildId: studentSlice.selectedChildId,
     setSelectedChildId: studentSlice.setSelectedChildId,
     selectedChild: studentSlice.selectedChild,

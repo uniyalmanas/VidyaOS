@@ -172,10 +172,20 @@ service cloud.firestore {
         isCenterStaffOrAdmin(request.resource.data.orgId) &&
         request.resource.data.orgId != null;
 
-      // Update: Center Admin or Staff can update student records in their org
+      // Update: Center Admin or Staff can update student records in their org.
+      // Faculty may only change `batchIds` (enrolling/unenrolling) — every other
+      // field stays put. Per-batch ownership can't be checked here (rules cannot
+      // loop over an array), but a teacher can already update any org batch
+      // document, so this grants no new read or write reach: it just lets the
+      // `student.batchIds` mirror be kept honest when a roster changes.
       allow update: if isSignedIn() && 
-        isCenterStaffOrAdmin(resource.data.orgId) &&
-        request.resource.data.orgId == resource.data.orgId;
+        request.resource.data.orgId == resource.data.orgId &&
+        (
+          isCenterStaffOrAdmin(resource.data.orgId)
+          ||
+          (isTeacher() && isTenantMember(resource.data.orgId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['batchIds']))
+        );
 
       // Delete: Only Center Admin or Platform Owner can delete student records
       allow delete: if isSignedIn() && 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useApp } from '../../context/AppContext';
 import { getIndiaDateString } from '../../lib/date';
@@ -17,7 +17,11 @@ import {
   UserCheck,
   MessageSquare,
   LayoutDashboard,
-  ArrowRight
+  ArrowRight,
+  X,
+  UserPlus,
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { AttendanceStatus } from '../../types';
 import {
@@ -30,8 +34,9 @@ import {
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { easings } from '../../lib/motion';
+import { selectTeacherBatches, filterToBatches } from '../../lib/teacherScope';
 
 export const TeacherPortal: React.FC = () => {
   const { currentPath, navigate } = useRouter();
@@ -40,6 +45,7 @@ export const TeacherPortal: React.FC = () => {
     currentOrg,
     batches,
     students,
+    teachers,
     attendanceRecords,
     markAttendance,
     markBatchAllPresent,
@@ -49,6 +55,9 @@ export const TeacherPortal: React.FC = () => {
     assignments,
     createAssignment,
     setActiveWhatsappModal,
+    enrollStudentInBatch,
+    removeStudentFromBatch,
+    showToast,
     mobileViewActive
   } = useApp();
 
@@ -90,14 +99,71 @@ export const TeacherPortal: React.FC = () => {
   // Homework modal
   const [showHomeworkModal, setShowHomeworkModal] = useState<boolean>(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState<boolean>(false);
+  // Rooster manager: lets a teacher add/remove students from the active batch.
+  const [showRosterManager, setShowRosterManager] = useState<boolean>(false);
+  const [rosterSearch, setRosterSearch] = useState<string>('');
+  const [savingRosterStudentId, setSavingRosterStudentId] = useState<string | null>(null);
   const [hwTitle, setHwTitle] = useState<string>('');
   const [hwSubject, setHwSubject] = useState<string>('Mathematics');
   const [hwDueDate, setHwDueDate] = useState<string>(() => getIndiaDateString());
   const [hwDesc, setHwDesc] = useState<string>('');
 
-  const activeBatch = batches.find(b => b.id === selectedBatchId) || batches[0];
+  // ── Scope everything this console can see or act on to MY batches ────────────
+  // Fails closed — see `selectTeacherBatches` for why the two sides of this join
+  // use different keys and what happens when a faculty record cannot be matched.
+  const myBatches = useMemo(
+    () => selectTeacherBatches(batches, teachers, currentUser.id),
+    [batches, teachers, currentUser.id]
+  );
+
+  const myBatchIds = useMemo(() => new Set(myBatches.map(b => b.id)), [myBatches]);
+
+  // Tests and coursework are batch-scoped, so a teacher only ever sees the ones
+  // belonging to their own batches — not every test in the institute.
+  const myExams = useMemo(() => filterToBatches(exams, myBatchIds), [exams, myBatchIds]);
+  const myAssignments = useMemo(() => filterToBatches(assignments, myBatchIds), [assignments, myBatchIds]);
+
+  // Unique students across my batches — drives the overview "students" figure.
+  const myStudents = useMemo(() => {
+    const seen = new Set<string>();
+    const roster: typeof students = [];
+    for (const b of myBatches) {
+      for (const id of b.studentIds) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const student = students.find(s => s.id === id);
+        if (student) roster.push(student);
+      }
+    }
+    return roster;
+  }, [myBatches, students]);
+
+  const hasBatches = myBatches.length > 0;
+  const activeBatch = myBatches.find(b => b.id === selectedBatchId) || myBatches[0];
   const batchStudents = students.filter(s => activeBatch?.studentIds.includes(s.id));
-  const activeExam = exams.find(e => e.id === selectedExamId) || exams[0];
+  const batchAssignments = myAssignments.filter(a => a.batchId === activeBatch?.id);
+  const activeExam = myExams.find(e => e.id === selectedExamId) || myExams[0];
+
+  // Marks must be entered against the EXAM's own roster, not whichever batch the
+  // attendance tab happened to have selected — with several batches assigned,
+  // grading Batch A's students into Batch B's test sheet was easy to hit.
+  const examBatch = activeExam ? myBatches.find(b => b.id === activeExam.batchId) : undefined;
+  const examStudents = students.filter(s => examBatch?.studentIds.includes(s.id));
+
+  // Who can this faculty member add to the active batch? Students who are already
+  // in it are excluded; the reachable pool is everyone who is either enrolled
+  // nowhere yet (fresh admission) or already in one of THIS teacher's other
+  // batches. It keeps the picker useful without turning the faculty console into
+  // a browse-everyone directory.
+  const rosterAvailableStudents = useMemo(() => {
+    if (!activeBatch) return [];
+    const inBatch = new Set(activeBatch.studentIds);
+    return students.filter(s => {
+      if (inBatch.has(s.id)) return false;
+      const otherEnrolments = (s.batchIds || []).filter(id => id !== activeBatch.id);
+      return otherEnrolments.length === 0 || otherEnrolments.every(id => myBatchIds.has(id));
+    });
+  }, [students, activeBatch, myBatchIds]);
 
   // Marks are per-exam. Seed the editor from the results already saved for the
   // selected exam, and re-seed whenever that exam changes. `saveExamResults`
@@ -146,6 +212,32 @@ export const TeacherPortal: React.FC = () => {
     setTimeout(() => setSavedSuccessMsg(''), 2500);
   };
 
+  /**
+   * Add or remove a student from the currently selected batch. Delegates to the
+   * shared roster-sync path in StudentContext, which keeps `student.batchIds`
+   * and `batch.studentIds` in lockstep — and enforces that a faculty member can
+   * only write `batchIds` on students (every other field is rules-denied).
+   */
+  const handleRosterChange = async (studentId: string, add: boolean) => {
+    if (!activeBatch) return;
+    setSavingRosterStudentId(studentId);
+    try {
+      const result = add
+        ? await enrollStudentInBatch(studentId, activeBatch.id)
+        : await removeStudentFromBatch(studentId, activeBatch.id);
+      if (result.ok) {
+        showToast(
+          add ? `${activeBatch.name}: student added to the roster.` : `${activeBatch.name}: student removed from the roster.`,
+          'success'
+        );
+      } else {
+        showToast(result.error, 'error');
+      }
+    } finally {
+      setSavingRosterStudentId(null);
+    }
+  };
+
   const handleSaveMarks = () => {
     if (!activeExam) return;
 
@@ -191,6 +283,35 @@ export const TeacherPortal: React.FC = () => {
     setSavedSuccessMsg('Homework posted to students & parent feeds.');
     setTimeout(() => setSavedSuccessMsg(''), 2500);
   };
+
+  // Shared across the Attendance and Homework tabs so both act on, and visibly
+  // name, the same batch instead of silently defaulting to the first one.
+  const batchSelect = (
+    <select
+      value={activeBatch?.id || ''}
+      onChange={e => setSelectedBatchId(e.target.value)}
+      aria-label="Select batch"
+      className="bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] min-h-[38px] font-apple-text cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
+    >
+      {myBatches.map(b => (
+        <option key={b.id} value={b.id} className="dark:bg-[#1C1C1E]">
+          {b.name} ({b.studentIds.length} students)
+        </option>
+      ))}
+    </select>
+  );
+
+  const noBatchesCard = (
+    <ConsoleCard
+      title="No batches assigned to you yet"
+      subtitle="This console only shows batches you have been assigned to teach"
+    >
+      <p className="py-8 text-center text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+        Ask your centre admin to assign you to a batch from the Faculty directory.
+        Attendance, marks and homework all become available once a batch is linked to your profile.
+      </p>
+    </ConsoleCard>
+  );
 
   const content = (
     <div className="space-y-6">
@@ -319,7 +440,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                <CountUp value={batches.length} />
+                <CountUp value={myBatches.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Active teaching sections</p>
             </div>
@@ -332,9 +453,9 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                <CountUp value={students.length} />
+                <CountUp value={myStudents.length} />
               </div>
-              <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Enrolled under coaching</p>
+              <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Enrolled in my batches</p>
             </div>
 
             <div className="bg-white dark:bg-[#1C1C1E] border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-4 shadow-2xs">
@@ -345,7 +466,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                <CountUp value={assignments.length} />
+                <CountUp value={myAssignments.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Homework assignments</p>
             </div>
@@ -358,7 +479,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
               </div>
               <div className="mt-2 text-2xl sm:text-3xl font-bold font-apple-display text-[#1D1D1F] dark:text-[#F5F5F7] tabular-nums">
-                <CountUp value={exams.length} />
+                <CountUp value={myExams.length} />
               </div>
               <p className="text-[10px] text-[#86868B] mt-0.5 font-apple-text">Scheduled tests</p>
             </div>
@@ -396,7 +517,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
                 <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[11px] text-[#0071E3] dark:text-[#2997FF] font-semibold font-apple-text">
                   <span>Open Attendance Register</span>
-                  <span>{batches.length} Active Batches →</span>
+                  <span>{myBatches.length} Active Batches →</span>
                 </div>
               </div>
 
@@ -426,7 +547,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
                 <div className="mt-4 pt-3 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between text-[11px] text-[#FFA000] font-semibold font-apple-text">
                   <span>Evaluate Marks</span>
-                  <span>{exams.length} Diagnostic Tests →</span>
+                  <span>{myExams.length} Diagnostic Tests →</span>
                 </div>
               </div>
 
@@ -456,7 +577,7 @@ export const TeacherPortal: React.FC = () => {
                 </div>
                 <div className="mt-4 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043] flex items-center justify-between text-[11px] text-[#188038] font-semibold">
                   <span>Manage Coursework</span>
-                  <span>{assignments.length} Homeworks Posted →</span>
+                  <span>{myAssignments.length} Homeworks Posted →</span>
                 </div>
               </div>
 
@@ -498,7 +619,13 @@ export const TeacherPortal: React.FC = () => {
             subtitle="Direct shortcut to launch daily attendance or record test marks for each batch"
           >
             <div className="space-y-3">
-              {batches.map(b => (
+              {myBatches.length === 0 && (
+                <p className="py-6 text-center text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                  No batches are assigned to you yet. Ask your centre admin to assign you to one
+                  from the Faculty directory.
+                </p>
+              )}
+              {myBatches.map(b => (
                 <div
                   key={b.id}
                   className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-xl gap-3"
@@ -550,23 +677,14 @@ export const TeacherPortal: React.FC = () => {
       )}
 
       {/* TAB 1: ATTENDANCE */}
-      {activeTab === 'attendance' && (
+      {activeTab === 'attendance' && !hasBatches && noBatchesCard}
+      {activeTab === 'attendance' && hasBatches && (
         <ConsoleCard
           title="Batch Attendance Roster"
-          subtitle="Mark student presence with 1-tap toggles or broadcast absentee WhatsApp alerts"
+          subtitle={`Mark student presence with 1-tap toggles or broadcast absentee WhatsApp alerts · ${batchStudents.length} students`}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={activeBatch?.id || ''}
-                onChange={e => setSelectedBatchId(e.target.value)}
-                className="bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] min-h-[38px] font-apple-text cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
-              >
-                {batches.map(b => (
-                  <option key={b.id} value={b.id} className="dark:bg-[#1C1C1E]">
-                    {b.name} ({b.studentIds.length} students)
-                  </option>
-                ))}
-              </select>
+              {batchSelect}
 
               <input
                 type="date"
@@ -574,6 +692,15 @@ export const TeacherPortal: React.FC = () => {
                 onChange={e => setAttendanceDate(e.target.value)}
                 className="bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] min-h-[38px] font-apple-text focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
               />
+
+              <ConsoleButton
+                variant="secondary"
+                size="sm"
+                icon={<UserPlus className="w-3.5 h-3.5 text-[#EA580C]" />}
+                onClick={() => setShowRosterManager(true)}
+              >
+                Manage Roster
+              </ConsoleButton>
 
               <ConsoleButton
                 variant="blue"
@@ -646,8 +773,8 @@ export const TeacherPortal: React.FC = () => {
       {activeTab === 'marks' && !activeExam && (
         <ConsoleCard title="Test Marks" subtitle="Recorded scores auto-calculate batch percentiles and report cards">
           <p className="py-8 text-center text-xs text-[#5F6368] dark:text-[#9AA0A6]">
-            No tests have been created for this institute yet. Once a test is scheduled,
-            its mark sheet appears here.
+            No tests have been created for your batches yet. Once a test is scheduled
+            for one of your batches, its mark sheet appears here.
           </p>
         </ConsoleCard>
       )}
@@ -662,7 +789,7 @@ export const TeacherPortal: React.FC = () => {
                 onChange={e => setSelectedExamId(e.target.value)}
                 className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#202124] dark:text-[#E8EAED]"
               >
-                {exams.map(e => (
+                {myExams.map(e => (
                   <option key={e.id} value={e.id}>
                     {e.title} ({e.subject}) · Max: {e.maxMarks}
                   </option>
@@ -681,7 +808,7 @@ export const TeacherPortal: React.FC = () => {
           }
         >
           <div className="divide-y divide-[#DADCE0]/60 dark:divide-[#3C4043]">
-            {batchStudents.map(student => {
+            {examStudents.map(student => {
               // Blank until a score is entered. It used to default to 40, so an
               // untouched sheet looked graded and one click saved fabricated marks.
               const currentVal = marksState[student.id] ?? '';
@@ -725,23 +852,33 @@ export const TeacherPortal: React.FC = () => {
       )}
 
       {/* TAB 3: HOMEWORK & NOTES */}
-      {activeTab === 'assignments' && (
+      {activeTab === 'assignments' && !hasBatches && noBatchesCard}
+      {activeTab === 'assignments' && hasBatches && (
         <ConsoleCard
           title="Coursework & Assignments"
-          subtitle="Manage assigned homework, submission track records, and solutions"
+          subtitle={`Homework posted to ${activeBatch?.name || 'this batch'}`}
           action={
-            <ConsoleButton
-              variant="blue"
-              size="sm"
-              icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => setShowHomeworkModal(true)}
-            >
-              Post Homework
-            </ConsoleButton>
+            <div className="flex flex-wrap items-center gap-2">
+              {batchSelect}
+              <ConsoleButton
+                variant="blue"
+                size="sm"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => setShowHomeworkModal(true)}
+              >
+                Post Homework
+              </ConsoleButton>
+            </div>
           }
         >
           <div className="space-y-3">
-            {assignments.map(asg => (
+            {batchAssignments.length === 0 && (
+              <p className="py-8 text-center text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                No homework has been posted to this batch yet. Use “Post Homework” to assign
+                work — students and parents see it on their dashboards immediately.
+              </p>
+            )}
+            {batchAssignments.map(asg => (
               <div
                 key={asg.id}
                 className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-1 text-xs"
@@ -847,6 +984,152 @@ export const TeacherPortal: React.FC = () => {
           onClose={() => setShowEditProfileModal(false)}
         />
       )}
+
+      {/* Roster Manager — add/remove students from the active batch */}
+      <AnimatePresence>
+      {showRosterManager && activeBatch && (() => {
+        const query = rosterSearch.trim().toLowerCase();
+        const matchingAvailable = rosterAvailableStudents.filter(s =>
+          !query ||
+          s.name.toLowerCase().includes(query) ||
+          s.rollNo.toLowerCase().includes(query) ||
+          (s.phone || '').replace(/[^0-9]/g, '').includes(query.replace(/[^0-9]/g, ''))
+        );
+        return (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+                  Manage Roster · {activeBatch.name}
+                </h3>
+                <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                  {activeBatch.studentIds.length}/{activeBatch.capacity} seats filled · adding or
+                  removing updates the batch roster instantly everywhere
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowRosterManager(false); setRosterSearch(''); }}
+                aria-label="Close"
+                className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Already enrolled */}
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[#5F6368] dark:text-[#9AA0A6] mb-1.5">
+                In this batch · {batchStudents.length}
+              </div>
+              <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1">
+                {batchStudents.length === 0 && (
+                  <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] py-3 text-center">
+                    No students yet — add your first one below.
+                  </p>
+                )}
+                {batchStudents.map(student => (
+                  <div
+                    key={student.id}
+                    className="flex items-center justify-between gap-2 py-1.5 border-b border-black/[0.05] dark:border-white/[0.06] last:border-0"
+                  >
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <img
+                        src={student.avatar}
+                        alt={student.name}
+                        className="w-7 h-7 rounded-full object-cover border border-black/[0.08] dark:border-white/[0.1] flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[#202124] dark:text-[#E8EAED] truncate">{student.name}</div>
+                        <div className="text-[10px] text-[#86868B]">Roll {student.rollNo}</div>
+                      </div>
+                    </div>
+                    <ConsoleButton
+                      variant="danger"
+                      size="xs"
+                      disabled={!!savingRosterStudentId}
+                      onClick={() => handleRosterChange(student.id, false)}
+                      icon={savingRosterStudentId === student.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    >
+                      Remove
+                    </ConsoleButton>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add students */}
+            <div className="pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[#5F6368] dark:text-[#9AA0A6]">
+                  Add students
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#86868B]" />
+                  <input
+                    value={rosterSearch}
+                    onChange={e => setRosterSearch(e.target.value)}
+                    placeholder="Search name or roll no"
+                    className="pl-7 pr-2 py-1.5 w-40 text-xs bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/[0.1] rounded-lg text-[#202124] dark:text-[#E8EAED] focus:outline-none focus:ring-2 focus:ring-[#FFA000]/30"
+                  />
+                </div>
+              </div>
+              <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1">
+                {rosterAvailableStudents.length === 0 && (
+                  <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] py-3 text-center">
+                    No other students can be added right now.
+                  </p>
+                )}
+                {matchingAvailable.map(student => (
+                  <div
+                    key={student.id}
+                    className="flex items-center justify-between gap-2 py-1.5 border-b border-black/[0.05] dark:border-white/[0.06] last:border-0"
+                  >
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <img
+                        src={student.avatar}
+                        alt={student.name}
+                        className="w-7 h-7 rounded-full object-cover border border-black/[0.08] dark:border-white/[0.1] flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[#202124] dark:text-[#E8EAED] truncate">{student.name}</div>
+                        <div className="text-[10px] text-[#86868B]">Class {student.classGrade} · Roll {student.rollNo}</div>
+                      </div>
+                    </div>
+                    <ConsoleButton
+                      variant="primary"
+                      size="xs"
+                      disabled={!!savingRosterStudentId}
+                      onClick={() => handleRosterChange(student.id, true)}
+                      icon={savingRosterStudentId === student.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                    >
+                      Add
+                    </ConsoleButton>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-[#86868B] mt-2">
+                Shows students who are not enrolled anywhere yet, or already in one of your other
+                batches. Ask your admin for anything beyond that.
+              </p>
+            </div>
+          </motion.div>
+        </motion.div>
+        );
+      })()}
+      </AnimatePresence>
     </div>
   );
 

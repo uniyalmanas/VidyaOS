@@ -45,7 +45,10 @@ import {
   Edit2,
   Eye,
   EyeOff,
-  KeyRound
+  KeyRound,
+  UserCog,
+  X,
+  Loader2
 } from 'lucide-react';
 import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
@@ -102,6 +105,8 @@ export const AdminDashboard: React.FC = () => {
     deleteStudent,
     addBatch,
     updateBatch,
+    enrollStudentInBatch,
+    removeStudentFromBatch,
     addTeacher,
     updateTeacher,
     deleteTeacher,
@@ -158,6 +163,9 @@ export const AdminDashboard: React.FC = () => {
   const [showBulkImportModal, setShowBulkImportModal] = useState<boolean>(false);
   const [showAddBatchModal, setShowAddBatchModal] = useState<boolean>(false);
   const [showAddTeacherModal, setShowAddTeacherModal] = useState<boolean>(false);
+  // Student batch enrollment modal — the student whose roster is being managed.
+  const [enrollingStudentId, setEnrollingStudentId] = useState<string | null>(null);
+  const [enrollingBatchId, setEnrollingBatchId] = useState<string | null>(null);
   const [teacherName, setTeacherName] = useState<string>('');
   const [teacherEmail, setTeacherEmail] = useState<string>('');
   const [teacherPhone, setTeacherPhone] = useState<string>('');
@@ -591,6 +599,31 @@ export const AdminDashboard: React.FC = () => {
 
     setShowAddBatchModal(false);
     setBatchName('');
+  };
+
+  /**
+   * Toggle a student's enrolment in one batch from the admin roster manager.
+   * Delegates to the shared roster-sync path in StudentContext, which keeps
+   * `student.batchIds` and `batch.studentIds` in lockstep before it returns.
+   */
+  const handleToggleStudentBatch = async (studentId: string, batchId: string) => {
+    const enrolled = students.find(s => s.id === studentId)?.batchIds.includes(batchId) || false;
+    setEnrollingBatchId(batchId);
+    try {
+      const result = enrolled
+        ? await removeStudentFromBatch(studentId, batchId)
+        : await enrollStudentInBatch(studentId, batchId);
+      if (result.ok) {
+        showToast(
+          enrolled ? 'Student removed from the batch.' : 'Student enrolled in the batch.',
+          'success'
+        );
+      } else {
+        showToast(result.error, 'error');
+      }
+    } finally {
+      setEnrollingBatchId(null);
+    }
   };
 
   const handleCreateTeacher = async (e: React.FormEvent) => {
@@ -1539,6 +1572,15 @@ export const AdminDashboard: React.FC = () => {
                     }}
                   >
                     Edit Profile
+                  </ConsoleButton>
+                  <ConsoleButton
+                    variant="secondary"
+                    size="xs"
+                    icon={<UserCog className="w-3 h-3 text-[#EA580C]" />}
+                    onClick={() => setEnrollingStudentId(s.id)}
+                    title="Manage batch enrollment"
+                  >
+                    Manage
                   </ConsoleButton>
                   <ConsoleButton
                     variant="secondary"
@@ -4116,6 +4158,86 @@ export const AdminDashboard: React.FC = () => {
           </motion.div>
         </motion.div>
       )}
+      </AnimatePresence>
+
+      {/* STUDENT BATCH ENROLLMENT MODAL — toggles keep both mirrors in sync */}
+      <AnimatePresence>
+      {enrollingStudentId && (() => {
+        const rosterStudent = students.find(s => s.id === enrollingStudentId);
+        return (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-1"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <div className="flex items-start justify-between pb-3">
+              <div>
+                <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+                  Manage Batch Enrollment
+                </h3>
+                <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                  {rosterStudent
+                    ? `${rosterStudent.name} · ${rosterStudent.classGrade} · Roll ${rosterStudent.rollNo}`
+                    : 'Loading student…'}
+                </p>
+              </div>
+              <button
+                onClick={() => setEnrollingStudentId(null)}
+                aria-label="Close"
+                className="p-1.5 rounded-lg text-[#5F6368] dark:text-[#9AA0A6] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {batches.length === 0 && (
+              <p className="text-center text-xs text-[#5F6368] dark:text-[#9AA0A6] py-10">
+                No batches exist in this centre yet. Create a batch first, then come back here to
+                enrol students into it.
+              </p>
+            )}
+
+            {rosterStudent && batches.map(b => {
+              const isEnrolled = rosterStudent.batchIds.includes(b.id);
+              const saving = enrollingBatchId === b.id;
+              return (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between gap-3 py-2.5 border-b border-[#DADCE0]/60 dark:border-[#3C4043]/60 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-[#202124] dark:text-[#E8EAED] text-sm truncate">
+                      {b.name}
+                    </div>
+                    <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] font-medium">
+                      {b.subject} · Class {b.classGrade} · {b.studentIds.length}/{b.capacity} enrolled
+                    </div>
+                  </div>
+                  <ConsoleButton
+                    variant={isEnrolled ? 'danger' : 'primary'}
+                    size="xs"
+                    disabled={!!enrollingBatchId}
+                    onClick={() => handleToggleStudentBatch(rosterStudent.id, b.id)}
+                    icon={saving ? <Loader2 className="w-3 h-3 animate-spin" /> : undefined}
+                  >
+                    {saving ? 'Saving…' : isEnrolled ? 'Remove' : 'Enroll'}
+                  </ConsoleButton>
+                </div>
+              );
+            })}
+          </motion.div>
+        </motion.div>
+        );
+      })()}
       </AnimatePresence>
 
       {/* Bulk Student CSV / Excel Import Modal */}
