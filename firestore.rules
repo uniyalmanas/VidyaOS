@@ -457,6 +457,23 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // INQUIRIES / LEADS (F2) — admission pipeline
+    // ------------------------------------------------------------------------
+    match /inquiries/{inquiryId} {
+      // Any tenant member may view the funnel (front desk, faculty, owner).
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // Only staff/admins maintain leads: create, move statuses, convert,
+      // append notes, or remove a stale enquiry.
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId);
+
+      allow update, delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

@@ -13,6 +13,15 @@ import {
   sortAuditNewestFirst,
   AuditLogEntry
 } from './src/lib/audit';
+import {
+  searchInquiries,
+  countByStatus,
+  canSetInquiryStatus,
+  isTerminalInquiryStatus,
+  sortInquiriesForFollowUp,
+  formatInquiryPhone
+} from './src/lib/inquiries';
+import { Inquiry } from './src/types';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -460,6 +469,60 @@ assert(
   sortAuditNewestFirst([e1, e2]).every((x, i, arr) => i === 0 || arr[i - 1].createdAtMs >= x.createdAtMs),
   'Audit list sorts newest-first'
 );
+
+// -------------------------------------------------------------
+// Inquiries / Leads pipeline (F2) — pure helpers under the CRM
+// -------------------------------------------------------------
+console.log('\n===== Inquiry pipeline core (F2) =====');
+
+const makeLead = (over: Partial<Inquiry>): Inquiry => ({
+  id: 'inq-x',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  name: 'Priya Singh',
+  phone: '+91 98120 33445',
+  classGrade: 'Class 10',
+  board: 'CBSE',
+  status: 'new',
+  notes: [],
+  createdByUserId: 'user-apex-staff',
+  createdByName: 'Pooja Verma',
+  createdAt: '2026-10-07T09:15:00.000Z',
+  createdAtMs: 100,
+  ...over
+});
+
+const leadA = makeLead({ id: 'inq-a', name: 'Priya Singh', phone: '+919812033445', classGrade: 'Class 10', status: 'new', followUpDate: '2026-10-09', createdAtMs: 100 });
+const leadB = makeLead({ id: 'inq-b', name: 'Arjun Mehta', phone: '+91 99887 66554', classGrade: 'Class 12', status: 'contacted', followUpDate: '2026-10-08', createdAtMs: 200 });
+const leadC = makeLead({ id: 'inq-c', name: 'Sneha Patel', phone: '+91 97654 32109', classGrade: 'Class 8', status: 'joined', followUpDate: undefined, createdAtMs: 300 });
+const leads: Inquiry[] = [leadA, leadB, leadC];
+
+assert(isTerminalInquiryStatus('joined'), 'A joined lead is terminal');
+assert(!isTerminalInquiryStatus('new') && !isTerminalInquiryStatus('lost'), 'Only joined leads are terminal');
+assert(canSetInquiryStatus('demo_booked', 'contacted'), 'A lead can move back down the funnel in the edit UI');
+assert(!canSetInquiryStatus('joined', 'new'), 'A joined lead cannot silently re-enter the funnel');
+
+const searchedByName = searchInquiries(leads, 'arjun');
+assert(searchedByName.length === 1 && searchedByName[0].id === 'inq-b', 'Search matches a lead by name (case-insensitive)');
+assert(searchInquiries(leads, '98120').length === 1, 'Search matches by phone');
+assert(searchInquiries(leads, 'class 12').length === 1, 'Search matches by class');
+assert(searchInquiries(leads, '').length === 3, 'Empty search returns the full pipeline');
+assert(searchInquiries(leads, 'no-such-lead').length === 0, 'Unmatched search returns nothing');
+
+const pipelineCounts = countByStatus(leads);
+assert(
+  pipelineCounts.new === 1 && pipelineCounts.contacted === 1 && pipelineCounts.joined === 1 && pipelineCounts.lost === 0 && pipelineCounts.demo_booked === 0,
+  'Pipeline columns count their cards correctly'
+);
+
+const followUpSorted = sortInquiriesForFollowUp([leadC, leadA, leadB]);
+assert(
+  followUpSorted[0].id === 'inq-b' && followUpSorted[1].id === 'inq-a' && followUpSorted[2].id === 'inq-c',
+  'Follow-up leads sort first (soonest date first), the rest sink to the bottom'
+);
+
+assert(formatInquiryPhone('+919812033445') === '+91 98120 33445', 'Phone formatter renders a +91 12-digit number the India way');
+assert(formatInquiryPhone('9988766554') === '+91 99887 66554', 'Phone formatter handles a bare 10-digit number');
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 shipped ✅ · F2–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 shipped ✅ · F3–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -98,7 +98,7 @@ staff read, non-member denied, update/delete denied, actor-spoof denied.
 
 ---
 
-## F2 — Leads / admission inquiry CRM
+## F2 — Leads / admission inquiry CRM — ✅ SHIPPED (2026-10-07)
 
 **Simple words:** A parent calls → we note the name/phone/class → the admission team moves
 it through stages (new → demo → joined → lost). Converted leads become students with one tap.

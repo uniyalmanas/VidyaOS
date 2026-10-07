@@ -50,7 +50,7 @@ import {
   X,
   Loader2
 } from 'lucide-react';
-import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student } from '../../types';
+import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
@@ -65,6 +65,7 @@ import {
 } from '../ui';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { AuditTrailModule } from './AuditTrailModule';
+import { InquiriesModule } from './InquiriesModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -79,6 +80,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   assignments: { label: 'Homework & Coursework', breadcrumb: 'Assignments', subtitle: 'Manage assigned coursework, submission deadlines, and student homework completion' },
   materials: { label: 'Study Material & Library', breadcrumb: 'Materials', subtitle: 'Curated NCERT solutions, formula sheets, lecture notes, and chapter summaries' },
   teachers: { label: 'Faculty & Teachers Directory', breadcrumb: 'Teachers', subtitle: 'Instructor profiles, assigned subjects, contact details, and teaching schedules' },
+  inquiries: { label: 'Admission Leads Pipeline', breadcrumb: 'Inquiries', subtitle: 'Walk-ins, calls & WhatsApp enquiries tracked from first hello to final admission' },
   parents: { label: 'Parents & Guardians Directory', breadcrumb: 'Parents', subtitle: 'Direct communication channels, child linkages, and fee receipt sharing' },
   announcements: { label: 'Announcements & Broadcast System', breadcrumb: 'Announcements', subtitle: 'Publish urgent notices, holiday schedules, and WhatsApp broadcast templates' },
   discussions: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
@@ -134,7 +136,8 @@ export const AdminDashboard: React.FC = () => {
     subscriptionPlans,
     changeOrgPlan,
     showToast,
-    recordAudit
+    recordAudit,
+    markInquiryConverted
   } = useApp();
 
   const { navigate } = useRouter();
@@ -163,6 +166,10 @@ export const AdminDashboard: React.FC = () => {
   // Modals state
   const [editingPerson, setEditingPerson] = useState<User | null>(null);
   const [showAddStudentModal, setShowAddStudentModal] = useState<boolean>(false);
+  // F2 conversion handoff — set when the Inquiries board asks to admit a lead.
+  // handleCreateStudent consumes it to mark the inquiry joined + linked after the
+  // admission succeeds.
+  const [inquiryPendingConversion, setInquiryPendingConversion] = useState<Inquiry | null>(null);
   const [showBulkImportModal, setShowBulkImportModal] = useState<boolean>(false);
   const [showAddBatchModal, setShowAddBatchModal] = useState<boolean>(false);
   const [showAddTeacherModal, setShowAddTeacherModal] = useState<boolean>(false);
@@ -490,6 +497,30 @@ export const AdminDashboard: React.FC = () => {
     setStBatchIds(batches[0]?.id ? [batches[0].id] : []);
   };
 
+  // F2 — a lead from the Inquiries board is being admitted. Pre-fill the standard
+  // admission form with the details we already captured (name / parent phone /
+  // class / board / interested batches), then let the existing flow provision
+  // the student + optional logins. The inquiry is marked 'joined' only after the
+  // admission actually succeeds (see handleCreateStudent).
+  const handleConvertInquiry = (inquiry: Inquiry) => {
+    setInquiryPendingConversion(inquiry);
+    setStName(inquiry.name);
+    const phoneDigits = inquiry.phone.replace(/[^0-9]/g, '').slice(-10);
+    setStPhone(phoneDigits || inquiry.phone);
+    setStClass(inquiry.classGrade || 'Class 10');
+    setStBoard((inquiry.board || 'Board level') as IndianBoard);
+    const interestedBatchIds = inquiry.interestedBatchIds?.filter(id => batches.some(b => b.id === id)) || [];
+    setStBatchIds(interestedBatchIds.length > 0 ? interestedBatchIds : (batches[0]?.id ? [batches[0].id] : []));
+    setStSchool('');
+    setStFather('');
+    setStGender('');
+    setStStudentPhone('');
+    setStStudentPassword('');
+    setStParentPassword('');
+    setShowAdmissionPasswords(false);
+    setShowAddStudentModal(true);
+  };
+
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stName.trim() || !stGender) return;
@@ -599,6 +630,19 @@ export const AdminDashboard: React.FC = () => {
         targetId: newStudent.id,
         summary: `Admitted ${newStudent.name} (${stClass}, ${stBatchIds.length} batch allocation${stBatchIds.length === 1 ? '' : 's'})${studentAuthUid ? ' with a student login.' : '.'}`
       });
+
+      // F2 — admission started from the Inquiries board: close the loop on the
+      // lead — status 'joined' + convertedStudentId + a conversion note.
+      if (inquiryPendingConversion) {
+        markInquiryConverted(inquiryPendingConversion.id, newStudent.id, newStudent.name);
+        recordAudit({
+          action: 'verify',
+          targetType: 'inquiry',
+          targetId: inquiryPendingConversion.id,
+          summary: `Admitted lead ${inquiryPendingConversion.name} (${inquiryPendingConversion.phone}) as student ${newStudent.name} — pipeline completed.`
+        });
+        setInquiryPendingConversion(null);
+      }
 
       setShowAddStudentModal(false);
       resetStudentForm();
@@ -2690,6 +2734,9 @@ export const AdminDashboard: React.FC = () => {
       {/* 15. ANALYTICS & REPORTS */}
       {/* 14. AUDIT TRAIL & SECURE BACKUP (F1) */}
       {!isStaff && currentModule === 'audit' && <AuditTrailModule />}
+
+      {/* 16. ADMISSION LEADS PIPELINE (F2) — staff + admin desk function */}
+      {currentModule === 'inquiries' && <InquiriesModule onConvert={handleConvertInquiry} />}
 
       {/* 15. ANALYTICS & REPORTS */}
       {!isStaff && (currentModule === 'analytics' || currentModule === 'reports') && (

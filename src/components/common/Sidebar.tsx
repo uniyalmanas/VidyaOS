@@ -20,7 +20,8 @@ import {
   ShieldCheck,
   PanelLeft,
   X,
-  History
+  History,
+  PhoneIncoming
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -59,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapsed
 }) => {
-  const { students, batches, invoices, announcements, teachers } = useApp();
+  const { students, batches, invoices, announcements, teachers, inquiries } = useApp();
   const { currentUser } = useAuth();
 
   // Real-time custom resizable sidebar width state (persisted in localStorage)
@@ -146,6 +147,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     i => i.status === 'pending' || i.status === 'partially_paid' || i.status === 'overdue'
   ).length;
 
+  const freshLeadsCount = inquiries.filter(i => i.status === 'new').length;
+
   const navGroups: NavGroup[] = [
     {
       title: 'CORE OPERATIONS',
@@ -175,6 +178,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'PEOPLE',
       items: [
+        { id: 'inquiries', label: 'Inquiries', icon: PhoneIncoming, badge: freshLeadsCount > 0 ? freshLeadsCount : undefined, badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 font-bold' },
         { id: 'teachers', label: 'Faculty', icon: UserCheck, badge: teachers.length },
         { id: 'parents', label: 'Parents', icon: HeartHandshake }
       ]

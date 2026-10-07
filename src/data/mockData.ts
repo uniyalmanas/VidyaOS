@@ -13,7 +13,8 @@ import {
   TimetableSlot,
   Announcement,
   SubscriptionPlan,
-  AuditLogEntry
+  AuditLogEntry,
+  Inquiry
 } from '../types';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -1187,5 +1188,114 @@ export const MOCK_AUDIT_LOGS: AuditLogEntry[] = [
     summary: 'Enrolled Rahul Sharma into Class 10 Mathematics Batch A and synced the roster.',
     createdAt: '2026-10-01T11:20:00.000Z',
     createdAtMs: new Date('2026-10-01T11:20:00.000Z').getTime()
+  }
+];
+
+/**
+ * DEV-only demo seed for the Leads pipeline (F2). Served directly as the
+ * demo-persona fallback by `subscribeToInquiries` — never seeded into Firestore.
+ */
+export const MOCK_INQUIRIES: Inquiry[] = [
+  {
+    id: 'inq-1',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    name: 'Priya Singh',
+    phone: '+91 98120 33445',
+    email: 'priya.singh@example.com',
+    classGrade: 'Class 10',
+    board: 'CBSE',
+    subjects: ['Mathematics', 'Science'],
+    source: 'whatsapp',
+    status: 'new',
+    followUpDate: '2026-10-08',
+    notes: [
+      {
+        authorId: 'user-apex-admin',
+        authorName: 'Er. Manoj Verma',
+        text: 'Mother enquired about Class 10 integrated batch. Sent fee structure on WhatsApp.',
+        createdAt: '2026-10-07T09:15:00.000Z'
+      }
+    ],
+    createdByUserId: 'user-apex-admin',
+    createdByName: 'Er. Manoj Verma',
+    createdAt: '2026-10-07T09:15:00.000Z',
+    createdAtMs: new Date('2026-10-07T09:15:00.000Z').getTime()
+  },
+  {
+    id: 'inq-2',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    name: 'Arjun Mehta',
+    phone: '+91 99887 66554',
+    classGrade: 'Class 12',
+    board: 'State Board',
+    subjects: ['Physics'],
+    source: 'walkin',
+    status: 'contacted',
+    followUpDate: '2026-10-09',
+    notes: [
+      {
+        authorId: 'user-apex-staff',
+        authorName: 'Pooja Verma',
+        text: 'Walk-in with father; discussed NEET Foundation physics batch and demo class timings.',
+        createdAt: '2026-10-06T16:40:00.000Z'
+      }
+    ],
+    createdByUserId: 'user-apex-staff',
+    createdByName: 'Pooja Verma',
+    createdAt: '2026-10-06T16:40:00.000Z',
+    createdAtMs: new Date('2026-10-06T16:40:00.000Z').getTime()
+  },
+  {
+    id: 'inq-3',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    name: 'Sneha Patel',
+    phone: '+91 97654 32109',
+    email: 'sneha.patel@example.com',
+    classGrade: 'Class 8',
+    board: 'CBSE',
+    subjects: ['Mathematics'],
+    source: 'referral',
+    status: 'demo_booked',
+    followUpDate: '2026-10-10',
+    interestedBatchIds: ['batch-c10-math'],
+    notes: [
+      {
+        authorId: 'user-apex-staff',
+        authorName: 'Pooja Verma',
+        text: 'Referred by Rahul Sharma family. Demo class booked for Saturday 5 PM batch.',
+        createdAt: '2026-10-05T12:10:00.000Z'
+      }
+    ],
+    createdByUserId: 'user-apex-staff',
+    createdByName: 'Pooja Verma',
+    createdAt: '2026-10-05T12:10:00.000Z',
+    createdAtMs: new Date('2026-10-05T12:10:00.000Z').getTime()
+  },
+  {
+    id: 'inq-4',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    name: 'Vikram Nair',
+    phone: '+91 98910 22334',
+    classGrade: 'Class 11',
+    board: 'CBSE',
+    subjects: ['Chemistry'],
+    source: 'online',
+    status: 'lost',
+    notes: [
+      {
+        authorId: 'user-apex-staff',
+        authorName: 'Pooja Verma',
+        text: 'Could not follow up — opted for an online-only platform. Left a note in case they return next term.',
+        createdAt: '2026-10-01T11:00:00.000Z'
+      }
+    ],
+    createdByUserId: 'user-apex-staff',
+    createdByName: 'Pooja Verma',
+    createdAt: '2026-09-28T11:00:00.000Z',
+    createdAtMs: new Date('2026-09-28T11:00:00.000Z').getTime()
   }
 ];

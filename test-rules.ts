@@ -102,6 +102,7 @@ async function main(): Promise<void> {
   const admin = await makeClient('admin');
   const adminOther = await makeClient('admin-other');
   const teacher = await makeClient('teacher');
+  const staff = await makeClient('staff');
 
   const stamp = Date.now();
 
@@ -310,6 +311,109 @@ async function main(): Promise<void> {
     getDoc(doc(adminOther.db, 'auditLogs', auditId))
   );
   check('audit history is tenant-isolated', crossOrgReadDenied);
+
+  // ---------------------------------------------------------------- inquiries (F2)
+  console.log('\nSuite 5: Inquiry pipeline — staff/admin writes, teachers read-only, tenant-isolated');
+  const inquiryDoc = (id: string, uid: string, name: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    orgId: ORG_ID,
+    branchId: 'branch-rules',
+    name,
+    phone: '+91 9000' + String(100000 + ((stamp + id.length) % 900000)),
+    classGrade: 'Class 10',
+    board: 'CBSE',
+    status: 'new',
+    notes: [],
+    createdByUserId: uid,
+    createdByName: name,
+    createdAt: new Date().toISOString(),
+    createdAtMs: Date.now(),
+    ...extra
+  });
+
+  let suite5Step = 'staff sign-in';
+  try {
+    const staffCred = await createUserWithEmailAndPassword(
+      staff.auth,
+      `rules-staff-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+    const staffUid = staffCred.user.uid;
+
+    suite5Step = 'provision staff profile';
+    await setDoc(doc(admin.db, 'users', staffUid), {
+      id: staffUid,
+      uid: staffUid,
+      role: 'STAFF',
+      orgId: ORG_ID,
+      name: 'Rules Staff',
+      phone: '+91 9000000066'
+    });
+    check('staff profile provisioned', true);
+
+    const inqId = `inq-rules-${stamp}`;
+    const inqRef = doc(admin.db, 'inquiries', inqId);
+
+    suite5Step = 'admin creates inquiry';
+    await setDoc(inqRef, inquiryDoc(inqId, adminUid, 'Rules Admin'));
+    check('center admin can create an inquiry', true);
+
+    suite5Step = 'staff creates inquiry';
+    const staffWriteDenied = await expectDenied('staff writes an inquiry', () =>
+      setDoc(doc(staff.db, 'inquiries', `inq-staff-${stamp}`), inquiryDoc(`inq-staff-${stamp}`, staffUid, 'Rules Staff'))
+    );
+    check('center staff can create an inquiry (front desk function)', !staffWriteDenied);
+
+    suite5Step = 'teacher reads inquiry';
+    let teacherRead = false;
+    try {
+      teacherRead = (await getDoc(doc(teacher.db, 'inquiries', inqId))).exists();
+    } catch {
+      teacherRead = false;
+    }
+    check('teacher can read leads (tenant member view)', teacherRead);
+
+    suite5Step = 'teacher creates inquiry';
+    const teacherInquiryCreateDenied = await expectDenied('teacher creates an inquiry', () =>
+      setDoc(doc(teacher.db, 'inquiries', `inq-teacher-${stamp}`), inquiryDoc(`inq-teacher-${stamp}`, teacherUid, 'Rules Teacher'))
+    );
+    check('teacher cannot create inquiries', teacherInquiryCreateDenied);
+
+    suite5Step = 'teacher updates inquiry';
+    const teacherUpdateDenied = await expectDenied('teacher moves a lead status', () =>
+      updateDoc(doc(teacher.db, 'inquiries', inqId), { status: 'contacted' })
+    );
+    check('teacher cannot update inquiries (pipeline is staff/admin)', teacherUpdateDenied);
+
+    suite5Step = 'teacher deletes inquiry';
+    const teacherDeleteDenied = await expectDenied('teacher deletes an inquiry', () =>
+      deleteDoc(doc(teacher.db, 'inquiries', inqId))
+    );
+    check('teacher cannot delete inquiries', teacherDeleteDenied);
+
+    suite5Step = 'admin moves inquiry to demo_booked';
+    await updateDoc(inqRef, { status: 'demo_booked', followUpDate: '2026-10-10', updatedAt: new Date().toISOString() });
+    check('staff/admin can move a lead through the pipeline', true);
+
+    suite5Step = 'staff marks inquiry lost';
+    await updateDoc(doc(staff.db, 'inquiries', inqId), { status: 'lost' });
+    check('staff can mark a lead lost (the Every-Day desk flow)', true);
+
+    suite5Step = 'cross-org inquiry write';
+    const crossOrgWriteDenied = await expectDenied('other-centre admin captures a lead into this org', () =>
+      setDoc(doc(adminOther.db, 'inquiries', `inq-foreign-${stamp}`), inquiryDoc(`inq-foreign-${stamp}`, adminUid, 'Rules Admin'))
+    );
+    check('inquiries are tenant-isolated on write', crossOrgWriteDenied);
+
+    suite5Step = 'cross-org inquiry read';
+    const crossOrgReadDeniedInq = await expectDenied('other-centre admin reads foreign leads', () =>
+      getDoc(doc(adminOther.db, 'inquiries', inqId))
+    );
+    check('inquiries are tenant-isolated on read', crossOrgReadDeniedInq);
+  } catch (err) {
+    console.error(`\nSuite 5 failed at step: "${suite5Step}"`);
+    throw err;
+  }
 
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);

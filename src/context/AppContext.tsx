@@ -24,7 +24,8 @@ import {
   ChatMessage,
   ChatMessageTag,
   ChatMessageAttachment,
-  AuditLogEntry
+  AuditLogEntry,
+  Inquiry
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -47,6 +48,7 @@ import { AcademicProvider, useAcademics } from './slices/AcademicContext';
 import { CommunicationProvider, useCommunication } from './slices/CommunicationContext';
 import { AuditProvider, useAuditLog } from './slices/AuditContext';
 import { RecordAuditInput } from '../lib/audit';
+import { InquiryProvider, useInquiries, NewInquiryInput } from './slices/InquiryContext';
 
 // Export domain hooks for direct fine-grained consumption
 export { useStudents } from './slices/StudentContext';
@@ -55,6 +57,7 @@ export { useAttendance } from './slices/AttendanceContext';
 export { useAcademics } from './slices/AcademicContext';
 export { useCommunication, useChat } from './slices/CommunicationContext';
 export { useAuditLog } from './slices/AuditContext';
+export { useInquiries } from './slices/InquiryContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -86,6 +89,14 @@ export interface AppContextType {
   // Audit trail (F1) — append-only change history
   auditLogs: AuditLogEntry[];
   recordAudit: (input: RecordAuditInput) => void;
+
+  // Leads & admissions (F2) — inquiry pipeline CRM
+  inquiries: Inquiry[];
+  addInquiry: (input: NewInquiryInput) => Inquiry;
+  updateInquiry: (inquiryId: string, updates: Partial<Inquiry>) => void;
+  addInquiryNote: (inquiryId: string, text: string) => void;
+  markInquiryConverted: (inquiryId: string, studentId: string, studentName: string) => void;
+  deleteInquiry: (inquiryId: string) => void;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -287,7 +298,13 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
               currentUser={props.currentUser}
               isPlatformOwner={props.isPlatformOwner}
             >
-              <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+              <InquiryProvider
+                currentOrg={props.currentOrg}
+                currentUser={props.currentUser}
+                isPlatformOwner={props.isPlatformOwner}
+              >
+                <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+              </InquiryProvider>
             </AuditProvider>
           </CommunicationProvider>
         </AcademicProvider>
@@ -306,6 +323,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const academicSlice = useAcademics();
   const commSlice = useCommunication();
   const auditSlice = useAuditLog();
+  const inquirySlice = useInquiries();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -399,6 +417,14 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     // Audit trail (F1) — append-only change history
     auditLogs: auditSlice.auditLogs,
     recordAudit: auditSlice.recordAudit,
+
+    // Leads & admissions (F2) — inquiry pipeline CRM
+    inquiries: inquirySlice.inquiries,
+    addInquiry: inquirySlice.addInquiry,
+    updateInquiry: inquirySlice.updateInquiry,
+    addInquiryNote: inquirySlice.addInquiryNote,
+    markInquiryConverted: inquirySlice.markInquiryConverted,
+    deleteInquiry: inquirySlice.deleteInquiry,
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

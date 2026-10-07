@@ -34,7 +34,8 @@ import {
   Announcement,
   ChatChannel,
   ChatMessage,
-  AuditLogEntry
+  AuditLogEntry,
+  Inquiry
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -49,7 +50,8 @@ import {
   MOCK_ASSIGNMENTS,
   MOCK_STUDY_MATERIALS,
   MOCK_ANNOUNCEMENTS,
-  MOCK_AUDIT_LOGS
+  MOCK_AUDIT_LOGS,
+  MOCK_INQUIRIES
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -628,6 +630,68 @@ export async function persistAuditLogToFirestore(entry: AuditLogEntry): Promise<
     } else {
       console.warn(`Audit log write failed (${entry.id}).`);
     }
+  }
+}
+
+// ----------------------------------------------------
+// INQUIRIES / LEADS (F2) — admission pipeline CRM
+// ----------------------------------------------------
+
+/**
+ * Newest-first off the wire (requires the `inquiries` composite index declared
+ * in `firestore.indexes.json`), reversed so the UI receives chronological order
+ * — the same pattern as `subscribeToChatMessages` / `subscribeToAuditLogs`.
+ */
+export function subscribeToInquiries(onData: (inquiries: Inquiry[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_INQUIRIES, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(
+          collection(db, 'inquiries'),
+          where('orgId', '==', orgId),
+          orderBy('createdAtMs', 'desc'),
+          limit(500)
+        )
+      : query(collection(db, 'inquiries'), orderBy('createdAtMs', 'desc'), limit(500));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as Inquiry).reverse());
+        } else {
+          onData(developmentFallback(MOCK_INQUIRIES, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time inquiries', error);
+        onData(developmentFallback(MOCK_INQUIRIES, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_INQUIRIES, orgId);
+    if (import.meta.env.DEV) console.error('Could not start inquiries listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+export async function persistInquiryToFirestore(inquiry: Inquiry): Promise<void> {
+  try {
+    await setDoc(doc(db, 'inquiries', inquiry.id), cleanFirestoreData(inquiry));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `inquiries/${inquiry.id}`);
+  }
+}
+
+export async function deleteInquiryFromFirestore(inquiryId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'inquiries', inquiryId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `inquiries/${inquiryId}`);
   }
 }
 

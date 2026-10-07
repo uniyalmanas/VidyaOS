@@ -358,6 +358,50 @@ export interface AuditLogEntry {
   createdAtMs: number;
 }
 
+export type InquiryStatus = 'new' | 'contacted' | 'demo_booked' | 'joined' | 'lost';
+export type InquirySource = 'walkin' | 'call' | 'whatsapp' | 'referral' | 'online' | 'other';
+
+export interface InquiryNote {
+  authorId: string;
+  authorName: string;
+  text: string;
+  /** ISO display string (UTC). */
+  createdAt: string;
+}
+
+/**
+ * Admission lead (F2) — a prospective student captured on the phone / desk.
+ * `status` moves along the pipeline: new → contacted → demo_booked → joined
+ * (conversion to a real student) or lost. Joined leads carry a
+ * `convertedStudentId` linking to the student record created on conversion.
+ */
+export interface Inquiry {
+  id: string;
+  orgId: string;
+  branchId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  classGrade?: string;
+  board?: IndianBoard;
+  subjects?: string[];
+  source?: InquirySource;
+  status: InquiryStatus;
+  /** YYYY-MM-DD follow-up reminder date (India). */
+  followUpDate?: string;
+  interestedBatchIds?: string[];
+  notes: InquiryNote[];
+  createdByUserId: string;
+  createdByName: string;
+  /** ISO display string (UTC). */
+  createdAt: string;
+  /** Sortable epoch-ms timestamp. */
+  createdAtMs: number;
+  updatedAt?: string;
+  /** Set when this lead is converted into a student. */
+  convertedStudentId?: string;
+}
+
 export interface AuthSession {
   // NOTE: Firebase Auth owns the ID token. It is deliberately NOT part of the
   // session shape — persisting it to localStorage only created a stale,
