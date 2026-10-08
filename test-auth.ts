@@ -175,6 +175,19 @@ import {
   MIN_INSTALLMENTS,
   MAX_INSTALLMENTS
 } from './src/lib/installments';
+import {
+  classLevel,
+  nextClassGrade,
+  nextAcademicYear,
+  academicYearSpan,
+  slugify,
+  rolloverBatchId,
+  renameBatchForNextYear,
+  firstInvoiceMonth,
+  firstInvoiceDueDate,
+  buildRolloverPlan,
+  suggestedRolloverYears
+} from './src/lib/rollover';
 import { PtmEvent, PtmSlot, IssuedDocument, ExamResult } from './src/types';
 
 function cleanPhone(phone: string): string {
@@ -1829,6 +1842,141 @@ assert(nextPaymentDueAmount(f11Invoice) === 500, 'The next payable amount is the
 assert(nextPaymentDueDate({ dueDate: '2026-09-10' }) === '2026-09-10', 'Without a plan the invoice due date is used');
 assert(nextPaymentDueAmount({ netAmount: 1000, paidAmount: 400 }) === 600, 'Without a plan the whole remaining balance is due');
 assert(nextPaymentDueDate({ installments: [], dueDate: '2026-09-10' }) === '2026-09-10', 'An empty plan falls back to the invoice due date');
+
+
+// ============================================================================
+// F12 — Session rollover (new academic year)
+// ============================================================================
+
+const mkRollBatch = (over: Partial<Batch>): Batch => ({
+  id: 'batch-x',
+  orgId: 'org-x',
+  branchId: 'branch-x',
+  name: 'Class 9 - Mathematics',
+  subject: 'Mathematics',
+  classGrade: 'Class 9',
+  teacherId: 'teach-x',
+  classroom: 'Room 1',
+  scheduleDays: ['Mon', 'Wed', 'Fri'],
+  timeSlot: '05:00 PM - 06:30 PM',
+  capacity: 25,
+  studentIds: [],
+  feeAmountMonthly: 2000,
+  academicYear: '2026-2027',
+  status: 'active',
+  ...over
+});
+
+const mkRollStudent = (over: Partial<Student>): Student => ({
+  id: 'stud-x',
+  orgId: 'org-x',
+  branchId: 'branch-x',
+  enrollmentNo: 'ORG/2026/001',
+  rollNo: '1',
+  name: 'Student X',
+  gender: 'Male',
+  classGrade: 'Class 9',
+  board: 'Coaching',
+  schoolName: 'School X',
+  dateOfBirth: '2010-01-01',
+  admissionDate: '2026-04-01',
+  phone: '9999999999',
+  address: 'Civil Lines',
+  avatar: '',
+  batchIds: [],
+  guardian: { fatherName: 'Father', fatherPhone: '9999999998', parentUserId: 'parent-x' },
+  status: 'active',
+  ...over
+});
+
+// Class mapping + rename ------------------------------------------------------------
+assert(classLevel('Class 10') === 10 && classLevel('Class 9') === 9, 'The class level is parsed from the label');
+assert(classLevel('JEE Foundation') === null, 'A label without a class has no level');
+assert(classLevel('Class 99') === null, 'An out-of-range class has no level');
+assert(nextClassGrade('Class 8') === 'Class 9', 'Class 8 rolls into Class 9');
+assert(nextClassGrade('Class 11') === 'Class 12', 'Class 11 rolls into Class 12');
+assert(nextClassGrade('Class 12') === null, 'Class 12 graduates with no next class');
+assert(nextClassGrade('Grade-9') === 'Grade-10', 'The label style is preserved when rolling');
+assert(nextClassGrade('Foundation') === null, 'An unclassed batch has no next class');
+
+assert(nextAcademicYear('2026-2027') === '2027-2028', 'An academic year rolls forward one year');
+assert(nextAcademicYear('2027-2028') === '2028-2029', 'The next span is not hard-coded to a single year');
+assert(nextAcademicYear('not-a-year') === 'not-a-year', 'A malformed academic year passes through');
+assert(academicYearSpan('2026-2027')?.join(',') === '2026,2027', 'The academic year span parses');
+
+assert(slugify('Class 10') === 'class-10' && slugify('Math & Logic') === 'math-logic', 'Slugs are lower-case and hyphenated');
+assert(rolloverBatchId('Class 10', 'Mathematics', '2027-2028') === 'batch-class-10-mathematics-2027-2028', 'Target batch ids are deterministic');
+assert(renameBatchForNextYear('Class 9 - Mathematics Batch A', 'Class 9', 'Class 10') === 'Class 10 - Mathematics Batch A', 'The class label inside a batch name is rewritten');
+assert(renameBatchForNextYear('Math Booster', 'Class 9', 'Class 10') === 'Class 10 · Math Booster', 'A name without the class is prefixed with the target class');
+assert(firstInvoiceMonth('2027-2028') === 'April 2027', 'The first invoice month is April of the start year');
+assert(firstInvoiceDueDate('2027-2028') === '2027-04-10', 'The first invoice is due on the 10th');
+
+// Plan building: carry, filter inactive, graduate, dedupe, ignore completed -----------------
+const rolloverPlan = buildRolloverPlan({
+  batches: [
+    mkRollBatch({ id: 'b-math9', studentIds: ['s-a', 's-b', 's-c'] }),
+    mkRollBatch({ id: 'b-math9-dup', name: 'Class 9 - Mathematics (Evening)', studentIds: ['s-d'] }),
+    mkRollBatch({ id: 'b-phy12', classGrade: 'Class 12', subject: 'Physics', name: 'Class 12 - Physics', studentIds: ['s-e'] }),
+    mkRollBatch({ id: 'b-c8-empty', classGrade: 'Class 8', subject: 'Math & Logic', name: 'Class 8 - Foundation', studentIds: [] }),
+    mkRollBatch({ id: 'b-done', classGrade: 'Class 11', subject: 'Chemistry', name: 'Class 11 - Chemistry', status: 'completed', studentIds: ['s-f'] })
+  ],
+  students: [
+    mkRollStudent({ id: 's-a', name: 'A' }),
+    mkRollStudent({ id: 's-b', name: 'B' }),
+    mkRollStudent({ id: 's-c', name: 'C', status: 'inactive' }),
+    mkRollStudent({ id: 's-d', name: 'D' }),
+    mkRollStudent({ id: 's-e', name: 'E' }),
+    mkRollStudent({ id: 's-f', name: 'F' })
+  ],
+  fromYear: '2026-2027',
+  toYear: '2027-2028'
+});
+
+const mathRow = rolloverPlan.batches.find(row => row.sourceBatchId === 'b-math9')!;
+const dupRow = rolloverPlan.batches.find(row => row.sourceBatchId === 'b-math9-dup')!;
+const phy12Row = rolloverPlan.batches.find(row => row.sourceBatchId === 'b-phy12')!;
+const emptyRow = rolloverPlan.batches.find(row => row.sourceBatchId === 'b-c8-empty')!;
+
+assert(mathRow.toClassGrade === 'Class 10' && mathRow.newName === 'Class 10 - Mathematics', 'A batch carries the class forward and is renamed');
+assert(mathRow.carriedStudentIds.join(',') === 's-a,s-b', 'Only active enrolled students are carried');
+assert(rolloverPlan.newBatchCount === 1, 'Only one new batch is planned');
+assert(rolloverPlan.carriedStudentCount === 2, 'Carried students are counted once');
+assert(rolloverPlan.invoiceCount === 2, 'One first-month invoice is planned per carried student');
+assert(rolloverPlan.invoices.every(invoice => invoice.amount === 2000 && invoice.dueDate === '2027-04-10'), 'Invoice drafts carry the batch fee and first-month due date');
+assert(dupRow.skipReason !== null, 'A second batch rolling into the same class & subject is deduped');
+assert(phy12Row.isTerminal && phy12Row.skipReason !== null, 'A graduating Class 12 batch is left behind');
+assert(emptyRow.skipReason !== null, 'A batch with no active students is left behind');
+assert(!rolloverPlan.batches.some(row => row.sourceBatchId === 'b-done'), 'A completed batch is not rolled over');
+
+// Existing target year skips the rollover -----------------------------------------------
+const existingPlan = buildRolloverPlan({
+  batches: [mkRollBatch({ id: 'b-math9', studentIds: ['s-a'] })],
+  students: [mkRollStudent({ id: 's-a' })],
+  fromYear: '2026-2027',
+  toYear: '2027-2028',
+  existingBatchIds: [rolloverBatchId('Class 10', 'Mathematics', '2027-2028')]
+});
+assert(existingPlan.newBatchCount === 0, 'A class already present next year is not duplicated');
+assert(existingPlan.batches[0].skipReason !== null, 'The already-existing slot is reported to the admin');
+
+// Fee overrides flow into the plan and the invoices ------------------------------------
+const feePlan = buildRolloverPlan({
+  batches: [mkRollBatch({ id: 'b-fee', studentIds: ['s-a', 's-b'] })],
+  students: [mkRollStudent({ id: 's-a' }), mkRollStudent({ id: 's-b' })],
+  fromYear: '2026-2027',
+  toYear: '2027-2028',
+  feeOverrides: { 'b-fee': 2500 }
+});
+assert(feePlan.batches[0].feeAmountMonthly === 2500, 'An edited monthly fee replaces the batch default');
+assert(feePlan.invoices.every(invoice => invoice.amount === 2500), 'The edited fee is used on every first-month invoice');
+
+// Year suggestion ------------------------------------------------------------------------
+const suggestion = suggestedRolloverYears([
+  mkRollBatch({ id: 'y1', academicYear: '2025-2026' }),
+  mkRollBatch({ id: 'y2', academicYear: '2026-2027' })
+]);
+assert(suggestion?.fromYear === '2026-2027' && suggestion?.toYear === '2027-2028', 'The latest academic year seeds the next rollover');
+assert(suggestedRolloverYears([]) === null, 'No batches means no year suggestion');
 
 
 console.log('\n----------------------------------------');

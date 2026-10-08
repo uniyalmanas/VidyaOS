@@ -1902,6 +1902,114 @@ async function main(): Promise<void> {
     throw err;
   }
 
+  console.log('\nSuite 15: Session rollover (F12) — next-year batches + first-month invoices reuse existing roles');
+  let suite15Step = 'setup';
+  try {
+    const batchDoc = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      name: 'Class 10 - Mathematics',
+      subject: 'Mathematics',
+      classGrade: 'Class 10',
+      teacherId: 'teach-rules',
+      classroom: 'Room 1',
+      scheduleDays: ['Mon', 'Wed', 'Fri'],
+      timeSlot: '05:00 PM - 06:30 PM',
+      capacity: 25,
+      studentIds: ['stud-rules-1'],
+      feeAmountMonthly: 2000,
+      academicYear: '2026-2027',
+      status: 'active',
+      ...over
+    });
+
+    suite15Step = 'admin creates the current-year batch';
+    await setDoc(doc(admin.db, 'batches', 'batch-f12-current'), batchDoc('batch-f12-current'));
+    check('an admin may create the batch that will be rolled over', true);
+
+    suite15Step = 'admin creates the next-year batch';
+    await setDoc(
+      doc(admin.db, 'batches', 'batch-f12-next'),
+      batchDoc('batch-f12-next', {
+        id: 'batch-f12-next',
+        name: 'Class 11 - Mathematics',
+        classGrade: 'Class 11',
+        academicYear: '2027-2028'
+      })
+    );
+    check('an admin may create the next-year rollover batch', true);
+
+    suite15Step = 'teacher archives the old batch';
+    await updateDoc(doc(teacher.db, 'batches', 'batch-f12-current'), { status: 'completed' });
+    check('faculty may archive an old batch as completed during rollover', true);
+
+    suite15Step = 'admin raises the first-month invoice';
+    await setDoc(doc(admin.db, 'invoices', 'inv-f12-first'), {
+      id: 'inv-f12-first',
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      studentId: 'stud-rules-1',
+      batchId: 'batch-f12-next',
+      invoiceNo: 'INV/2027-28/001',
+      monthYear: 'April 2027',
+      title: 'April 2027 Tuition Fee - Class 11 Mathematics',
+      amount: 2000,
+      discount: 0,
+      lateFee: 0,
+      netAmount: 2000,
+      paidAmount: 0,
+      dueDate: '2027-04-10',
+      status: 'pending',
+      createdAt: '2027-04-01',
+      payments: []
+    });
+    check('an admin may raise a first-month rollover invoice', true);
+
+    suite15Step = 'foreign admin creates a batch here';
+    const foreignBatchDenied = await expectDenied('another centre creates a batch in this centre', () =>
+      setDoc(doc(adminOther.db, 'batches', 'batch-f12-foreign'), batchDoc('batch-f12-foreign'))
+    );
+    check('rollover batches stay tenant-isolated', foreignBatchDenied);
+
+    suite15Step = 'teacher creates a batch';
+    const teacherBatchDenied = await expectDenied('faculty creates a rollover batch', () =>
+      setDoc(doc(teacher.db, 'batches', 'batch-f12-teacher'), batchDoc('batch-f12-teacher'))
+    );
+    check('faculty cannot create batches (rollover stays desk-side)', teacherBatchDenied);
+
+    suite15Step = 'learner creates a batch';
+    const learnerBatchDenied = await expectDenied('a learner creates a batch', () =>
+      setDoc(doc(student.db, 'batches', 'batch-f12-student'), batchDoc('batch-f12-student'))
+    );
+    check('a learner cannot create a rollover batch', learnerBatchDenied);
+
+    suite15Step = 'learner raises an invoice';
+    const learnerInvoiceDenied = await expectDenied('a learner raises a rollover invoice', () =>
+      setDoc(doc(student.db, 'invoices', 'inv-f12-student'), {
+        id: 'inv-f12-student',
+        orgId: ORG_ID,
+        branchId: 'branch-rules',
+        studentId: 'stud-rules-1',
+        monthYear: 'April 2027',
+        title: 'Fabricated fee',
+        amount: 0,
+        discount: 0,
+        lateFee: 0,
+        netAmount: 0,
+        paidAmount: 0,
+        dueDate: '2027-04-10',
+        status: 'pending',
+        createdAt: '2027-04-01',
+        payments: []
+      })
+    );
+    check('a learner cannot raise a rollover invoice', learnerInvoiceDenied);
+  } catch (err) {
+    console.error(`\nSuite 15 failed at step: "${suite15Step}"`);
+    throw err;
+  }
+
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);
   console.log('----------------------------------------\n');
