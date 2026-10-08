@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { useRouter } from '../../context/RouterContext';
-import { VidyaLogo, Reveal } from '../ui';
+import { VidyaLogo, VidyaAvatar, Reveal } from '../ui';
 import { AuthCard } from './AuthCard';
 import { fadeUp, fadeUpLg, tDefault, tFast, tSoftSpring } from '../../lib/motion';
 import {
@@ -141,11 +141,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenRegister }) => {
               "VidyaOS completely eliminated the awkwardness of manual fee calls. Parents love the instant UPI receipts and our collections increased by 30%."
             </p>
             <div className="flex items-center space-x-3 mt-3">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                alt="Director"
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-[#FFA000]"
-              />
+              <VidyaAvatar name="Manoj Verma" size={32} className="rounded-full ring-2 ring-[#FFA000]" />
               <div>
                 <div className="text-xs font-bold text-slate-900 dark:text-white">Er. Manoj Verma</div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400">Director, Apex IIT Academy (Kota, Rajasthan)</div>
