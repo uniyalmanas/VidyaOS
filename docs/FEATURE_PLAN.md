@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 + F10 + F11 shipped ✅ · F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 + F10 + F11 + F12 shipped ✅ (all 12 done). Each feature shipped one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -419,7 +419,7 @@ emulator — payment submission amount rule against remaining installment balanc
 
 ---
 
-## F12 — Session rollover
+## F12 — Session rollover — ✅ SHIPPED (2026-10-08)
 
 **Simple words:** New academic year → one wizard takes all active batches+students and prepares
 next year's setup (new batches, fresh invoices) without retyping everything.
@@ -433,6 +433,17 @@ next year's setup (new batches, fresh invoices) without retyping everything.
 - `executeRollover(plan)` → writeBatch: new batches (id `batch-<slug>-<toYear>`), mark old
   batches `status:'completed'`, generate first-month invoices for carried active students,
   audit each step. Confirmation-only execution (no undo).
+
+**As built:** pure planning logic in `src/lib/rollover.ts` (`classLevel`, `nextClassGrade`,
+`nextAcademicYear`, `slugify`, `rolloverBatchId`, `renameBatchForNextYear`, `firstInvoiceMonth`,
+`firstInvoiceDueDate`, `buildRolloverPlan`, `suggestedRolloverYears`) — fully unit-testable.
+`RolloverContext` sits inside both `StudentProvider` and `FeeProvider`, so `executeRollover`
+reuses the existing `addBatch` / `updateBatch` / `createInvoice` mutations (each already persists
+and keeps local state in sync) rather than introducing a parallel write path. A plan row is left
+behind when the class graduates (Class 12), its class+subject is already present next year, another
+row already rolls into the same slot, or it has no active students; only active students are
+carried, one first-month (April, 10th) invoice per carried enrolment. Admin tab "New Academic
+Year"; Staff-restricted.
 
 **UI:** Admin → **New Academic Year** tab: pick years → review plan table → edit fees → "Start
 new year".
