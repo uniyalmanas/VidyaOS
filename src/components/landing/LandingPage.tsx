@@ -7,7 +7,16 @@ import {
 import { AnimatePresence, motion, useMotionValue, useSpring, type Variants } from 'motion/react';
 import { UserRole } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
-import { ConsoleButton, StatusChip, VidyaLogo, Reveal, RevealGroup, CountUp } from '../ui';
+import {
+  ConsoleButton,
+  StatusChip,
+  VidyaLogo,
+  Reveal,
+  RevealGroup,
+  CountUp,
+  HeroIllustration,
+  HowItWorksInfographic
+} from '../ui';
 import { usePwaInstall } from '../../hooks/usePwaInstall';
 import { PwaInstallModal } from '../common/PwaInstallModal';
 import {
@@ -30,6 +39,7 @@ const heading = 'text-3xl sm:text-4xl lg:text-5xl font-semibold font-apple-displ
 
 const navLinks = [
   { href: '#features', label: 'Features' },
+  { href: '#how-it-works', label: 'How It Works' },
   { href: '#console-demo', label: 'Console Demo' },
   { href: '#fee-calculator', label: 'Fee Calculator' },
   { href: '#pricing-tiers', label: 'Pricing Tiers' },
@@ -625,6 +635,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </motion.div>
       </section>
 
+      {/* Hero brand illustration — the VidyaOS learning constellation */}
+      <section className="relative -mt-6 sm:-mt-12 pb-6 sm:pb-10 max-w-4xl mx-auto px-4 lg:px-8">
+        <Reveal variant="scale">
+          <div className="relative rounded-[32px] border border-black/[0.06] dark:border-white/[0.08] bg-white/70 dark:bg-[#1C1C1E]/60 backdrop-blur-xl p-3 sm:p-6 shadow-[0_24px_70px_-24px_rgba(79,70,229,0.35)]">
+            <HeroIllustration />
+          </div>
+        </Reveal>
+      </section>
+
       {/* Features */}
       <section id="features" className="scroll-mt-24 py-12 sm:py-20 max-w-7xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
         <Reveal className="text-center max-w-2xl mx-auto space-y-2">
@@ -665,6 +684,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             );
           })}
         </RevealGroup>
+      </section>
+
+      {/* How it works — onboarding infographic */}
+      <section id="how-it-works" className="scroll-mt-24 py-12 sm:py-16 bg-white dark:bg-[#1C1C1E] border-y border-black/[0.08] dark:border-white/[0.08] transition-colors">
+        <div className="max-w-6xl mx-auto px-4 lg:px-8 space-y-8 sm:space-y-10">
+          <Reveal className="text-center max-w-2xl mx-auto space-y-2">
+            <h2 className={sectionTitle}>From admission to receipt</h2>
+            <p className={heading}>How a Day on VidyaOS Flows</p>
+            <p className={`text-[13px] sm:text-sm ${muted}`}>
+              Five connected steps replace paper registers, spreadsheets and chasing fee calls — inside one tenant-isolated workspace.
+            </p>
+          </Reveal>
+          <Reveal variant="fade" delay={0.05}>
+            <HowItWorksInfographic />
+          </Reveal>
+        </div>
       </section>
 
       {/* Role demo */}
