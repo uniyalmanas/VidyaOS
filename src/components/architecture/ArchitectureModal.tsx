@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { easings, tSpring, fadeUp } from '../../lib/motion';
+import { HowItWorksInfographic } from '../ui';
 
 /** Modal shell: spring pop-in cascading header → sidebar + chapter → footer. */
 const archPanelVariants: Variants = {
@@ -188,6 +189,14 @@ Persistence Tier
   ├── S3/GCS Object Storage (Study Notes, PDFs, Receipts, Avatars)
   └── Redis Cache (User Sessions, OTP verification tokens, Quota meters)`}
                   </pre>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 p-4">
+                  <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-4 flex items-center gap-1.5">
+                    <Compass className="w-4 h-4 text-indigo-500" />
+                    End-to-End Product Flow
+                  </div>
+                  <HowItWorksInfographic variant="compact" />
                 </div>
 
                 <h3 className="font-bold text-slate-900 text-base">Key Architectural Tenets</h3>

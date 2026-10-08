@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
+import { HowItWorksInfographic } from '../ui';
 
 /** Modal shell: spring pop-in cascading header → tab bar → body → footer. */
 const helpPanelVariants: Variants = {
@@ -468,6 +469,16 @@ export const HelpSupportModal: React.FC = () => {
           {/* TAB 2: VIDEO TUTORIALS */}
           {activeTab === 'tutorials' && (
             <div className="space-y-5">
+              <div className="rounded-2xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#18191B] p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Sparkles className="w-4 h-4 text-[#FFA000]" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#5F6368] dark:text-[#9AA0A6]">
+                    The VidyaOS Daily Flow
+                  </h4>
+                </div>
+                <HowItWorksInfographic variant="compact" />
+              </div>
+
               {/* Selected Tutorial Video Simulation Modal / Banner */}
               {selectedTutorial && (
                 <motion.div
