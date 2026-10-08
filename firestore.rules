@@ -26,30 +26,38 @@ service cloud.firestore {
       return getUserDoc().orgId;
     }
 
+    // Role conveyed by the ID token's custom claim, if any. The claim is usually
+    // absent (phone-auth users carry no role claim) and the rules runtime throws
+    // when reading a property off a missing token — so presence is guarded here,
+    // letting `isPlatformOwner()` etc. return a clean false instead of erroring.
+    function tokenRole() {
+      return (request.auth.token != null && 'role' in request.auth.token) ? request.auth.token.role : null;
+    }
+
     function isPlatformOwner() {
       return isSignedIn() && (
-        (request.auth.token.role == 'PLATFORM_OWNER') ||
+        (tokenRole() == 'PLATFORM_OWNER') ||
         (hasUserDoc() && getUserRole() == 'PLATFORM_OWNER')
       );
     }
 
     function isCenterAdmin() {
       return isSignedIn() && (
-        (request.auth.token.role == 'CENTER_ADMIN') ||
+        (tokenRole() == 'CENTER_ADMIN') ||
         (hasUserDoc() && getUserRole() == 'CENTER_ADMIN')
       );
     }
 
     function isStaff() {
       return isSignedIn() && (
-        (request.auth.token.role == 'STAFF') ||
+        (tokenRole() == 'STAFF') ||
         (hasUserDoc() && getUserRole() == 'STAFF')
       );
     }
 
     function isTeacher() {
       return isSignedIn() && (
-        (request.auth.token.role == 'TEACHER') ||
+        (tokenRole() == 'TEACHER') ||
         (hasUserDoc() && getUserRole() == 'TEACHER')
       );
     }
@@ -281,6 +289,49 @@ service cloud.firestore {
         (!('reviewedBy' in data) || (data.reviewedBy is string && data.reviewedBy.size() <= 128)) &&
         (!('reviewedAt' in data) || (data.reviewedAt is string && data.reviewedAt.size() <= 40)) &&
         (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 200));
+    }
+
+    // F8 — the PTM window an admin opens. Strict enough that a malformed event
+    // can't carry bad times or an empty teacher list into the slot cutter.
+    function isValidPtmEvent(data) {
+      return data.keys().hasOnly([
+        'id', 'orgId', 'branchId', 'title', 'date', 'startTime', 'endTime',
+        'slotMinutes', 'teacherIds', 'notes', 'createdBy', 'createdAt'
+      ]) &&
+        data.id is string && data.id.size() <= 120 &&
+        data.orgId is string &&
+        data.branchId is string &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
+        data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.startTime is string &&
+        data.endTime is string &&
+        data.slotMinutes is int && data.slotMinutes >= 10 && data.slotMinutes <= 60 &&
+        data.teacherIds is list && data.teacherIds.size() >= 1 && data.teacherIds.size() <= 50 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+        data.createdBy is string &&
+        data.createdAt is string;
+    }
+
+    // F8 — one row of the booking grid. `booked*` fields may be absent on a
+    // fresh available slot and are explicitly NULL once a booking is released,
+    // so both states stay inside the field-lock's key set.
+    function isValidPtmSlot(data) {
+      return data.keys().hasOnly([
+        'id', 'orgId', 'branchId', 'eventId', 'teacherId', 'startsAt', 'endsAt',
+        'status', 'bookedByUserId', 'bookedStudentId', 'bookedForName', 'bookedAt'
+      ]) &&
+        data.id is string && data.id.size() <= 160 &&
+        data.orgId is string &&
+        data.branchId is string &&
+        data.eventId is string &&
+        data.teacherId is string && data.teacherId.size() <= 120 &&
+        data.startsAt is string &&
+        data.endsAt is string &&
+        data.status in ['available', 'booked', 'cancelled'] &&
+        (!('bookedByUserId' in data) || data.bookedByUserId is string || data.bookedByUserId == null) &&
+        (!('bookedStudentId' in data) || data.bookedStudentId is string || data.bookedStudentId == null) &&
+        (!('bookedForName' in data) || data.bookedForName is string || data.bookedForName == null) &&
+        (!('bookedAt' in data) || data.bookedAt is string || data.bookedAt == null);
     }
 
     match /paymentSubmissions/{submissionId} {
@@ -796,6 +847,118 @@ service cloud.firestore {
 
       allow delete: if isSignedIn() &&
         isCenterInstructorOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
+    // PTM SCHEDULER (F8) — parent–teacher meeting windows + slot grid
+    // ------------------------------------------------------------------------
+    match /ptmEvents/{eventId} {
+      // Every tenant member reads the windows — parents need the grid headers,
+      // faculty need the diary titles. Only the desk writes.
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        isValidPtmEvent(request.resource.data) &&
+        request.resource.data.id == eventId &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      // Edits keep the event inside its centre; well-formedness re-applies and
+      // the creator stamp never moves (desk corrections only).
+      allow update: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId) &&
+        isValidPtmEvent(request.resource.data) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    match /ptmSlots/{slotId} {
+      // The teacher join backing the "teacher reads own" rule: a faculty
+      // session may only see slots whose teacherId points at their own record.
+      function slotIsMine(teacherId) {
+        return exists(/databases/$(database)/documents/teachers/$(teacherId)) &&
+          get(/databases/$(database)/documents/teachers/$(teacherId)).data.userId == request.auth.uid;
+      }
+
+      // Non-faculty tenant members read the whole org grid (desk runs events,
+      // families pick times). Faculty pass only when the doc pins teacherId to
+      // their own record — or they were the booker.
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        (
+          !isTeacher() ||
+          slotIsMine(resource.data.teacherId) ||
+          resource.data.bookedByUserId == request.auth.uid
+        );
+
+      // Slot documents are born of grid generation (staff/admin only) and must
+      // cite an event that exists inside the same centre.
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        isValidPtmSlot(request.resource.data) &&
+        request.resource.data.id == slotId &&
+        exists(/databases/$(database)/documents/ptmEvents/$(request.resource.data.eventId)) &&
+        get(/databases/$(database)/documents/ptmEvents/$(request.resource.data.eventId)).data.orgId == request.resource.data.orgId;
+
+      // The booking field-lock (mirrors `paymentSubmissions`): every actor must
+      // keep the identity pins (id/org/event/teacher/times) and ship a
+      // whole-well-formed slot, touching nothing outside status + the four
+      // `booked*` keys. A family may then either CLAIM a free slot — status
+      // must be 'available' server-side right now, so a racing second booker
+      // re-reads 'booked' and is denied (double-book impossible) — or RELEASE
+      // their own booking back to 'available'. The desk may override any cell
+      // (reassign or retire) but stays inside the same lock.
+      allow update: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        isValidPtmSlot(request.resource.data) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.eventId == resource.data.eventId &&
+        request.resource.data.teacherId == resource.data.teacherId &&
+        request.resource.data.startsAt == resource.data.startsAt &&
+        request.resource.data.endsAt == resource.data.endsAt &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'bookedByUserId', 'bookedStudentId', 'bookedForName', 'bookedAt'
+        ]) &&
+        (
+          isCenterStaffOrAdmin(resource.data.orgId)
+          ||
+          (
+            (isStudent() || isParent()) &&
+            (
+              // claim a free slot for a child you are linked to
+              (
+                resource.data.status == 'available' &&
+                request.resource.data.status == 'booked' &&
+                request.resource.data.bookedByUserId == request.auth.uid &&
+                request.resource.data.bookedStudentId is string &&
+                isLinkedToStudent(request.resource.data.bookedStudentId) &&
+                request.resource.data.bookedForName is string &&
+                request.resource.data.bookedAt is string
+              )
+              ||
+              // release your own booking — the slot is free again
+              (
+                resource.data.status == 'booked' &&
+                resource.data.bookedByUserId == request.auth.uid &&
+                request.resource.data.status == 'available' &&
+                request.resource.data.bookedByUserId == null &&
+                request.resource.data.bookedStudentId == null &&
+                request.resource.data.bookedForName == null &&
+                request.resource.data.bookedAt == null
+              )
+            )
+          )
+        );
+
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
     }
 
     // ------------------------------------------------------------------------

@@ -31,7 +31,10 @@ import {
   SalarySlip,
   Expense,
   SyllabusTopic,
-  SyllabusStatus
+  SyllabusStatus,
+  PtmEvent,
+  PtmEventInput,
+  PtmSlot
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -74,6 +77,12 @@ import {
   SyllabusCreateParams,
   TopicStatusMeta
 } from './slices/SyllabusContext';
+import {
+  PtmProvider,
+  usePtm,
+  PtmCreateResult,
+  PtmBookingResult
+} from './slices/PtmContext';
 import { NewExpenseInput } from '../lib/finance';
 
 // Export domain hooks for direct fine-grained consumption
@@ -87,6 +96,7 @@ export { useInquiries } from './slices/InquiryContext';
 export { useLeaveRequests } from './slices/LeaveContext';
 export { useStaffOps } from './slices/StaffOpsContext';
 export { useFinance } from './slices/FinanceContext';
+export { usePtm } from './slices/PtmContext';
 export { useSyllabus } from './slices/SyllabusContext';
 
 export interface AppContextType {
@@ -165,6 +175,21 @@ export interface AppContextType {
   updateSyllabusTopic: (topicId: string, updates: Partial<Omit<SyllabusTopic, 'id' | 'orgId'>>) => void;
   deleteSyllabusTopic: (topicId: string) => void;
   deleteTopicsForBatch: (batchId: string) => void;
+
+  // PTM (F8) — parent–teacher meeting events + slots
+  ptmEvents: PtmEvent[];
+  ptmSlots: PtmSlot[];
+  createEvent: (input: PtmEventInput) => PtmCreateResult;
+  generateSlots: (eventId: string) => PtmSlot[];
+  bookSlot: (
+    slotId: string,
+    studentId: string,
+    studentName: string
+  ) => Promise<PtmBookingResult>;
+  cancelBooking: (slotId: string) => Promise<PtmBookingResult>;
+  deleteEvent: (eventId: string) => void;
+  myBookings: PtmSlot[];
+  myTeacherSlots: PtmSlot[];
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -396,7 +421,14 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
                       currentUser={props.currentUser}
                       isPlatformOwner={props.isPlatformOwner}
                     >
-                      <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                      <PtmProvider
+                        currentOrg={props.currentOrg}
+                        selectedBranchId={props.selectedBranchId}
+                        currentUser={props.currentUser}
+                        isPlatformOwner={props.isPlatformOwner}
+                      >
+                        <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                      </PtmProvider>
                     </FinanceProvider>
                   </StaffOpsProvider>
                 </LeaveProvider>
@@ -425,6 +457,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const staffOpsSlice = useStaffOps();
   const financeSlice = useFinance();
   const syllabusSlice = useSyllabus();
+  const ptmSlice = usePtm();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -556,6 +589,18 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     updateSyllabusTopic: syllabusSlice.updateSyllabusTopic,
     deleteSyllabusTopic: syllabusSlice.deleteSyllabusTopic,
     deleteTopicsForBatch: syllabusSlice.deleteTopicsForBatch,
+
+    // PTM scheduler (F8)
+    ptmEvents: ptmSlice.ptmEvents,
+    ptmSlots: ptmSlice.ptmSlots,
+    createEvent: ptmSlice.createEvent,
+    generateSlots: ptmSlice.generateSlots,
+    bookSlot: ptmSlice.bookSlot,
+    cancelBooking: ptmSlice.cancelBooking,
+    deleteEvent: ptmSlice.deleteEvent,
+    myBookings: ptmSlice.myBookings,
+    myTeacherSlots: ptmSlice.myTeacherSlots,
+
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

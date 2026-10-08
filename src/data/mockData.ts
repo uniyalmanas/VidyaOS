@@ -19,9 +19,12 @@ import {
   TeacherAttendance,
   SalarySlip,
   Expense,
-  SyllabusTopic
+  SyllabusTopic,
+  PtmEvent,
+  PtmSlot
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
+import { generatePtmSlots } from '../lib/ptm';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
@@ -1561,3 +1564,47 @@ function sylRow(
     createdAt: '2026-09-01T00:00:00.000Z'
   };
 }
+
+// ---------------------------------------------------------------------------
+// F8 — PTM (parent–teacher meeting) demo window.
+// The slots come from the very same `generatePtmSlots` the app runs, so the
+// demo grid exercises real slot-cutting code rather than hand-written rows.
+// ---------------------------------------------------------------------------
+const MOCK_PTM_EVENT: PtmEvent = {
+  id: 'ptm-oct',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  title: 'Parent–Teacher Meeting (October)',
+  date: '2026-10-11',
+  startTime: '16:00',
+  endTime: '18:00',
+  slotMinutes: 15,
+  teacherIds: ['teach-anjali', 'teach-rohit'],
+  notes:
+    'Meet the class teacher, review Term 1 progress and the pre-board plan. One family per slot — please arrive five minutes early.',
+  createdBy: 'user-apex-admin',
+  createdAt: '2026-10-01T09:00:00.000Z'
+};
+
+export const MOCK_PTM_EVENTS: PtmEvent[] = [MOCK_PTM_EVENT];
+
+/** Two families already claimed seats so the demo grid isn't all-green. */
+export const MOCK_PTM_SLOTS: PtmSlot[] = generatePtmSlots(MOCK_PTM_EVENT).map(slot => {
+  const claim =
+    slot.id === `ptm-${MOCK_PTM_EVENT.id}-teach-anjali-1`
+      ? {
+          bookedByUserId: 'user-parent-rajesh',
+          bookedStudentId: 'stud-rahul-10',
+          bookedForName: 'Rahul Sharma',
+          bookedAt: '2026-10-02T10:12:00.000Z'
+        }
+      : slot.id === `ptm-${MOCK_PTM_EVENT.id}-teach-rohit-4`
+      ? {
+          bookedByUserId: 'user-parent-rajesh',
+          bookedStudentId: 'stud-priya-8',
+          bookedForName: 'Priya Sharma',
+          bookedAt: '2026-10-03T14:40:00.000Z'
+        }
+      : null;
+  return claim ? { ...slot, status: 'booked' as const, ...claim } : slot;
+});

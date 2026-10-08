@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 shipped ✅ · F8–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 shipped ✅ · F9–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -321,7 +321,7 @@ write denied.
 
 ---
 
-## F8 — PTM / parent–teacher meeting scheduler
+## F8 — PTM / parent–teacher meeting scheduler ✅ SHIPPED
 
 **Simple words:** Owner opens a PTM event with date + time slots; parents book a 15-min slot;
 teachers see their diary; everyone gets a reminder.

@@ -106,6 +106,27 @@ import {
   advanceStatus,
   validateSyllabusTopic
 } from './src/lib/syllabus';
+import {
+  generatePtmSlots,
+  validatePtmEvent,
+  parseClockMinutes,
+  minutesToClock,
+  formatClock12,
+  formatClockRange,
+  formatSlotRange as formatPtmSlotRange,
+  slotsForTeacher,
+  bookableSlots,
+  bookingsForUser,
+  bookingsForStudent,
+  applyBooking,
+  applyCancel,
+  dayOfReminders,
+  teacherNameFor,
+  PTM_DEFAULT_SLOT_MINUTES,
+  PTM_MIN_SLOT_MINUTES,
+  PTM_MAX_SLOT_MINUTES
+} from './src/lib/ptm';
+import { PtmEvent, PtmSlot } from './src/types';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -1369,6 +1390,143 @@ assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: '  ', title: 'Real N
 assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: '   ', status: 'not_started' }) !== null, 'A blank title is rejected');
 assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: 'X', status: 'weird' as SyllabusStatus }) !== null, 'An unknown status is rejected');
 assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: 'X', status: 'not_started', sequence: -3 }) !== null, 'A negative sequence is rejected');
+
+// ============================================================================
+// F8 — PTM scheduler: slot cutting, booking/cancel transitions, reminders
+// ============================================================================
+
+const ptmEventFor = (over: Partial<PtmEvent> = {}): PtmEvent => ({
+  id: 'ptm-test-1',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  title: 'October Parent–Teacher Meeting',
+  date: '2026-10-11',
+  startTime: '16:00',
+  endTime: '18:00',
+  slotMinutes: 15,
+  teacherIds: ['teach-a', 'teach-b'],
+  createdBy: 'user-admin',
+  createdAt: '2026-10-01T09:00:00.000Z',
+  ...over
+});
+
+// Clock helpers --------------------------------------------------------------------
+assert(parseClockMinutes('17:00') === 1020, 'parseClockMinutes reads an afternoon hour');
+assert(parseClockMinutes('00:05') === 5, 'parseClockMinutes reads just after midnight');
+assert(parseClockMinutes('5:30') === 330, 'parseClockMinutes tolerates an unpadded hour');
+assert(Number.isNaN(parseClockMinutes('24:00')), 'parseClockMinutes rejects 24:00');
+assert(Number.isNaN(parseClockMinutes('abc')), 'parseClockMinutes rejects junk');
+assert(Number.isNaN(parseClockMinutes('')), 'parseClockMinutes rejects an empty string');
+
+assert(minutesToClock(1020) === '17:00', 'minutesToClock pads the hour back');
+assert(minutesToClock(0) === '00:00', 'minutesToClock handles midnight');
+assert(minutesToClock(-5) === '00:00', 'minutesToClock clamps negatives to midnight');
+assert(minutesToClock(24 * 60) === '23:59', 'minutesToClock clamps past the end of the day');
+
+assert(formatClock12('17:00') === '5:00 PM', 'formatClock12 renders an afternoon slot for parents');
+assert(formatClock12('09:05') === '9:05 AM', 'formatClock12 keeps the leading-zero minute');
+assert(formatClock12('00:00') === '12:00 AM', 'formatClock12 treats midnight as 12 AM');
+assert(formatClock12('12:15') === '12:15 PM', 'formatClock12 treats noon as 12 PM');
+
+assert(formatClockRange('17:00', '17:45') === '5:00 – 5:45 PM', 'formatClockRange shares one AM/PM suffix');
+assert(formatClockRange('16:00', '18:00') === '4:00 – 6:00 PM', 'formatClockRange keeps both suffixes when periods match');
+assert(formatClockRange('11:45', '12:15') === '11:45 AM – 12:15 PM', 'formatClockRange splits suffixes across noon');
+
+// Slot cutting ----------------------------------------------------------------------
+const grid = generatePtmSlots(ptmEventFor());
+assert(grid.length === 16, 'A 2-hour window at 15 minutes × two teachers cuts 16 slots');
+assert(grid.every(s => s.status === 'available'), 'Fresh slots all start available');
+assert(grid.every(s => s.orgId === 'org-apex' && s.eventId === 'ptm-test-1'), 'Every slot inherits tenant + event ids');
+assert(grid.filter(s => s.teacherId === 'teach-a').length === 8, 'Both teachers get the same number of columns');
+assert(grid[0].startsAt === '2026-10-11T16:00' && grid[0].endsAt === '2026-10-11T16:15', 'The first slot starts exactly at the window open');
+assert(grid[0].id === 'ptm-ptm-test-1-teach-a-0', 'Slot ids are deterministic and prefixed');
+
+const regen = generatePtmSlots(ptmEventFor());
+assert(regen.every(s => grid.some(g => g.id === s.id)), 'Re-generating the same event yields identical ids — no duplicates');
+assert(new Set(grid.map(s => s.id)).size === grid.length, 'Every slot id is unique');
+
+const nonDivisible = generatePtmSlots(ptmEventFor({ startTime: '16:00', endTime: '17:10' }));
+assert(nonDivisible.filter(s => s.teacherId === 'teach-a').length === 4, 'A window that is not a whole number of slots truncates cleanly');
+assert(nonDivisible[nonDivisible.length - 1].endsAt === '2026-10-11T17:00', 'The last slot never spills past the window close');
+
+const column = grid.filter(s => s.teacherId === 'teach-a');
+assert(column.every((s, i) => i === 0 || s.startsAt === column[i - 1].endsAt), 'Slots tile the window with no gaps or overlaps');
+
+assert(generatePtmSlots(ptmEventFor({ teacherIds: [] })).length === 0, 'An event without teachers cuts no slots');
+assert(generatePtmSlots(ptmEventFor({ startTime: '18:00', endTime: '16:00' })).length === 0, 'An inverted window cuts no slots');
+assert(generatePtmSlots(ptmEventFor({ startTime: '', endTime: '' })).length === 0, 'Garbage times cut no slots');
+
+// Event validation ------------------------------------------------------------------
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '16:00', endTime: '18:00', teacherIds: ['teach-a'] }) === null, 'A complete PTM window passes validation');
+assert(validatePtmEvent({ title: '   ', date: '2026-10-11', startTime: '16:00', endTime: '18:00', teacherIds: ['teach-a'] }) !== null, 'A blank title is rejected');
+assert(validatePtmEvent({ title: 'X'.repeat(121), date: '2026-10-11', startTime: '16:00', endTime: '18:00', teacherIds: ['teach-a'] }) !== null, 'An over-long title is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '', startTime: '16:00', endTime: '18:00', teacherIds: ['teach-a'] }) !== null, 'A missing date is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '10-11-2026', startTime: '16:00', endTime: '18:00', teacherIds: ['teach-a'] }) !== null, 'A non-ISO date is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '5pm', endTime: '18:00', teacherIds: ['teach-a'] }) !== null, 'A non-clock start is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '18:00', endTime: '16:00', teacherIds: ['teach-a'] }) !== null, 'An inverted window is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '16:00', endTime: '16:10', teacherIds: ['teach-a'] }) !== null, 'A window shorter than one slot is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '16:00', endTime: '18:00', teacherIds: [] }) !== null, 'An event without teachers is rejected');
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '16:00', endTime: '18:00', slotMinutes: 5, teacherIds: ['teach-a'] }) !== null, 'A 5-minute slot is below the minimum');
+assert(validatePtmEvent({ title: 'PTM', date: '2026-10-11', startTime: '16:00', endTime: '18:00', slotMinutes: 90, teacherIds: ['teach-a'] }) !== null, 'A 90-minute slot is above the maximum');
+
+// Selectors -------------------------------------------------------------------------
+const teacherAColumn = slotsForTeacher(grid, 'teach-a');
+assert(teacherAColumn.every(s => s.teacherId === 'teach-a'), 'slotsForTeacher returns one diary column only');
+assert(teacherAColumn[0].startsAt === '2026-10-11T16:00', 'slotsForTeacher sorts soonest first');
+
+const claimed: PtmSlot = { ...grid[0], status: 'booked', bookedByUserId: 'user-parent', bookedStudentId: 'stud-r', bookedForName: 'Rahul', bookedAt: '2026-10-02T10:00:00.000Z' };
+const mixedSlots = [grid[0], grid[1], claimed, grid[8]];
+assert(bookableSlots(mixedSlots).length === 3, 'bookableSlots drops booked rows');
+assert(bookableSlots(mixedSlots, 'teach-a').every(s => s.teacherId === 'teach-a'), 'bookableSlots honours the teacher filter');
+assert(bookingsForUser(mixedSlots, 'user-parent').length === 1, 'bookingsForUser finds the claimed row');
+assert(bookingsForStudent(mixedSlots, 'stud-r').length === 1, 'bookingsForStudent finds the claimed row by child');
+
+// Pure claim + cancel (the exact guards the Firestore transaction reuses) -------------
+const bookedByParent = applyBooking({ ...claimed, status: 'available' }, { userId: 'user-parent-2', studentId: 'stud-p', studentName: 'Priya', nowIso: '2026-10-03T12:00:00.000Z' });
+assert(bookedByParent.status === 'booked' && bookedByParent.bookedByUserId === 'user-parent-2', 'applyBooking claims an available slot and stamps the actor');
+assert(bookedByParent.bookedForName === 'Priya' && bookedByParent.bookedStudentId === 'stud-p' && bookedByParent.bookedAt === '2026-10-03T12:00:00.000Z', 'applyBooking records who the meeting is for and when');
+
+let threw = false;
+try { applyBooking(claimed, { userId: 'user-x', studentId: 'stud-x', studentName: 'X', nowIso: 'now' }); } catch { threw = true; }
+assert(threw, 'applyBooking REJECTS a double-book — the loser of the race never mutates state');
+
+threw = false;
+try { applyBooking({ ...claimed, status: 'cancelled' }, { userId: 'user-x', studentId: 'stud-x', studentName: 'X', nowIso: 'now' }); } catch { threw = true; }
+assert(threw, 'applyBooking rejects a retired (cancelled) slot');
+
+threw = false;
+try { applyBooking(grid[2], { userId: '', studentId: 'stud-x', studentName: 'X', nowIso: 'now' }); } catch { threw = true; }
+assert(threw, 'applyBooking rejects an anonymous actor');
+
+const released = applyCancel(claimed, 'user-parent');
+assert(released.status === 'available' && released.bookedForName === null && released.bookedByUserId === null, 'applyCancel frees the slot and clears every booked* field');
+assert(applyCancel(claimed, 'user-parent').status === 'available', 'A released slot is bookable again');
+threw = false;
+try { applyCancel(claimed, 'someone-else'); } catch { threw = true; }
+assert(threw, 'applyCancel rejects a non-owner');
+threw = false;
+try { applyCancel(grid[2], 'user-parent'); } catch { threw = true; }
+assert(threw, 'applyCancel rejects an unbooked slot');
+
+// Day-of reminders ------------------------------------------------------------------
+const today = '2026-10-08';
+const remindSlots: PtmSlot[] = [
+  claimed,
+  { ...claimed, id: 'ptm-my-diary', teacherId: 'teach-a', bookedByUserId: 'user-parent', bookedForName: 'Rahul', startsAt: `2026-10-08T17:00`, endsAt: `2026-10-08T17:15` },
+  { ...grid[2], startsAt: '2026-10-09T16:00', endsAt: '2026-10-09T16:15' },
+  { ...grid[3] }
+];
+const myReminders = dayOfReminders(remindSlots, { userId: 'user-parent', today });
+assert(myReminders.length === 1 && myReminders[0].startsAt === '2026-10-08T17:00', 'dayOfReminders surfaces my own meeting that falls today');
+assert(dayOfReminders(remindSlots, { teacherId: 'teach-a', today }).some(s => s.startsAt === '2026-10-08T17:00'), 'dayOfReminders also surfaces the teacher diary for today');
+assert(dayOfReminders(remindSlots, { userId: 'user-parent', today: '2026-10-11' }).some(s => s.id === claimed.id), 'dayOfReminders matches any day requested');
+assert(dayOfReminders(remindSlots, { userId: 'nobody', today }).length === 0, 'Unrelated accounts get no reminders');
+
+// Misc helpers -----------------------------------------------------------------------
+assert(teacherNameFor([{ id: 'teach-a', name: 'Anjali Sharma' } as never], 'teach-a') === 'Anjali Sharma', 'teacherNameFor resolves the faculty name');
+assert(teacherNameFor([], 'teach-z') === 'Faculty', 'teacherNameFor falls back for an unknown id');
+assert(PTM_DEFAULT_SLOT_MINUTES === 15 && PTM_MIN_SLOT_MINUTES === 10 && PTM_MAX_SLOT_MINUTES === 60, 'Slot length bounds are 10–60 minutes, default 15');
+assert(formatPtmSlotRange(claimed) === '4:00 – 4:15 PM', 'formatSlotRange formats a slot for the grid');
 
 
 console.log('\n----------------------------------------');

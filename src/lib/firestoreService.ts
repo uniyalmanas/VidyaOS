@@ -4,6 +4,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  updateDoc,
   collection,
   onSnapshot,
   getDocs,
@@ -41,7 +42,9 @@ import {
   SalarySlip,
   Expense,
   TimetableSlot,
-  SyllabusTopic
+  SyllabusTopic,
+  PtmEvent,
+  PtmSlot
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -63,8 +66,11 @@ import {
   MOCK_SALARY_SLIPS,
   MOCK_EXPENSES,
   MOCK_TIMETABLE,
-  MOCK_SYLLABUS_TOPICS
+  MOCK_SYLLABUS_TOPICS,
+  MOCK_PTM_EVENTS,
+  MOCK_PTM_SLOTS
 } from '../data/mockData';
+import { applyBooking, applyCancel, BookingActor } from './ptm';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
   if (!import.meta.env.DEV) return [];
@@ -657,6 +663,87 @@ export function subscribeToSyllabusTopics(onData: (topics: SyllabusTopic[]) => v
   } catch (e) {
     const fallback = developmentFallback(MOCK_SYLLABUS_TOPICS, orgId);
     if (import.meta.env.DEV) console.error('Could not start syllabus listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/**
+ * F8 — the PTM event windows an admin has opened. Org-scoped; every tenant
+ * member reads them (the grid needs the title/date), only the desk writes.
+ */
+export function subscribeToPtmEvents(onData: (events: PtmEvent[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_PTM_EVENTS, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(collection(db, 'ptmEvents'), where('orgId', '==', orgId), limit(200))
+      : query(collection(db, 'ptmEvents'), limit(200));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as PtmEvent));
+        } else {
+          onData(developmentFallback(MOCK_PTM_EVENTS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time PTM events', error);
+        onData(developmentFallback(MOCK_PTM_EVENTS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_PTM_EVENTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start PTM event listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/**
+ * F8 — the bookable slots. `teacherId` is passed ONLY for a faculty session:
+ * the `ptmSlots` read rule lets a teacher through solely when the query pins
+ * `teacherId` to their own record, so faculty can never enumerate other
+ * teachers' diaries (see firestore.rules). Everyone else reads the whole org.
+ */
+export function subscribeToPtmSlots(
+  onData: (slots: PtmSlot[]) => void,
+  orgId?: string,
+  teacherId?: string
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_PTM_SLOTS, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    let targetRef = orgId
+      ? query(collection(db, 'ptmSlots'), where('orgId', '==', orgId), limit(1000))
+      : query(collection(db, 'ptmSlots'), limit(1000));
+    if (teacherId) {
+      targetRef = query(targetRef, where('teacherId', '==', teacherId));
+    }
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as PtmSlot));
+        } else {
+          onData(developmentFallback(MOCK_PTM_SLOTS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time PTM slots', error);
+        onData(developmentFallback(MOCK_PTM_SLOTS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_PTM_SLOTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start PTM slot listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -1543,6 +1630,105 @@ export async function deleteSyllabusTopicFromFirestore(topicId: string): Promise
     await deleteDoc(doc(db, 'syllabusTopics', topicId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `syllabusTopics/${topicId}`);
+  }
+}
+
+// ----------------------------------------------------
+// PTM (F8) — parent–teacher meeting events + slots
+// ----------------------------------------------------
+
+export async function persistPtmEventToFirestore(event: PtmEvent): Promise<void> {
+  try {
+    await setDoc(doc(db, 'ptmEvents', event.id), cleanFirestoreData(event));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `ptmEvents/${event.id}`);
+  }
+}
+
+/** Slot generation writes a whole grid at once (per-doc rules still apply). */
+export async function persistPtmSlotsBatch(slots: PtmSlot[]): Promise<void> {
+  if (slots.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    for (const slot of slots) {
+      batch.set(doc(db, 'ptmSlots', slot.id), cleanFirestoreData(slot));
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `ptmSlots`);
+  }
+}
+
+export async function deletePtmEventFromFirestore(eventId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'ptmEvents', eventId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `ptmEvents/${eventId}`);
+  }
+}
+
+export async function deletePtmSlotFromFirestore(slotId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'ptmSlots', slotId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `ptmSlots/${slotId}`);
+  }
+}
+
+/**
+ * F8 — claim a slot without ever double-booking it.
+ *
+ * The read → validate → write runs inside `runTransaction`, so if two parents
+ * tap the same slot the loser's transaction is retried against the winner's
+ * commit, re-reads `status: 'booked'`, and `applyBooking` throws the friendly
+ * "just taken" error. The `ptmSlots` rules re-check the same invariant server
+ * side (a booker may only move 'available' → 'booked' inside the field-lock),
+ * so even a hand-rolled client can't grab a taken slot.
+ */
+export async function bookPtmSlotInTransaction(slotId: string, actor: BookingActor): Promise<PtmSlot> {
+  try {
+    return await runTransaction(db, async transaction => {
+      const slotRef = doc(db, 'ptmSlots', slotId);
+      const snapshot = await transaction.get(slotRef);
+      if (!snapshot.exists()) {
+        throw new Error('That meeting slot no longer exists.');
+      }
+      const booked = applyBooking(snapshot.data() as PtmSlot, actor);
+      transaction.set(slotRef, cleanFirestoreData(booked));
+      return booked;
+    });
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    const friendly =
+      raw.includes('just taken') || raw.includes('no longer') || raw.includes('signed in')
+        ? raw
+        : raw.includes('permission-denied') || raw.includes('insufficient permissions')
+        ? 'Your account is not allowed to book meetings at this centre. Please contact the desk.'
+        : 'Could not book that slot. Please try again.';
+    if (import.meta.env.DEV) console.error('PTM booking failed:', raw);
+    throw new Error(friendly);
+  }
+}
+
+/**
+ * F8 — release a booking. The same `applyCancel` guard the unit tests run
+ * decides whether the slot goes back to 'available' (fields explicitly nulled
+ * so the rules field-lock can still see them), then the write follows.
+ */
+export async function cancelPtmBookingInFirestore(slot: PtmSlot): Promise<PtmSlot> {
+  try {
+    const released = applyCancel(slot, slot.bookedByUserId || '');
+    await setDoc(doc(db, 'ptmSlots', slot.id), cleanFirestoreData(released));
+    return released;
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    if (raw.includes('not booked') || raw.includes('only cancel')) {
+      throw error;
+    }
+    if (raw.includes('permission-denied') || raw.includes('insufficient permissions')) {
+      throw new Error('Your account is not allowed to change this booking. Please contact the desk.');
+    }
+    handleFirestoreError(error, OperationType.WRITE, `ptmSlots/${slot.id}`);
   }
 }
 

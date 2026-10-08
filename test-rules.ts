@@ -40,6 +40,16 @@
  *      front desk are denied, the status vocabulary is validated, the tenant
  *      is pinned on update, and both reads and writes are tenant-isolated.
  *
+ *   PTM scheduler (F8):
+ *   9. `ptmEvents` — desk-only windows (staff/admin), well-formed (a real
+ *      date, clock window, valid slot length, and a non-empty teacher list),
+ *      tenant-isolated. `ptmSlots` — the grid is born of desk generation and
+ *      must cite a real event; every tenant member reads except faculty, who
+ *      only see their OWN diary column (single-doc AND list queries must pin
+ *      their teacherId); booking is a transaction-guarded field-lock: only an
+ *      isLinkedToStudent claim flips 'available' → 'booked', only the owner
+ *      releases it, a double-book is denied, and cross-org access is blocked.
+ *
  * Run: npx firebase emulators:exec --only auth,firestore --project vidyut-2bcb6 "npx tsx test-rules.ts"
  */
 
@@ -48,6 +58,7 @@ import {
   getAuth,
   connectAuthEmulator,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   type Auth
 } from 'firebase/auth';
 import {
@@ -58,6 +69,10 @@ import {
   updateDoc,
   deleteDoc,
   getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
   type Firestore
 } from 'firebase/firestore';
 
@@ -1353,6 +1368,275 @@ async function main(): Promise<void> {
     check('the syllabus is tenant-isolated on read', crossReadDenied);
   } catch (err) {
     console.error(`\nSuite 10 failed at step: "${suite10Step}"`);
+    throw err;
+  }
+
+  console.log('\nSuite 11: PTM scheduler — desk opens windows, families book inside the field-lock');
+  let suite11Step = 'setup';
+  try {
+    // A second faculty record owned by somebody the teacher client is NOT, so
+    // the "not my diary" read is a real negative (the teacher client is linked
+    // to teach-rules-1 via its userId — provisioned in Suite 6).
+    await setDoc(doc(admin.db, 'teachers', 'teach-rules-2'), {
+      id: 'teach-rules-2',
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      userId: 'somebody-else-uid',
+      name: 'Other Rules Teacher',
+      phone: '+91 9000000099',
+      email: 'other-teacher@example.com',
+      avatar: '',
+      qualification: 'M.Sc',
+      subjects: ['Physics'],
+      assignedBatchIds: [],
+      joiningDate: '2026-04-01',
+      status: 'active'
+    });
+
+    // Re-sign into the accounts Suite 6 linked to students/stud-rules-1: the
+    // learner (userId) and the guardian (guardian.parentUserId), so claims pass
+    // `isLinkedToStudent`.
+    const studentBooker = await makeClient('ptm-student');
+    await signInWithEmailAndPassword(
+      studentBooker.auth,
+      `rules-student-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+    const parentBooker = await makeClient('ptm-parent');
+    await signInWithEmailAndPassword(
+      parentBooker.auth,
+      `rules-parent-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+    const studentBookerUid = studentBooker.auth.currentUser!.uid;
+    const parentBookerUid = parentBooker.auth.currentUser!.uid;
+
+    const eventDoc = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      title: 'Rules PTM',
+      date: '2026-11-15',
+      startTime: '16:00',
+      endTime: '18:00',
+      slotMinutes: 15,
+      teacherIds: ['teach-rules-1', 'teach-rules-2'],
+      notes: 'Term progress review.',
+      createdBy: adminUid,
+      createdAt: new Date().toISOString(),
+      ...extra
+    });
+    const slotDoc = (id: string, teacherId: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      eventId: 'ptm-event-rules',
+      teacherId,
+      startsAt: '2026-11-15T16:00',
+      endsAt: '2026-11-15T16:15',
+      status: 'available',
+      ...extra
+    });
+    // Full-document set() — exactly the app's transactional write path.
+    const claimDoc = (slot: Record<string, unknown>, uid: string, studentId: string, name: string) => ({
+      ...slot,
+      status: 'booked',
+      bookedByUserId: uid,
+      bookedStudentId: studentId,
+      bookedForName: name,
+      bookedAt: new Date().toISOString()
+    });
+    const releaseDoc = (slot: Record<string, unknown>) => ({
+      ...slot,
+      status: 'available',
+      bookedByUserId: null,
+      bookedStudentId: null,
+      bookedForName: null,
+      bookedAt: null
+    });
+
+    // --- events: desk-only ---------------------------------------------------
+    suite11Step = 'admin opens a PTM window';
+    await setDoc(doc(admin.db, 'ptmEvents', 'ptm-event-rules'), eventDoc('ptm-event-rules'));
+    check('an admin may open a PTM event', true);
+
+    suite11Step = 'teacher opens a PTM window';
+    const teacherEventDenied = await expectDenied('teacher opens a PTM event', () =>
+      setDoc(doc(teacher.db, 'ptmEvents', `ptm-t-${stamp}`), eventDoc(`ptm-t-${stamp}`))
+    );
+    check('faculty cannot open a PTM event', teacherEventDenied);
+
+    suite11Step = 'student opens a PTM window';
+    const studentEventDenied = await expectDenied('student opens a PTM event', () =>
+      setDoc(doc(student.db, 'ptmEvents', `ptm-s-${stamp}`), eventDoc(`ptm-s-${stamp}`))
+    );
+    check('a student cannot open a PTM event', studentEventDenied);
+
+    suite11Step = 'malformed event';
+    const noTeachersDenied = await expectDenied('admin opens a PTM event with no teachers', () =>
+      setDoc(doc(admin.db, 'ptmEvents', 'ptm-bad-1'), eventDoc('ptm-bad-1', { teacherIds: [] }))
+    );
+    check('an event must invite at least one teacher', noTeachersDenied);
+    const badDateDenied = await expectDenied('admin opens a PTM event with an invalid date', () =>
+      setDoc(doc(admin.db, 'ptmEvents', 'ptm-bad-2'), eventDoc('ptm-bad-2', { date: '11-15-2026' }))
+    );
+    check('a non-ISO event date is rejected', badDateDenied);
+
+    suite11Step = 'cross-org event write';
+    const crossEventDenied = await expectDenied('foreign admin opens a PTM event in this centre', () =>
+      setDoc(doc(adminOther.db, 'ptmEvents', 'ptm-foreign'), eventDoc('ptm-foreign'))
+    );
+    check('PTM events are tenant-isolated on write', crossEventDenied);
+
+    // --- slots: born of desk generation, event-join enforced -----------------
+    suite11Step = 'desk cuts the grid';
+    await setDoc(doc(admin.db, 'ptmSlots', 'ptm-slot-1'), slotDoc('ptm-slot-1', 'teach-rules-1'));
+    await setDoc(doc(admin.db, 'ptmSlots', 'ptm-slot-2'), slotDoc('ptm-slot-2', 'teach-rules-2'));
+    await setDoc(doc(admin.db, 'ptmSlots', 'ptm-slot-3'), slotDoc('ptm-slot-3', 'teach-rules-1'));
+    await setDoc(doc(admin.db, 'ptmSlots', 'ptm-slot-4'), slotDoc('ptm-slot-4', 'teach-rules-1'));
+    check('staff/admin may cut slots for an event that exists', true);
+
+    suite11Step = 'staff cuts a slot';
+    await setDoc(doc(staff.db, 'ptmSlots', 'ptm-slot-5'), slotDoc('ptm-slot-5', 'teach-rules-1'));
+    check('the front desk may cut slots too', true);
+
+    suite11Step = 'orphan slot';
+    const orphanDenied = await expectDenied('admin cuts a slot inside a missing event', () =>
+      setDoc(doc(admin.db, 'ptmSlots', 'ptm-orphan'),
+        slotDoc('ptm-orphan', 'teach-rules-1', { eventId: 'ptm-no-such-event' }))
+    );
+    check('a slot must cite a real event', orphanDenied);
+
+    suite11Step = 'student cuts a slot';
+    const studentSlotCreateDenied = await expectDenied('student cuts a slot', () =>
+      setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-student-slot'), slotDoc('ptm-student-slot', 'teach-rules-1'))
+    );
+    check('a learner cannot cut slots', studentSlotCreateDenied);
+
+    // --- reads: non-faculty see the grid, faculty only their own column ------
+    suite11Step = 'learner reads the grid';
+    const learnerRead = (await getDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-1'))).exists();
+    check('a learner can read the booking grid', learnerRead);
+
+    suite11Step = 'teacher reads own column';
+    const teacherOwnRead = (await getDoc(doc(teacher.db, 'ptmSlots', 'ptm-slot-1'))).exists();
+    check('faculty can read their own diary column', teacherOwnRead);
+
+    suite11Step = 'teacher reads another column';
+    const teacherOtherReadDenied = await expectDenied('faculty reads another teacher column', () =>
+      getDoc(doc(teacher.db, 'ptmSlots', 'ptm-slot-2'))
+    );
+    check('faculty cannot read another teacher diary', teacherOtherReadDenied);
+
+    suite11Step = 'teacher list queries';
+    const teacherListDenied = await expectDenied('faculty reads the whole grid as an unpinned list', () =>
+      getDocs(query(collection(teacher.db, 'ptmSlots'), where('orgId', '==', ORG_ID)))
+    );
+    check('a faculty list query must pin their own teacherId', teacherListDenied);
+    const teacherOwnList = await getDocs(
+      query(
+        collection(teacher.db, 'ptmSlots'),
+        where('orgId', '==', ORG_ID),
+        where('teacherId', '==', 'teach-rules-1')
+      )
+    );
+    check('a pinned faculty list query (own teacherId) is provable', !teacherOwnList.empty);
+
+    suite11Step = 'cross-org read';
+    const crossSlotReadDenied = await expectDenied('foreign admin reads the grid', () =>
+      getDoc(doc(adminOther.db, 'ptmSlots', 'ptm-slot-1'))
+    );
+    check('the slot grid is tenant-isolated on read', crossSlotReadDenied);
+
+    // --- booking: claim free slot inside the field-lock ----------------------
+    suite11Step = 'learner claims a slot';
+    await setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-1'),
+      claimDoc(slotDoc('ptm-slot-1', 'teach-rules-1'), studentBookerUid, 'stud-rules-1', 'Rules Student'));
+    check('a learner may claim a free slot for their own record', true);
+
+    suite11Step = 'parent claims a slot';
+    await setDoc(doc(parentBooker.db, 'ptmSlots', 'ptm-slot-2'),
+      claimDoc(slotDoc('ptm-slot-2', 'teach-rules-2'), parentBookerUid, 'stud-rules-1', 'Rules Student'));
+    check('a parent may claim a free slot for their linked child', true);
+
+    suite11Step = 'double-book';
+    const doubleBookDenied = await expectDenied('a second family claims an already-booked slot', () =>
+      setDoc(doc(parentBooker.db, 'ptmSlots', 'ptm-slot-1'),
+        claimDoc(slotDoc('ptm-slot-1', 'teach-rules-1'), parentBookerUid, 'stud-rules-1', 'Rules Student'))
+    );
+    check('a booked slot cannot be double-booked', doubleBookDenied);
+
+    suite11Step = 'forged booker';
+    const forgedDenied = await expectDenied('a claim stamped with another user id', () =>
+      setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-3'),
+        claimDoc(slotDoc('ptm-slot-3', 'teach-rules-1'), 'somebody-else-uid', 'stud-rules-1', 'Rules Student'))
+    );
+    check('a claim must be stamped with the caller uid', forgedDenied);
+
+    suite11Step = 'unlinked child';
+    const unlinkedDenied = await expectDenied('a claim for a student you are not linked to', () =>
+      setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-3'),
+        claimDoc(slotDoc('ptm-slot-3', 'teach-rules-1'), studentBookerUid, 'stud-rules-2', 'Unlinked Student'))
+    );
+    check('a claim must cite a linked student', unlinkedDenied);
+
+    suite11Step = 'field-lock';
+    const windowTweakDenied = await expectDenied('a claim that also moves the slot time', () =>
+      setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-4'),
+        claimDoc({ ...slotDoc('ptm-slot-4', 'teach-rules-1'), startsAt: '2026-11-15T16:15', endsAt: '2026-11-15T16:30' },
+          studentBookerUid, 'stud-rules-1', 'Rules Student'))
+    );
+    check('a booking cannot touch the slot identity keys', windowTweakDenied);
+    const teacherSwapDenied = await expectDenied('a claim that swaps the teacher', () =>
+      setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-4'),
+        claimDoc({ ...slotDoc('ptm-slot-4', 'teach-rules-1'), teacherId: 'teach-rules-2' },
+          studentBookerUid, 'stud-rules-1', 'Rules Student'))
+    );
+    check('a booking cannot move the slot to another teacher', teacherSwapDenied);
+
+    // --- release --------------------------------------------------------------
+    suite11Step = 'non-owner release';
+    const nonOwnerCancelDenied = await expectDenied('a learner releases the parent booking', () =>
+      setDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-2'),
+        releaseDoc(slotDoc('ptm-slot-2', 'teach-rules-2')))
+    );
+    check('only the booker may release their own booking', nonOwnerCancelDenied);
+
+    suite11Step = 'owner release';
+    await setDoc(doc(parentBooker.db, 'ptmSlots', 'ptm-slot-2'),
+      releaseDoc(slotDoc('ptm-slot-2', 'teach-rules-2')));
+    check('the booker may release their own booking — slot is free again', true);
+
+    suite11Step = 'rebook after release';
+    await setDoc(doc(parentBooker.db, 'ptmSlots', 'ptm-slot-2'),
+      claimDoc(slotDoc('ptm-slot-2', 'teach-rules-2'), parentBookerUid, 'stud-rules-1', 'Rules Student'));
+    check('a released slot is bookable again', true);
+
+    // --- desk override ---------------------------------------------------------
+    suite11Step = 'desk override';
+    await setDoc(doc(staff.db, 'ptmSlots', 'ptm-slot-1'),
+      releaseDoc(slotDoc('ptm-slot-1', 'teach-rules-1')));
+    check('the desk may override any cell (clear a booking) inside the field-lock', true);
+
+    // --- deletes ---------------------------------------------------------------
+    suite11Step = 'student deletes a slot';
+    const studentSlotDeleteDenied = await expectDenied('student deletes a slot', () =>
+      deleteDoc(doc(studentBooker.db, 'ptmSlots', 'ptm-slot-3'))
+    );
+    check('a learner cannot delete slots', studentSlotDeleteDenied);
+
+    suite11Step = 'teacher deletes the event';
+    const teacherEventDeleteDenied = await expectDenied('teacher deletes the PTM event', () =>
+      deleteDoc(doc(teacher.db, 'ptmEvents', 'ptm-event-rules'))
+    );
+    check('faculty cannot delete a PTM event', teacherEventDeleteDenied);
+
+    suite11Step = 'desk deletes event';
+    await deleteDoc(doc(admin.db, 'ptmSlots', 'ptm-slot-4'));
+    await deleteDoc(doc(admin.db, 'ptmEvents', 'ptm-event-rules'));
+    check('the desk may remove a PTM event and its grid', true);
+  } catch (err) {
+    console.error(`\nSuite 11 failed at step: "${suite11Step}"`);
     throw err;
   }
 

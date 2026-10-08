@@ -25,7 +25,8 @@ import {
   PhoneIncoming,
   CalendarDays,
   Wallet,
-  PieChart
+  PieChart,
+  CalendarClock
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -190,7 +191,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'leaves', label: 'Leaves', icon: CalendarDays, badge: pendingLeaveCount > 0 ? `${pendingLeaveCount} due` : undefined, badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 font-bold' },
         { id: 'teachers', label: 'Faculty', icon: UserCheck, badge: teachers.length },
         { id: 'staffops', label: 'Staff Ops', icon: Wallet },
-        { id: 'parents', label: 'Parents', icon: HeartHandshake }
+        { id: 'parents', label: 'Parents', icon: HeartHandshake },
+        { id: 'ptm', label: 'PTM Meetings', icon: CalendarClock }
       ]
     },
     {

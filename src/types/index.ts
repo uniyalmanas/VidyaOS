@@ -321,6 +321,64 @@ export interface SyllabusTopic {
   createdAt: string;
 }
 
+/**
+ * F8 — parent–teacher meeting (PTM) scheduler. An admin opens an event window
+ * ("Parent–Teacher Meeting, 12 Oct, 4–7 PM"); `generateSlots` then cuts it into
+ * 15-minute slots per teacher, which parents claim one at a time.
+ */
+export interface PtmEvent {
+  id: string;
+  orgId: string;
+  branchId: string;
+  title: string;
+  /** YYYY-MM-DD (India) the whole event runs on. */
+  date: string;
+  /** 'HH:MM' window boundaries, inclusive start / exclusive end. */
+  startTime: string;
+  endTime: string;
+  /** Length of one meeting, in minutes (15 default, 10–60 accepted). */
+  slotMinutes: number;
+  /** Teachers whose diaries this event cuts slots for. */
+  teacherIds: string[];
+  notes?: string;
+  /** User id of the desk account that opened the event. */
+  createdBy: string;
+  createdAt: string;
+}
+
+export type PtmSlotStatus = 'available' | 'booked' | 'cancelled';
+
+export interface PtmSlot {
+  id: string;
+  orgId: string;
+  branchId: string;
+  eventId: string;
+  /** Teacher record id this slot belongs to (one diary row per teacher). */
+  teacherId: string;
+  /** ISO-local 'YYYY-MM-DDTHH:MM' (no zone) so day comparisons stay tz-free. */
+  startsAt: string;
+  /** ISO-local 'YYYY-MM-DDTHH:MM', exclusive end of the meeting. */
+  endsAt: string;
+  status: PtmSlotStatus;
+  /** Auth uid of the parent/student who claimed it. */
+  bookedByUserId?: string | null;
+  bookedStudentId?: string | null;
+  /** Display name of the child the meeting is for. */
+  bookedForName?: string | null;
+  bookedAt?: string | null;
+}
+
+/** Everything the "open a PTM" form collects (ids/createdAt added by the slice). */
+export interface PtmEventInput {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  slotMinutes?: number;
+  teacherIds: string[];
+  notes?: string;
+}
+
 export interface Announcement {
   id: string;
   orgId: string;

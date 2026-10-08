@@ -25,7 +25,8 @@ import {
   MessageSquare,
   CalendarDays,
   Video,
-  ListChecks
+  ListChecks,
+  CalendarClock
 } from 'lucide-react';
 import {
   PageHeader,
@@ -40,6 +41,7 @@ import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
 import { SyllabusProgress } from '../syllabus/SyllabusProgress';
+import { ParentPtmBooking } from '../ptm/ParentPtmBooking';
 import { motion } from 'motion/react';
 import { easings } from '../../lib/motion';
 
@@ -70,7 +72,7 @@ export const ParentPortal: React.FC = () => {
     mobileViewActive
   } = useApp();
 
-  const [activeParentTab, setActiveParentTab] = useState<'overview' | 'attendance' | 'fees' | 'results' | 'schedule' | 'materials' | 'syllabus' | 'discussions' | 'leave'>(() => {
+  const [activeParentTab, setActiveParentTab] = useState<'overview' | 'attendance' | 'fees' | 'results' | 'schedule' | 'materials' | 'syllabus' | 'ptm' | 'discussions' | 'leave'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('/attendance')) return 'attendance';
@@ -78,6 +80,7 @@ export const ParentPortal: React.FC = () => {
       if (path.includes('/results')) return 'results';
       if (path.includes('/schedule')) return 'schedule';
       if (path.includes('/syllabus')) return 'syllabus';
+      if (path.includes('/ptm') || path.includes('/meetings')) return 'ptm';
       if (path.includes('/materials')) return 'materials';
       if (path.includes('/discussions') || path.includes('/messages')) return 'discussions';
       if (path.includes('/leave')) return 'leave';
@@ -93,6 +96,7 @@ export const ParentPortal: React.FC = () => {
     else if (path.includes('/results') && activeParentTab !== 'results') setActiveParentTab('results');
     else if (path.includes('/schedule') && activeParentTab !== 'schedule') setActiveParentTab('schedule');
     else if (path.includes('/syllabus') && activeParentTab !== 'syllabus') setActiveParentTab('syllabus');
+    else if ((path.includes('/ptm') || path.includes('/meetings')) && activeParentTab !== 'ptm') setActiveParentTab('ptm');
     else if (path.includes('/materials') && activeParentTab !== 'materials') setActiveParentTab('materials');
     else if ((path.includes('/discussions') || path.includes('/messages')) && activeParentTab !== 'discussions') setActiveParentTab('discussions');
     else if (path.includes('/leave') && activeParentTab !== 'leave') setActiveParentTab('leave');
@@ -211,6 +215,10 @@ export const ParentPortal: React.FC = () => {
                       ? 'TIMETABLE'
                       : activeParentTab === 'materials'
                       ? 'STUDY MATERIALS'
+                      : activeParentTab === 'syllabus'
+                      ? 'SYLLABUS'
+                      : activeParentTab === 'ptm'
+                      ? 'PTM MEETINGS'
                       : activeParentTab === 'discussions'
                       ? 'VIDYACHAT'
                       : (activeParentTab as string).toUpperCase()
@@ -271,6 +279,7 @@ export const ParentPortal: React.FC = () => {
           { id: 'schedule', label: 'Timetable', icon: Clock },
           { id: 'materials', label: 'Homework & Notes', icon: BookOpen },
           { id: 'syllabus', label: 'Syllabus', icon: ListChecks },
+          { id: 'ptm', label: 'Schedule PTM', icon: CalendarClock },
           { id: 'leave', label: 'Apply Leave', icon: CalendarDays },
           { id: 'discussions', label: 'VidyaChat', icon: MessageSquare },
         ].map(tab => {
@@ -712,6 +721,9 @@ export const ParentPortal: React.FC = () => {
           title={`${selectedChild.name.split(' ')[0]}'s syllabus progress`}
         />
       )}
+
+      {/* TAB 5c: PTM (F8) — schedule a parent–teacher meeting */}
+      {activeParentTab === 'ptm' && <ParentPtmBooking />}
 
       {/* TAB 6: MATERIALS & HOMEWORK */}
       {activeParentTab === 'materials' && (

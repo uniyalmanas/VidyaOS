@@ -71,6 +71,7 @@ import { StaffOpsModule } from '../staffops/StaffOpsModule';
 import { FinanceModule } from '../finance/FinanceModule';
 import { TimetableModule } from '../timetable/TimetableModule';
 import { SyllabusOverview } from '../syllabus/SyllabusOverview';
+import { PtmAdminPanel } from '../ptm/PtmAdminPanel';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -85,6 +86,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   assignments: { label: 'Homework & Coursework', breadcrumb: 'Assignments', subtitle: 'Manage assigned coursework, submission deadlines, and student homework completion' },
   materials: { label: 'Study Material & Library', breadcrumb: 'Materials', subtitle: 'Curated NCERT solutions, formula sheets, lecture notes, and chapter summaries' },
   syllabus: { label: 'Syllabus Coverage Tracker', breadcrumb: 'Syllabus', subtitle: 'Chapter-by-chapter lesson-plan coverage per batch — generate from a board template and watch it get ticked off' },
+  ptm: { label: 'Parent–Teacher Meetings (PTM)', breadcrumb: 'PTM', subtitle: 'Open a meeting window, cut it into bookable slots per teacher, and watch parents fill the grid — with day-of reminders' },
   teachers: { label: 'Faculty & Teachers Directory', breadcrumb: 'Teachers', subtitle: 'Instructor profiles, assigned subjects, contact details, and teaching schedules' },
   inquiries: { label: 'Admission Leads Pipeline', breadcrumb: 'Inquiries', subtitle: 'Walk-ins, calls & WhatsApp enquiries tracked from first hello to final admission' },
   leaves: { label: 'Leave Requests & Absences', breadcrumb: 'Leaves', subtitle: 'Absence asks from students & faculty — review, decide, and keep the centre register' },
@@ -2305,6 +2307,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 8b. SYLLABUS COVERAGE (F7) */}
       {currentModule === 'syllabus' && <SyllabusOverview />}
+
+      {/* 8c. PTM SCHEDULER (F8) — parent–teacher meetings */}
+      {currentModule === 'ptm' && <PtmAdminPanel />}
 
       {/* 9. ANNOUNCEMENTS */}
       {currentModule === 'announcements' && (
