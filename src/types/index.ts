@@ -284,6 +284,13 @@ export interface TimetableSlot {
   classroom: string;
   teacherId: string;
   subject: string;
+  /**
+   * F6 — optional online-class link (Google Meet / Zoom / Teams). When set, the
+   * student & parent "Join Class" buttons open it; absent for in-person classes.
+   */
+  meetUrl?: string;
+  /** Optional meeting passcode shown alongside the link (never a login secret). */
+  meetPassword?: string;
 }
 
 export interface Announcement {

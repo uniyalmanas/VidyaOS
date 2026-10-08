@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useApp } from '../../context/AppContext';
 import { getIndiaDayName } from '../../lib/date';
+import { normalizeMeetUrl, joinState } from '../../lib/timetable';
 import {
   Calendar,
   CreditCard,
@@ -22,7 +23,8 @@ import {
   ExternalLink,
   UserCheck,
   MessageSquare,
-  CalendarDays
+  CalendarDays,
+  Video
 } from 'lucide-react';
 import {
   PageHeader,
@@ -376,20 +378,61 @@ export const ParentPortal: React.FC = () => {
               icon={<Clock className="w-4 h-4" />}
             >
               <div className="space-y-2">
-                {childBatches.map(b => (
-                  <div
-                    key={b.id}
-                    className="p-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] flex items-center justify-between text-xs"
-                  >
-                    <div>
-                      <div className="font-semibold text-sm text-slate-900 dark:text-white">{b.name}</div>
-                      <div className="text-slate-500 dark:text-neutral-400">
-                        {b.timeSlot} · {b.classroom}
+                {todayClasses.length > 0 ? (
+                  todayClasses.map(slot => {
+                    const link = normalizeMeetUrl(slot.meetUrl);
+                    const live = joinState(slot, todayDay) === 'live';
+                    return (
+                      <div
+                        key={slot.id}
+                        className="p-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                            <span className="truncate">{slot.subject}</span>
+                            {live && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-white bg-[#188038] rounded-full px-1.5 py-0.5 flex-shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                Live
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-slate-500 dark:text-neutral-400 tabular-nums">
+                            {slot.startTime} – {slot.endTime} · {slot.classroom}
+                          </div>
+                        </div>
+                        {link ? (
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white bg-[#1A73E8] hover:brightness-110 rounded-full px-3 py-1.5 flex-shrink-0"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            Join Class
+                          </a>
+                        ) : (
+                          <StatusChip label="In-person" variant="neutral" size="xs" />
+                        )}
                       </div>
+                    );
+                  })
+                ) : (
+                  childBatches.map(b => (
+                    <div
+                      key={b.id}
+                      className="p-3 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.03] flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <div className="font-semibold text-sm text-slate-900 dark:text-white">{b.name}</div>
+                        <div className="text-slate-500 dark:text-neutral-400">
+                          {b.timeSlot} · {b.classroom}
+                        </div>
+                      </div>
+                      <StatusChip label="No class today" variant="neutral" size="xs" />
                     </div>
-                    <StatusChip label="Confirmed" variant="success" size="xs" />
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </ConsoleCard>
 
@@ -628,12 +671,29 @@ export const ParentPortal: React.FC = () => {
                   key={slot.id}
                   className="p-3.5 rounded-xl border border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-[#1C1C1E] space-y-1 text-xs"
                 >
-                  <div className="font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wider">
-                    {slot.dayOfWeek}
+                  <div className="font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                    <span>{slot.dayOfWeek}</span>
+                    {joinState(slot, todayDay) === 'live' && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-white bg-[#188038] rounded-full px-1.5 py-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        Live
+                      </span>
+                    )}
                   </div>
                   <div className="font-bold text-slate-900 dark:text-white">{slot.subject}</div>
                   <div className="text-slate-500 dark:text-neutral-400 tabular-nums">{slot.startTime} - {slot.endTime}</div>
                   <div className="text-[11px] text-slate-500 dark:text-neutral-400">{slot.classroom}</div>
+                  {normalizeMeetUrl(slot.meetUrl) && (
+                    <a
+                      href={normalizeMeetUrl(slot.meetUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-white bg-[#1A73E8] hover:brightness-110 rounded-full px-3 py-1.5"
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      Join Class
+                    </a>
+                  )}
                 </div>
               ))}
           </div>

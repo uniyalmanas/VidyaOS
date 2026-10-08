@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 shipped ✅ · F6–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 shipped ✅ · F7–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -259,7 +259,7 @@ add-expense modal).
 
 ---
 
-## F6 — Live class links on timetable
+## F6 — Live class links on timetable — ✅ SHIPPED (2026-10-08)
 
 **Simple words:** Each scheduled class can have a "Join now" Google Meet/Zoom link so students
 actually attend online classes from the timetable.
@@ -278,6 +278,14 @@ staff/admin (mirror batches block).
 timetable + "Today" card renders the link with a **Join Class** button.
 
 **Tests:** unit — URL validation/redaction; emulator — timetable roles.
+
+> **Shipped notes:** Timetable turned out to be DEV-only in-memory state, so it was
+> **moved to Firestore first** (`timetableSlots` subscription + persist/delete in
+> `firestoreService.ts`, `AcademicContext` now owns CRUD + a `vidyaos_timetable` DEV
+> mirror). Link helpers live in `src/lib/timetable.ts` (scheme-redacting URL
+> validation, a 10-min "join window", clash detection) and the admin editor is
+> `src/components/timetable/TimetableModule.tsx`. Students/parents get a **Join
+> Class** button and a live badge; the rules block mirrors the desk-only write model.
 
 ---
 

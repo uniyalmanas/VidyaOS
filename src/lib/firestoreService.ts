@@ -39,7 +39,8 @@ import {
   LeaveRequest,
   TeacherAttendance,
   SalarySlip,
-  Expense
+  Expense,
+  TimetableSlot
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -59,7 +60,8 @@ import {
   MOCK_LEAVE_REQUESTS,
   MOCK_TEACHER_ATTENDANCE,
   MOCK_SALARY_SLIPS,
-  MOCK_EXPENSES
+  MOCK_EXPENSES,
+  MOCK_TIMETABLE
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -573,6 +575,46 @@ export function subscribeToStudyMaterials(onData: (materials: StudyMaterial[]) =
   } catch (e) {
     const fallback = developmentFallback(MOCK_STUDY_MATERIALS, orgId);
     if (import.meta.env.DEV) console.error('Could not start study materials listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/**
+ * F6 — the weekly class schedule. Org-scoped, read by every tenant member
+ * (students/parents need it for the "Join Class" button) and written by the
+ * desk (see the `timetableSlots` rules block).
+ */
+export function subscribeToTimetableSlots(onData: (slots: TimetableSlot[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_TIMETABLE, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(collection(db, 'timetableSlots'), where('orgId', '==', orgId), limit(500))
+      : query(collection(db, 'timetableSlots'), limit(500));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map(d => d.data() as TimetableSlot);
+          onData(list);
+        } else {
+          const fallback = developmentFallback(MOCK_TIMETABLE, orgId);
+          onData(fallback);
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time timetable', error);
+        const fallback = developmentFallback(MOCK_TIMETABLE, orgId);
+        onData(fallback);
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_TIMETABLE, orgId);
+    if (import.meta.env.DEV) console.error('Could not start timetable listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -1401,6 +1443,26 @@ export async function deleteStudyMaterialFromFirestore(matId: string): Promise<v
     await deleteDoc(doc(db, 'studyMaterials', matId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `studyMaterials/${matId}`);
+  }
+}
+
+// ----------------------------------------------------
+// TIMETABLE (F6) — weekly schedule + optional live class link
+// ----------------------------------------------------
+
+export async function persistTimetableSlotToFirestore(slot: TimetableSlot): Promise<void> {
+  try {
+    await setDoc(doc(db, 'timetableSlots', slot.id), cleanFirestoreData(slot));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `timetableSlots/${slot.id}`);
+  }
+}
+
+export async function deleteTimetableSlotFromFirestore(slotId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'timetableSlots', slotId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `timetableSlots/${slotId}`);
   }
 }
 

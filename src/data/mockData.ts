@@ -989,7 +989,8 @@ export const MOCK_TIMETABLE: TimetableSlot[] = [
     endTime: '18:30',
     classroom: 'Hall 1 (Aryabhata Room)',
     teacherId: 'teach-anjali',
-    subject: 'Class 10 Mathematics'
+    subject: 'Class 10 Mathematics',
+    meetUrl: 'https://meet.google.com/abc-defg-hij'
   },
   {
     id: 'tt-2',
@@ -1001,7 +1002,9 @@ export const MOCK_TIMETABLE: TimetableSlot[] = [
     endTime: '20:15',
     classroom: 'Hall 3 (Einstein Theater)',
     teacherId: 'teach-rohit',
-    subject: 'Class 12 Advanced Physics'
+    subject: 'Class 12 Advanced Physics',
+    meetUrl: 'https://us02web.zoom.us/j/9876543210',
+    meetPassword: 'physics12'
   },
   {
     id: 'tt-3',

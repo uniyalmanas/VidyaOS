@@ -22,6 +22,7 @@ import {
   subscribeToExamResults,
   subscribeToAssignments,
   subscribeToStudyMaterials,
+  subscribeToTimetableSlots,
   persistTeacherToFirestore,
   deleteTeacherFromFirestore,
   persistExamToFirestore,
@@ -30,8 +31,11 @@ import {
   persistAssignmentToFirestore,
   deleteAssignmentFromFirestore,
   persistStudyMaterialToFirestore,
-  deleteStudyMaterialFromFirestore
+  deleteStudyMaterialFromFirestore,
+  persistTimetableSlotToFirestore,
+  deleteTimetableSlotFromFirestore
 } from '../../lib/firestoreService';
+import { normalizeMeetUrl } from '../../lib/timetable';
 
 export interface AcademicContextType {
   teachers: Teacher[];
@@ -50,6 +54,9 @@ export interface AcademicContextType {
   deleteAssignment: (assignId: string) => void;
   addStudyMaterial: (mat: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>) => StudyMaterial;
   deleteStudyMaterial: (matId: string) => void;
+  addTimetableSlot: (slot: Omit<TimetableSlot, 'id' | 'orgId' | 'branchId'> & { branchId?: string }) => TimetableSlot;
+  updateTimetableSlot: (slotId: string, updates: Partial<Omit<TimetableSlot, 'id' | 'orgId'>>) => void;
+  deleteTimetableSlot: (slotId: string) => void;
   deduplicateTeachers: () => { removedCount: number; mergedCount: number };
 }
 
@@ -149,7 +156,10 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_STUDY_MATERIALS : []);
   });
 
-  const [timetableSlots] = useState<TimetableSlot[]>(import.meta.env.DEV ? MOCK_TIMETABLE : []);
+  const [timetableSlots, setTimetableSlots] = useState<TimetableSlot[]>(() => {
+    const saved = import.meta.env.DEV ? localStorage.getItem('vidyaos_timetable') : null;
+    return saved ? JSON.parse(saved) : (import.meta.env.DEV ? MOCK_TIMETABLE : []);
+  });
 
   // DEV-only mirrors (see the note above the state declarations).
   useEffect(() => {
@@ -176,6 +186,11 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     if (!import.meta.env.DEV) return;
     localStorage.setItem('vidyaos_materials', JSON.stringify(studyMaterials));
   }, [studyMaterials]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    localStorage.setItem('vidyaos_timetable', JSON.stringify(timetableSlots));
+  }, [timetableSlots]);
 
   // Real-time Firestore Subscriptions
   useEffect(() => {
@@ -207,12 +222,17 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
       if (data) setStudyMaterials(data);
     }, targetOrg);
 
+    const unsubTimetable = subscribeToTimetableSlots(data => {
+      if (data) setTimetableSlots(data);
+    }, targetOrg);
+
     return () => {
       unsubTeachers();
       unsubExams();
       unsubResults();
       unsubAssignments();
       unsubMaterials();
+      unsubTimetable();
     };
   }, [currentOrg.id, isPlatformOwner]);
 
@@ -412,6 +432,50 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     }
   };
 
+  // --- F6 — timetable CRUD (weekly schedule + optional live class link) --------
+  const addTimetableSlot = (data: Omit<TimetableSlot, 'id' | 'orgId' | 'branchId'> & { branchId?: string }): TimetableSlot => {
+    const newSlot: TimetableSlot = {
+      ...data,
+      id: `tt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      orgId: currentOrg.id,
+      branchId:
+        data.branchId ||
+        (selectedBranchId !== 'all' ? selectedBranchId : currentOrg.branches?.[0]?.id || 'branch-1'),
+      meetUrl: normalizeMeetUrl(data.meetUrl) || undefined,
+      meetPassword: data.meetPassword?.trim() || undefined
+    };
+    setTimetableSlots(prev => [...prev, newSlot]);
+    persistTimetableSlotToFirestore(newSlot);
+    return newSlot;
+  };
+
+  const updateTimetableSlot = (slotId: string, updates: Partial<Omit<TimetableSlot, 'id' | 'orgId'>>) => {
+    setTimetableSlots(prev => prev.map(slot => {
+      if (slot.id !== slotId) return slot;
+      const updated: TimetableSlot = {
+        ...slot,
+        ...updates,
+        id: slot.id,
+        orgId: slot.orgId
+      };
+      // Normalise only when the caller actually touched the link, so clearing a
+      // previously-saved URL (meetUrl: '') really does remove it.
+      if ('meetUrl' in updates) {
+        updated.meetUrl = normalizeMeetUrl(updates.meetUrl) || undefined;
+      }
+      if ('meetPassword' in updates) {
+        updated.meetPassword = updates.meetPassword?.trim() || undefined;
+      }
+      persistTimetableSlotToFirestore(updated);
+      return updated;
+    }));
+  };
+
+  const deleteTimetableSlot = (slotId: string) => {
+    setTimetableSlots(prev => prev.filter(slot => slot.id !== slotId));
+    deleteTimetableSlotFromFirestore(slotId);
+  };
+
   return (
     <AcademicContext.Provider
       value={{
@@ -431,7 +495,10 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
         createAssignment,
         deleteAssignment,
         addStudyMaterial,
-        deleteStudyMaterial
+        deleteStudyMaterial,
+        addTimetableSlot,
+        updateTimetableSlot,
+        deleteTimetableSlot
       }}
     >
       {children}

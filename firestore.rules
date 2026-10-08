@@ -722,6 +722,45 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // TIMETABLE (F6) — weekly class schedule + optional live class link
+    // ------------------------------------------------------------------------
+    match /timetableSlots/{slotId} {
+      // Every tenant member reads the schedule — students and parents need it
+      // to see the "Join Class" button.
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // The desk owns the schedule. A slot must be well-formed (a real weekday,
+      // a batch, clock strings, and any link short enough to be an address).
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        request.resource.data.dayOfWeek in [
+          'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+        ] &&
+        request.resource.data.batchId is string &&
+        request.resource.data.startTime is string &&
+        request.resource.data.endTime is string &&
+        request.resource.data.get('meetUrl', '') is string &&
+        request.resource.data.get('meetUrl', '').size() <= 512;
+
+      // Edits keep the slot inside its centre; the same well-formedness applies.
+      allow update: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.dayOfWeek in [
+          'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
+        ] &&
+        request.resource.data.batchId is string &&
+        request.resource.data.startTime is string &&
+        request.resource.data.endTime is string &&
+        request.resource.data.get('meetUrl', '') is string &&
+        request.resource.data.get('meetUrl', '').size() <= 512;
+
+      allow delete: if isSignedIn() &&
+        isCenterStaffOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

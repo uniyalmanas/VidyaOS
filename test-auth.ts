@@ -58,7 +58,7 @@ import {
   slipsForMonth,
   formatTimeHHMM
 } from './src/lib/staffOps';
-import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice } from './src/types';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, TimetableSlot } from './src/types';
 import {
   monthKeyFromSalaryLabel,
   incomeForMonth,
@@ -72,6 +72,23 @@ import {
   EXPENSE_CATEGORY_LABEL,
   MAX_EXPENSE_AMOUNT
 } from './src/lib/finance';
+import {
+  TIMETABLE_DAYS,
+  normalizeMeetUrl,
+  isValidMeetUrl,
+  meetProviderLabel,
+  parseClock,
+  nowMinutesIndia,
+  joinState,
+  formatSlotRange,
+  sortTimetableSlots,
+  slotsForDay,
+  slotsForBatches,
+  slotsOverlap,
+  findTimetableClashes,
+  isClashFree,
+  validateTimetableSlot
+} from './src/lib/timetable';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -1108,6 +1125,120 @@ assert(searchExpenses(expenseList, 'electric').length === 1, 'Search matches the
 assert(searchExpenses(expenseList, 'rent').length === 2, 'Search matches a title substring');
 assert(searchExpenses(expenseList, '').length === expenseList.length, 'An empty search returns everything');
 assert(EXPENSE_CATEGORY_LABEL.electricity === 'Electricity', 'Category labels are human readable');
+
+// ============================================================================
+// F6 — live class links: URL validation/redaction, join window, clash detection
+// ============================================================================
+
+// normalizeMeetUrl — forgiving input, safe output -------------------------------
+assert(normalizeMeetUrl('meet.google.com/abc-defg-hij') === 'https://meet.google.com/abc-defg-hij', 'A bare host gets an https scheme');
+assert(normalizeMeetUrl('https://meet.google.com/abc-defg-hij').startsWith('https://meet.google.com/'), 'An https link is preserved');
+assert(normalizeMeetUrl('  https://us02web.zoom.us/j/9876543210  ') === 'https://us02web.zoom.us/j/9876543210', 'Whitespace around a link is trimmed');
+assert(normalizeMeetUrl('javascript:alert(1)') === '', 'A javascript: payload is redacted');
+assert(normalizeMeetUrl('data:text/html;base64,PHNjcmlwdD4=') === '', 'A data: URI is redacted');
+assert(normalizeMeetUrl('ftp://example.com/x') === '', 'A non-http scheme is redacted');
+assert(normalizeMeetUrl('') === '', 'An empty link normalises to empty');
+assert(normalizeMeetUrl(undefined) === '', 'An undefined link normalises to empty');
+assert(normalizeMeetUrl('not a url') === '', 'Unparseable text normalises to empty');
+assert(normalizeMeetUrl('https://localhost') === '', 'A host without a dot is rejected');
+
+// isValidMeetUrl ---------------------------------------------------------------
+assert(isValidMeetUrl('https://meet.google.com/abc') === true, 'A Meet link is valid');
+assert(isValidMeetUrl('meet.google.com/abc') === true, 'A bare Meet host is valid');
+assert(isValidMeetUrl('javascript:alert(1)') === false, 'A script URL is invalid');
+assert(isValidMeetUrl('') === false, 'An empty string is invalid');
+
+// meetProviderLabel ------------------------------------------------------------
+assert(meetProviderLabel('https://meet.google.com/x') === 'Google Meet', 'Meet is labelled');
+assert(meetProviderLabel('https://us02web.zoom.us/j/1') === 'Zoom', 'A Zoom subdomain is labelled');
+assert(meetProviderLabel('https://teams.microsoft.com/l/meetup-join/x') === 'Microsoft Teams', 'Teams is labelled');
+assert(meetProviderLabel('https://classes.mycoaching.in/room') === 'classes.mycoaching.in', 'An unknown host falls back to its hostname');
+assert(meetProviderLabel('') === '', 'No link means no label');
+
+// parseClock / nowMinutesIndia -------------------------------------------------
+assert(parseClock('17:00') === 1020, '17:00 is 1020 minutes');
+assert(parseClock('00:00') === 0, 'Midnight is zero minutes');
+assert(parseClock('9:00') === null, 'A single-digit hour is rejected');
+assert(parseClock('24:00') === null, 'Hour 24 is rejected');
+assert(parseClock('17:60') === null, 'Minute 60 is rejected');
+assert(nowMinutesIndia(new Date('2026-10-05T11:35:00.000Z')) === 1025, '11:35 UTC is 17:05 IST');
+
+// Fixtures ---------------------------------------------------------------------
+const makeSlot = (overrides: Partial<TimetableSlot>): TimetableSlot => ({
+  id: 'tt-x',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  batchId: 'batch-c10-math',
+  dayOfWeek: 'Monday',
+  startTime: '17:00',
+  endTime: '18:30',
+  classroom: 'Hall 1',
+  teacherId: 'teach-anjali',
+  subject: 'Class 10 Mathematics',
+  ...overrides
+});
+
+// joinState — only a linked, in-window, same-day class is joinable --------------
+const mondaySlot = makeSlot({ meetUrl: 'https://meet.google.com/abc-defg-hij' });
+assert(joinState(makeSlot({}), 'Monday', new Date('2026-10-05T11:35:00.000Z')) === 'unavailable', 'No link means not joinable');
+assert(joinState(mondaySlot, 'Tuesday', new Date('2026-10-05T11:35:00.000Z')) === 'upcoming', 'A different weekday is only upcoming');
+assert(joinState(mondaySlot, 'Monday', new Date('2026-10-05T10:00:00.000Z')) === 'upcoming', 'Before the 10-minute window it is upcoming');
+assert(joinState(mondaySlot, 'Monday', new Date('2026-10-05T11:19:00.000Z')) === 'upcoming', 'One minute before the window it is still upcoming');
+assert(joinState(mondaySlot, 'Monday', new Date('2026-10-05T11:20:00.000Z')) === 'live', '10 minutes before the start it opens');
+assert(joinState(mondaySlot, 'Monday', new Date('2026-10-05T11:35:00.000Z')) === 'live', 'During the class it is live');
+assert(joinState(mondaySlot, 'Monday', new Date('2026-10-05T13:30:00.000Z')) === 'ended', 'After the end time it has ended');
+assert(joinState(makeSlot({ meetUrl: 'javascript:alert(1)' }), 'Monday', new Date('2026-10-05T11:35:00.000Z')) === 'unavailable', 'An unsafe link is never joinable');
+
+// formatSlotRange / sorting / filters ------------------------------------------
+assert(formatSlotRange(mondaySlot) === '17:00 – 18:30', 'Slot range is printable');
+assert(formatSlotRange(makeSlot({ startTime: '', endTime: '' })) === '--:-- – --:--', 'Missing clocks fall back to placeholders');
+
+const week: TimetableSlot[] = [
+  makeSlot({ id: 'wed', dayOfWeek: 'Wednesday', startTime: '17:00' }),
+  makeSlot({ id: 'mon-late', dayOfWeek: 'Monday', startTime: '18:00' }),
+  makeSlot({ id: 'mon-early', dayOfWeek: 'Monday', startTime: '09:00' }),
+  makeSlot({ id: 'sat', dayOfWeek: 'Saturday', startTime: '10:00' })
+];
+const sortedWeek = sortTimetableSlots(week);
+assert(sortedWeek[0].id === 'mon-early' && sortedWeek[1].id === 'mon-late', 'Monday sorts before the rest, earliest first');
+assert(sortedWeek[3].id === 'sat', 'Saturday comes last');
+assert(slotsForDay(week, 'Monday').length === 2, 'slotsForDay filters to a single day');
+assert(slotsForDay(week, 'Monday')[0].id === 'mon-early', 'slotsForDay returns them sorted');
+assert(slotsForBatches(week, ['batch-c10-math']).length === 4, 'slotsForBatches keeps matching batches');
+assert(slotsForBatches(week, ['batch-nope']).length === 0, 'slotsForBatches drops other batches');
+assert(TIMETABLE_DAYS.length === 6 && TIMETABLE_DAYS[0] === 'Monday', 'The timetable week is Monday–Saturday');
+
+// slotsOverlap / clash detection -----------------------------------------------
+assert(slotsOverlap(makeSlot({ startTime: '17:00', endTime: '18:30' }), makeSlot({ startTime: '18:00', endTime: '19:00' })) === true, 'Overlapping windows clash');
+assert(slotsOverlap(makeSlot({ startTime: '17:00', endTime: '18:00' }), makeSlot({ startTime: '18:00', endTime: '19:00' })) === false, 'Touching windows do not clash');
+assert(slotsOverlap(makeSlot({ dayOfWeek: 'Monday' }), makeSlot({ dayOfWeek: 'Tuesday', startTime: '17:00', endTime: '18:30' })) === false, 'Different days do not clash');
+
+const clashBase = makeSlot({ id: 'base', startTime: '17:00', endTime: '18:30' });
+const sameTeacher = makeSlot({ id: 'st', teacherId: 'teach-anjali', batchId: 'batch-x', classroom: 'Hall 9', startTime: '18:00', endTime: '19:00' });
+const teacherClashes = findTimetableClashes(sameTeacher, [clashBase]);
+assert(teacherClashes.length === 1 && teacherClashes[0].kind === 'teacher', 'Same faculty in an overlapping window clashes');
+assert(teacherClashes[0].slot.id === 'base', 'The clash points at the existing slot');
+const sameRoom = makeSlot({ id: 'sr', teacherId: 'teach-rohit', batchId: 'batch-x', classroom: 'Hall 1', startTime: '18:00', endTime: '19:00' });
+assert(findTimetableClashes(sameRoom, [clashBase])[0].kind === 'classroom', 'Same room clashes');
+const sameBatch = makeSlot({ id: 'sb', teacherId: 'teach-rohit', classroom: 'Hall 9', batchId: 'batch-c10-math', startTime: '18:00', endTime: '19:00' });
+assert(findTimetableClashes(sameBatch, [clashBase])[0].kind === 'batch', 'Same batch clashes');
+assert(findTimetableClashes(makeSlot({ id: 'other', teacherId: 'teach-rohit', classroom: 'Hall 9', batchId: 'batch-x', startTime: '18:00', endTime: '19:00' }), [clashBase]).length === 0, 'A different teacher/room/batch does not clash');
+assert(findTimetableClashes(sameTeacher, [clashBase], 'base').length === 0, 'An edit ignores the slot it is replacing');
+assert(findTimetableClashes(sameTeacher, [makeSlot({ id: 'other-org', orgId: 'org-other', startTime: '18:00', endTime: '19:00' })]).length === 0, 'Another centre never clashes');
+assert(isClashFree(sameTeacher, [clashBase]) === false, 'isClashFree is false when booked');
+assert(isClashFree(makeSlot({ id: 'ok', teacherId: 'teach-rohit', classroom: 'Hall 9', batchId: 'batch-x', startTime: '18:00', endTime: '19:00' }), [clashBase]) === true, 'A free window is clash-free');
+
+// validateTimetableSlot --------------------------------------------------------
+const validSlotInput = { batchId: 'batch-1', dayOfWeek: 'Monday' as const, startTime: '17:00', endTime: '18:30', classroom: 'Hall 1', teacherId: 'teach-1', subject: 'Maths' };
+assert(validateTimetableSlot(validSlotInput) === null, 'A complete slot passes validation');
+assert(validateTimetableSlot({ ...validSlotInput, batchId: '' }) !== null, 'A missing batch is rejected');
+assert(validateTimetableSlot({ ...validSlotInput, subject: '   ' }) !== null, 'A blank subject is rejected');
+assert(validateTimetableSlot({ ...validSlotInput, startTime: '5pm' }) !== null, 'A malformed start time is rejected');
+assert(validateTimetableSlot({ ...validSlotInput, startTime: '18:00', endTime: '17:00' }) !== null, 'An end before the start is rejected');
+assert(validateTimetableSlot({ ...validSlotInput, startTime: '17:00', endTime: '17:00' }) !== null, 'A zero-length class is rejected');
+assert(validateTimetableSlot({ ...validSlotInput, meetUrl: 'javascript:alert(1)' }) !== null, 'An unsafe class link is rejected');
+assert(validateTimetableSlot({ ...validSlotInput, meetUrl: 'meet.google.com/abc' }) === null, 'A valid (bare) class link is accepted');
+assert(validateTimetableSlot({ ...validSlotInput, meetUrl: '' }) === null, 'An empty class link is fine — the class is in-person');
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

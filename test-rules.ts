@@ -118,6 +118,7 @@ async function main(): Promise<void> {
   const adminOther = await makeClient('admin-other');
   const teacher = await makeClient('teacher');
   const staff = await makeClient('staff');
+  const student = await makeClient('student');
 
   const stamp = Date.now();
 
@@ -201,6 +202,22 @@ async function main(): Promise<void> {
     phone: '+91 9000000033'
   });
   check('admin provisioned the faculty profile', true);
+
+  const studentCred = await createUserWithEmailAndPassword(
+    student.auth,
+    `rules-student-user-${stamp}@phone.vidyaos.in`,
+    PASSWORD
+  );
+  const studentUid = studentCred.user.uid;
+  await setDoc(doc(admin.db, 'users', studentUid), {
+    id: studentUid,
+    uid: studentUid,
+    role: 'STUDENT',
+    orgId: ORG_ID,
+    name: 'Rules Student User',
+    phone: '+91 9000000066'
+  });
+  check('admin provisioned a student profile', true);
 
   // ---------------------------------------------------------------- the rules
   console.log('\nSuite 2: Faculty may move students between their own org\'s batches');
@@ -1060,6 +1077,127 @@ async function main(): Promise<void> {
     check('expenses are tenant-isolated on read', crossOrgReadDenied);
   } catch (err) {
     console.error(`\nSuite 8 failed at step: "${suite8Step}"`);
+    throw err;
+  }
+
+  // ---------------------------------------------------------------- timetable (F6)
+  console.log('\nSuite 9: Timetable — weekly schedule with an optional live class link');
+  let suite9Step = 'setup';
+  try {
+    const slotDoc = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      batchId: 'batch-rules-1',
+      dayOfWeek: 'Monday',
+      startTime: '17:00',
+      endTime: '18:30',
+      classroom: 'Hall 1',
+      teacherId: 'teach-rules',
+      subject: 'Class 10 Mathematics',
+      meetUrl: 'https://meet.google.com/abc-defg-hij',
+      ...extra
+    });
+
+    // --- reads: every tenant member -------------------------------------------
+    suite9Step = 'staff publishes a class';
+    const slotId = `tt-rules-${stamp}`;
+    const slotRef = doc(staff.db, 'timetableSlots', slotId);
+    await setDoc(slotRef, slotDoc(slotId));
+    check('front desk may publish a class', true);
+
+    suite9Step = 'teacher reads the schedule';
+    const teacherSlotRead = (await getDoc(doc(teacher.db, 'timetableSlots', slotId))).exists();
+    check('faculty can read the schedule (tenant member view)', teacherSlotRead);
+
+    suite9Step = 'student reads the schedule';
+    const studentSlotRead = (await getDoc(doc(student.db, 'timetableSlots', slotId))).exists();
+    check('a student can read the schedule for the Join Class button', studentSlotRead);
+
+    // --- writes: desk only ----------------------------------------------------
+    suite9Step = 'teacher publishes a class';
+    const teacherCreateDenied = await expectDenied('teacher publishes a class', () =>
+      setDoc(doc(teacher.db, 'timetableSlots', `tt-teacher-${stamp}`), slotDoc(`tt-teacher-${stamp}`))
+    );
+    check('faculty cannot publish a class', teacherCreateDenied);
+
+    suite9Step = 'student publishes a class';
+    const studentCreateDenied = await expectDenied('student publishes a class', () =>
+      setDoc(doc(student.db, 'timetableSlots', `tt-student-${stamp}`), slotDoc(`tt-student-${stamp}`))
+    );
+    check('a student cannot publish a class', studentCreateDenied);
+
+    // --- create validation ----------------------------------------------------
+    suite9Step = 'unknown weekday';
+    const badDayDenied = await expectDenied('slot on an unknown weekday', () =>
+      setDoc(doc(admin.db, 'timetableSlots', `tt-day-${stamp}`), slotDoc(`tt-day-${stamp}`, { dayOfWeek: 'Sunday' }))
+    );
+    check('Sunday is not a schedulable day', badDayDenied);
+
+    suite9Step = 'missing batch';
+    const noBatch = slotDoc(`tt-nobatch-${stamp}`);
+    delete (noBatch as Record<string, unknown>).batchId;
+    const noBatchDenied = await expectDenied('slot with no batch', () =>
+      setDoc(doc(admin.db, 'timetableSlots', `tt-nobatch-${stamp}`), noBatch)
+    );
+    check('a slot must name a batch', noBatchDenied);
+
+    suite9Step = 'over-long class link';
+    const longUrlDenied = await expectDenied('slot with an over-long link', () =>
+      setDoc(
+        doc(admin.db, 'timetableSlots', `tt-long-${stamp}`),
+        slotDoc(`tt-long-${stamp}`, { meetUrl: `https://meet.google.com/${'a'.repeat(600)}` })
+      )
+    );
+    check('an over-long class link is rejected', longUrlDenied);
+
+    // --- updates are desk-only and identity-pinned ----------------------------
+    suite9Step = 'teacher edits a class';
+    const teacherUpdateDenied = await expectDenied('teacher edits a class', () =>
+      updateDoc(doc(teacher.db, 'timetableSlots', slotId), { subject: 'not mine' })
+    );
+    check('faculty cannot edit an existing class', teacherUpdateDenied);
+
+    suite9Step = 'staff corrects a class';
+    await updateDoc(slotRef, { subject: 'Class 10 Mathematics (corrected)', meetUrl: 'https://us02web.zoom.us/j/9876543210' });
+    check('front desk may correct a class', true);
+
+    suite9Step = 'staff moves the class org';
+    const moveOrgDenied = await expectDenied('staff moves a class to another centre', () =>
+      updateDoc(slotRef, { orgId: OTHER_ORG_ID })
+    );
+    check('the tenant of a class is pinned on update', moveOrgDenied);
+
+    // --- deletes are desk-only -------------------------------------------------
+    suite9Step = 'teacher deletes a class';
+    const teacherDeleteDenied = await expectDenied('teacher deletes a class', () =>
+      deleteDoc(doc(teacher.db, 'timetableSlots', slotId))
+    );
+    check('faculty cannot delete a class', teacherDeleteDenied);
+
+    suite9Step = 'staff deletes a class';
+    await deleteDoc(slotRef);
+    check('front desk may remove a class', true);
+
+    // --- tenant isolation ------------------------------------------------------
+    suite9Step = 'cross-org timetable write';
+    const crossOrgWriteDenied = await expectDenied('other-centre admin writes a foreign class', () =>
+      setDoc(doc(adminOther.db, 'timetableSlots', `tt-foreign-${stamp}`), {
+        ...slotDoc(`tt-foreign-${stamp}`),
+        orgId: ORG_ID
+      })
+    );
+    check('the timetable is tenant-isolated on write', crossOrgWriteDenied);
+
+    suite9Step = 'cross-org timetable read';
+    const foreignSlotId = `tt-foreign-read-${stamp}`;
+    await setDoc(doc(admin.db, 'timetableSlots', foreignSlotId), slotDoc(foreignSlotId));
+    const crossOrgReadDenied = await expectDenied('other-centre admin reads a foreign class', () =>
+      getDoc(doc(adminOther.db, 'timetableSlots', foreignSlotId))
+    );
+    check('the timetable is tenant-isolated on read', crossOrgReadDenied);
+  } catch (err) {
+    console.error(`\nSuite 9 failed at step: "${suite9Step}"`);
     throw err;
   }
 

@@ -69,6 +69,7 @@ import { InquiriesModule } from './InquiriesModule';
 import { LeavesModule } from './LeavesModule';
 import { StaffOpsModule } from '../staffops/StaffOpsModule';
 import { FinanceModule } from '../finance/FinanceModule';
+import { TimetableModule } from '../timetable/TimetableModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -109,7 +110,6 @@ export const AdminDashboard: React.FC = () => {
     pendingPaymentSubmissions,
     exams,
     examResults,
-    timetableSlots,
     announcements,
     addStudent,
     deleteStudent,
@@ -2298,48 +2298,8 @@ export const AdminDashboard: React.FC = () => {
         </ConsoleCard>
       )}
 
-      {/* 8. TIMETABLE */}
-      {currentModule === 'timetable' && (
-        <ConsoleCard
-          title="Master Institute Timetable"
-          subtitle="Zero-conflict schedule grid across all lecture halls and faculty timings"
-        >
-          {timetableSlots.length === 0 ? (
-            <div className="py-12 text-center space-y-3">
-              <Clock className="w-10 h-10 text-[#5F6368] dark:text-[#9AA0A6] mx-auto opacity-40" />
-              <p className="text-sm font-semibold text-[#202124] dark:text-[#E8EAED]">
-                No timetable slots scheduled
-              </p>
-              <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] max-w-sm mx-auto">
-                Schedule regular lectures and lab timings once batches and faculty are configured.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {timetableSlots.map(slot => (
-                <div
-                  key={slot.id}
-                  className="p-3.5 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] space-y-1 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#FFA000] dark:text-[#FFCA28] text-[11px] uppercase tracking-wider">
-                      {slot.dayOfWeek}
-                    </span>
-                    <span className="font-mono text-[#5F6368] dark:text-[#9AA0A6]">
-                      {slot.startTime} - {slot.endTime}
-                    </span>
-                  </div>
-                  <div className="font-bold text-[#202124] dark:text-[#E8EAED]">{slot.subject}</div>
-                  <div className="text-[#5F6368] dark:text-[#9AA0A6]">Classroom: {slot.classroom}</div>
-                  <div className="text-[10px] text-[#188038] dark:text-[#81C995] font-medium">
-                    ✓ Verified clash-free
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </ConsoleCard>
-      )}
+      {/* 8. TIMETABLE (F6) — weekly schedule + live class links */}
+      {currentModule === 'timetable' && <TimetableModule />}
 
       {/* 9. ANNOUNCEMENTS */}
       {currentModule === 'announcements' && (

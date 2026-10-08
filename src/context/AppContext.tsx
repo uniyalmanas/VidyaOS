@@ -195,6 +195,9 @@ export interface AppContextType {
   createAssignment: (assign: Omit<Assignment, 'id' | 'orgId' | 'submissions'>) => Assignment;
   addStudyMaterial: (mat: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>) => StudyMaterial;
   deleteStudyMaterial: (matId: string) => void;
+  addTimetableSlot: (slot: Omit<TimetableSlot, 'id' | 'orgId' | 'branchId'> & { branchId?: string }) => TimetableSlot;
+  updateTimetableSlot: (slotId: string, updates: Partial<Omit<TimetableSlot, 'id' | 'orgId'>>) => void;
+  deleteTimetableSlot: (slotId: string) => void;
   
   createAnnouncement: (announcement: Omit<Announcement, 'id' | 'orgId' | 'createdAt' | 'createdBy'>) => Announcement;
   
@@ -479,6 +482,9 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     createAssignment: academicSlice.createAssignment,
     addStudyMaterial: academicSlice.addStudyMaterial,
     deleteStudyMaterial: academicSlice.deleteStudyMaterial,
+    addTimetableSlot: academicSlice.addTimetableSlot,
+    updateTimetableSlot: academicSlice.updateTimetableSlot,
+    deleteTimetableSlot: academicSlice.deleteTimetableSlot,
 
     // Communication & Chat domain
     announcements: commSlice.announcements,

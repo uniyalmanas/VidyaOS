@@ -11,10 +11,13 @@ import {
   FileText,
   Check,
   UserCheck,
-  MessageSquare
+  MessageSquare,
+  Video
 } from 'lucide-react';
 import { Student, User } from '../../types';
 import { MOCK_STUDENTS } from '../../data/mockData';
+import { normalizeMeetUrl, joinState } from '../../lib/timetable';
+import { getIndiaDayName } from '../../lib/date';
 import {
   PageHeader,
   ConsoleCard,
@@ -274,14 +277,33 @@ export const StudentPortal: React.FC = () => {
                     className="p-3 rounded-2xl border border-black/[0.08] dark:border-white/[0.08] bg-white/90 dark:bg-[#1C1C1E]/90 flex items-center justify-between text-xs shadow-[0_4px_12px_rgba(0,0,0,0.02)]"
                   >
                     <div>
-                      <span className="font-bold text-[#FFA000] dark:text-[#FFCA28] text-[11px] uppercase tracking-wide font-apple-text">
-                        {t.dayOfWeek}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-[#FFA000] dark:text-[#FFCA28] text-[11px] uppercase tracking-wide font-apple-text">
+                          {t.dayOfWeek}
+                        </span>
+                        {joinState(t, getIndiaDayName()) === 'live' && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-white bg-[#188038] rounded-full px-1.5 py-0.5 font-apple-text">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            Live now
+                          </span>
+                        )}
+                      </div>
                       <div className="font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">{t.subject}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right space-y-1">
                       <div className="font-mono text-[#86868B] tabular-nums">{t.startTime} - {t.endTime}</div>
                       <div className="text-[10px] text-[#86868B] font-apple-text">{t.classroom}</div>
+                      {normalizeMeetUrl(t.meetUrl) && (
+                        <a
+                          href={normalizeMeetUrl(t.meetUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-[#1A73E8] hover:brightness-110 rounded-full px-2.5 py-1 font-apple-text"
+                        >
+                          <Video className="w-3 h-3" />
+                          Join Class
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
