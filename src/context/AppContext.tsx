@@ -89,6 +89,13 @@ import {
   IssuedDocsProvider,
   useIssuedDocs
 } from './slices/IssuedDocsContext';
+import {
+  RolloverProvider,
+  useRollover,
+  RolloverPreviewInput,
+  RolloverExecutionResult
+} from './slices/RolloverContext';
+import { RolloverPlan } from '../lib/rollover';
 import { NewExpenseInput } from '../lib/finance';
 
 // Export domain hooks for direct fine-grained consumption
@@ -105,6 +112,7 @@ export { useStaffOps } from './slices/StaffOpsContext';
 export { useFinance } from './slices/FinanceContext';
 export { usePtm } from './slices/PtmContext';
 export { useSyllabus } from './slices/SyllabusContext';
+export { useRollover } from './slices/RolloverContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -207,6 +215,11 @@ export interface AppContextType {
   documentsForStudent: (studentId: string) => IssuedDocument[];
   latestIdCardFor: (studentId: string) => IssuedDocument | null;
   latestTcFor: (studentId: string) => IssuedDocument | null;
+
+  // Session rollover (F12) — new academic year wizard
+  previewRollover: (input: RolloverPreviewInput) => RolloverPlan;
+  executeRollover: (plan: RolloverPlan) => Promise<RolloverExecutionResult>;
+  suggestedRolloverYears: () => { fromYear: string; toYear: string } | null;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -419,45 +432,52 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
               currentUser={props.currentUser}
               isPlatformOwner={props.isPlatformOwner}
             >
-              <InquiryProvider
+              <RolloverProvider
                 currentOrg={props.currentOrg}
+                selectedBranchId={props.selectedBranchId}
                 currentUser={props.currentUser}
                 isPlatformOwner={props.isPlatformOwner}
               >
-                <LeaveProvider
+                <InquiryProvider
                   currentOrg={props.currentOrg}
                   currentUser={props.currentUser}
                   isPlatformOwner={props.isPlatformOwner}
                 >
-                  <StaffOpsProvider
+                  <LeaveProvider
                     currentOrg={props.currentOrg}
                     currentUser={props.currentUser}
                     isPlatformOwner={props.isPlatformOwner}
                   >
-                    <FinanceProvider
+                    <StaffOpsProvider
                       currentOrg={props.currentOrg}
                       currentUser={props.currentUser}
                       isPlatformOwner={props.isPlatformOwner}
                     >
-                      <PtmProvider
+                      <FinanceProvider
                         currentOrg={props.currentOrg}
-                        selectedBranchId={props.selectedBranchId}
                         currentUser={props.currentUser}
                         isPlatformOwner={props.isPlatformOwner}
                       >
-                        <IssuedDocsProvider
+                        <PtmProvider
                           currentOrg={props.currentOrg}
                           selectedBranchId={props.selectedBranchId}
                           currentUser={props.currentUser}
                           isPlatformOwner={props.isPlatformOwner}
                         >
-                          <UnifiedAppProvider {...props} studentSlice={studentSlice} />
-                        </IssuedDocsProvider>
-                      </PtmProvider>
-                    </FinanceProvider>
-                  </StaffOpsProvider>
-                </LeaveProvider>
-              </InquiryProvider>
+                          <IssuedDocsProvider
+                            currentOrg={props.currentOrg}
+                            selectedBranchId={props.selectedBranchId}
+                            currentUser={props.currentUser}
+                            isPlatformOwner={props.isPlatformOwner}
+                          >
+                            <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                          </IssuedDocsProvider>
+                        </PtmProvider>
+                      </FinanceProvider>
+                    </StaffOpsProvider>
+                  </LeaveProvider>
+                </InquiryProvider>
+              </RolloverProvider>
             </AuditProvider>
           </CommunicationProvider>
           </SyllabusProvider>
@@ -484,6 +504,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const syllabusSlice = useSyllabus();
   const ptmSlice = usePtm();
   const issuedDocsSlice = useIssuedDocs();
+  const rolloverSlice = useRollover();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -637,6 +658,11 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     documentsForStudent: issuedDocsSlice.documentsForStudent,
     latestIdCardFor: issuedDocsSlice.latestIdCardFor,
     latestTcFor: issuedDocsSlice.latestTcFor,
+
+    // Session rollover (F12)
+    previewRollover: rolloverSlice.previewRollover,
+    executeRollover: rolloverSlice.executeRollover,
+    suggestedRolloverYears: rolloverSlice.suggestedYears,
 
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
