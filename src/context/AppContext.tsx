@@ -29,7 +29,9 @@ import {
   LeaveRequest,
   TeacherAttendance,
   SalarySlip,
-  Expense
+  Expense,
+  SyllabusTopic,
+  SyllabusStatus
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -66,6 +68,12 @@ import {
   MarkAttendanceOptions
 } from './slices/StaffOpsContext';
 import { FinanceProvider, useFinance, ExpenseEdit } from './slices/FinanceContext';
+import {
+  SyllabusProvider,
+  useSyllabus,
+  SyllabusCreateParams,
+  TopicStatusMeta
+} from './slices/SyllabusContext';
 import { NewExpenseInput } from '../lib/finance';
 
 // Export domain hooks for direct fine-grained consumption
@@ -79,6 +87,7 @@ export { useInquiries } from './slices/InquiryContext';
 export { useLeaveRequests } from './slices/LeaveContext';
 export { useStaffOps } from './slices/StaffOpsContext';
 export { useFinance } from './slices/FinanceContext';
+export { useSyllabus } from './slices/SyllabusContext';
 
 export interface AppContextType {
   // Tenancy & Session
@@ -148,6 +157,14 @@ export interface AppContextType {
   addExpense: (input: NewExpenseInput) => Expense | null;
   updateExpense: (expenseId: string, updates: ExpenseEdit) => Expense | null;
   deleteExpense: (expenseId: string) => void;
+
+  // Syllabus coverage (F7) — chapter-by-chapter checklist per batch
+  syllabusTopics: SyllabusTopic[];
+  createTopicsFromTemplate: (params: SyllabusCreateParams) => SyllabusTopic[];
+  updateTopicStatus: (topicId: string, status: SyllabusStatus, meta?: TopicStatusMeta) => void;
+  updateSyllabusTopic: (topicId: string, updates: Partial<Omit<SyllabusTopic, 'id' | 'orgId'>>) => void;
+  deleteSyllabusTopic: (topicId: string) => void;
+  deleteTopicsForBatch: (batchId: string) => void;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -339,6 +356,13 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
           selectedBranchId={props.selectedBranchId}
           isPlatformOwner={props.isPlatformOwner}
         >
+          <SyllabusProvider
+            currentOrg={props.currentOrg}
+            selectedBranchId={props.selectedBranchId}
+            currentUser={props.currentUser}
+            batches={studentSlice.batches}
+            isPlatformOwner={props.isPlatformOwner}
+          >
           <CommunicationProvider
             currentOrg={props.currentOrg}
             currentUser={props.currentUser}
@@ -379,6 +403,7 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
               </InquiryProvider>
             </AuditProvider>
           </CommunicationProvider>
+          </SyllabusProvider>
         </AcademicProvider>
       </AttendanceProvider>
     </FeeProvider>
@@ -399,6 +424,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const leaveSlice = useLeaveRequests();
   const staffOpsSlice = useStaffOps();
   const financeSlice = useFinance();
+  const syllabusSlice = useSyllabus();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -522,6 +548,14 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     addExpense: financeSlice.addExpense,
     updateExpense: financeSlice.updateExpense,
     deleteExpense: financeSlice.deleteExpense,
+
+    // Syllabus coverage (F7)
+    syllabusTopics: syllabusSlice.syllabusTopics,
+    createTopicsFromTemplate: syllabusSlice.createTopicsFromTemplate,
+    updateTopicStatus: syllabusSlice.updateTopicStatus,
+    updateSyllabusTopic: syllabusSlice.updateSyllabusTopic,
+    deleteSyllabusTopic: syllabusSlice.deleteSyllabusTopic,
+    deleteTopicsForBatch: syllabusSlice.deleteTopicsForBatch,
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,
     activeChatChannelId: commSlice.activeChatChannelId,

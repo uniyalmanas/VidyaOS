@@ -40,7 +40,8 @@ import {
   TeacherAttendance,
   SalarySlip,
   Expense,
-  TimetableSlot
+  TimetableSlot,
+  SyllabusTopic
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -61,7 +62,8 @@ import {
   MOCK_TEACHER_ATTENDANCE,
   MOCK_SALARY_SLIPS,
   MOCK_EXPENSES,
-  MOCK_TIMETABLE
+  MOCK_TIMETABLE,
+  MOCK_SYLLABUS_TOPICS
 } from '../data/mockData';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -615,6 +617,46 @@ export function subscribeToTimetableSlots(onData: (slots: TimetableSlot[]) => vo
   } catch (e) {
     const fallback = developmentFallback(MOCK_TIMETABLE, orgId);
     if (import.meta.env.DEV) console.error('Could not start timetable listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/**
+ * F7 — a batch's chapter checklist. Org-scoped; read by every tenant member
+ * (students/parents see coverage) and written by instructors/admins (see the
+ * `syllabusTopics` rules block). Ordered by `sequence` client-side.
+ */
+export function subscribeToSyllabusTopics(onData: (topics: SyllabusTopic[]) => void, orgId?: string) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_SYLLABUS_TOPICS, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(collection(db, 'syllabusTopics'), where('orgId', '==', orgId), limit(1000))
+      : query(collection(db, 'syllabusTopics'), limit(1000));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const list = snapshot.docs.map(d => d.data() as SyllabusTopic);
+          onData(list);
+        } else {
+          const fallback = developmentFallback(MOCK_SYLLABUS_TOPICS, orgId);
+          onData(fallback);
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time syllabus coverage', error);
+        const fallback = developmentFallback(MOCK_SYLLABUS_TOPICS, orgId);
+        onData(fallback);
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_SYLLABUS_TOPICS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start syllabus listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -1463,6 +1505,44 @@ export async function deleteTimetableSlotFromFirestore(slotId: string): Promise<
     await deleteDoc(doc(db, 'timetableSlots', slotId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `timetableSlots/${slotId}`);
+  }
+}
+
+// ----------------------------------------------------
+// SYLLABUS COVERAGE (F7) — chapter checklist per batch
+// ----------------------------------------------------
+
+export async function persistSyllabusTopicToFirestore(topic: SyllabusTopic): Promise<void> {
+  try {
+    await setDoc(doc(db, 'syllabusTopics', topic.id), cleanFirestoreData(topic));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `syllabusTopics/${topic.id}`);
+  }
+}
+
+/**
+ * "Generate from template" writes a whole chapter list at once. Firestore's
+ * per-document rules still run for every write in the batch, so a teacher or
+ * admin authorising the create is checked exactly as with single writes.
+ */
+export async function persistSyllabusTopicsBatch(topics: SyllabusTopic[]): Promise<void> {
+  if (topics.length === 0) return;
+  try {
+    const batch = writeBatch(db);
+    for (const topic of topics) {
+      batch.set(doc(db, 'syllabusTopics', topic.id), cleanFirestoreData(topic));
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `syllabusTopics`);
+  }
+}
+
+export async function deleteSyllabusTopicFromFirestore(topicId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'syllabusTopics', topicId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `syllabusTopics/${topicId}`);
   }
 }
 

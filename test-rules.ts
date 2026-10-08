@@ -34,6 +34,12 @@
  *      draft/issued/paid, identity is pinned on update, and both collections
  *      are tenant-isolated.
  *
+ *   Syllabus coverage (F7):
+ *   8. `syllabusTopics` — every tenant member reads (students/parents render
+ *      progress from it), only instructors/admins write: students and the
+ *      front desk are denied, the status vocabulary is validated, the tenant
+ *      is pinned on update, and both reads and writes are tenant-isolated.
+ *
  * Run: npx firebase emulators:exec --only auth,firestore --project vidyut-2bcb6 "npx tsx test-rules.ts"
  */
 
@@ -1198,6 +1204,155 @@ async function main(): Promise<void> {
     check('the timetable is tenant-isolated on read', crossOrgReadDenied);
   } catch (err) {
     console.error(`\nSuite 9 failed at step: "${suite9Step}"`);
+    throw err;
+  }
+
+  // ---------------------------------------------------------------- syllabus (F7)
+  console.log('\nSuite 10: Syllabus coverage — instructors/admin seed and tick, everyone reads');
+  let suite10Step = 'setup';
+  try {
+    const topicDoc = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      batchId: 'batch-rules-1',
+      subject: 'Mathematics',
+      classGrade: 'Class 10',
+      board: 'CBSE',
+      chapter: 'Chapter 1',
+      title: 'Real Numbers',
+      sequence: 1,
+      status: 'not_started',
+      createdAt: new Date().toISOString(),
+      ...extra
+    });
+
+    // --- reads: every tenant member ------------------------------------------
+    suite10Step = 'admin seeds a syllabus';
+    const topicId = `syl-rules-${stamp}`;
+    const topicRef = doc(admin.db, 'syllabusTopics', topicId);
+    await setDoc(topicRef, topicDoc(topicId));
+    check('an admin may seed a syllabus', true);
+
+    suite10Step = 'teacher reads the syllabus';
+    const teacherRead = (await getDoc(doc(teacher.db, 'syllabusTopics', topicId))).exists();
+    check('faculty can read the syllabus', teacherRead);
+
+    suite10Step = 'student reads the syllabus';
+    const studentRead = (await getDoc(doc(student.db, 'syllabusTopics', topicId))).exists();
+    check('a student can read coverage for their progress bar', studentRead);
+
+    // --- writes: instructors/admins only -------------------------------------
+    suite10Step = 'teacher seeds a syllabus';
+    const teacherTopicId = `syl-teacher-${stamp}`;
+    await setDoc(doc(teacher.db, 'syllabusTopics', teacherTopicId), topicDoc(teacherTopicId));
+    check('faculty may seed a syllabus', true);
+
+    suite10Step = 'staff seeds a syllabus';
+    const staffCreateDenied = await expectDenied('front desk seeds a syllabus', () =>
+      setDoc(doc(staff.db, 'syllabusTopics', `syl-staff-${stamp}`), topicDoc(`syl-staff-${stamp}`))
+    );
+    check('the front desk cannot write the syllabus', staffCreateDenied);
+
+    suite10Step = 'student seeds a syllabus';
+    const studentCreateDenied = await expectDenied('student seeds a syllabus', () =>
+      setDoc(doc(student.db, 'syllabusTopics', `syl-student-${stamp}`), topicDoc(`syl-student-${stamp}`))
+    );
+    check('a student cannot write the syllabus', studentCreateDenied);
+
+    // --- create validation ----------------------------------------------------
+    suite10Step = 'unknown status';
+    const badStatusDenied = await expectDenied('chapter with an unknown status', () =>
+      setDoc(doc(admin.db, 'syllabusTopics', `syl-status-${stamp}`), topicDoc(`syl-status-${stamp}`, { status: 'maybe' }))
+    );
+    check('an unknown coverage status is rejected', badStatusDenied);
+
+    suite10Step = 'missing title';
+    const noTitle = topicDoc(`syl-notitle-${stamp}`);
+    delete (noTitle as Record<string, unknown>).title;
+    const noTitleDenied = await expectDenied('chapter with no title', () =>
+      setDoc(doc(admin.db, 'syllabusTopics', `syl-notitle-${stamp}`), noTitle)
+    );
+    check('a chapter must have a title', noTitleDenied);
+
+    suite10Step = 'missing batch';
+    const noBatch = topicDoc(`syl-nobatch-${stamp}`);
+    delete (noBatch as Record<string, unknown>).batchId;
+    const noBatchDenied = await expectDenied('chapter with no batch', () =>
+      setDoc(doc(admin.db, 'syllabusTopics', `syl-nobatch-${stamp}`), noBatch)
+    );
+    check('a chapter must name a batch', noBatchDenied);
+
+    suite10Step = 'missing sequence';
+    const noSeq = topicDoc(`syl-noseq-${stamp}`);
+    delete (noSeq as Record<string, unknown>).sequence;
+    const noSeqDenied = await expectDenied('chapter with no sequence', () =>
+      setDoc(doc(admin.db, 'syllabusTopics', `syl-noseq-${stamp}`), noSeq)
+    );
+    check('a chapter must carry a sequence number', noSeqDenied);
+
+    // --- updates: instructors/admins only, tenant pinned ----------------------
+    suite10Step = 'student ticks a chapter';
+    const studentUpdateDenied = await expectDenied('student ticks a chapter', () =>
+      updateDoc(doc(student.db, 'syllabusTopics', topicId), { status: 'completed' })
+    );
+    check('a student cannot tick coverage', studentUpdateDenied);
+
+    suite10Step = 'staff ticks a chapter';
+    const staffUpdateDenied = await expectDenied('front desk ticks a chapter', () =>
+      updateDoc(doc(staff.db, 'syllabusTopics', topicId), { status: 'completed' })
+    );
+    check('the front desk cannot tick coverage', staffUpdateDenied);
+
+    suite10Step = 'teacher ticks a chapter';
+    await updateDoc(doc(teacher.db, 'syllabusTopics', topicId), {
+      status: 'completed',
+      coveredByTeacherId: 'teach-rules-1'
+    });
+    check('faculty may tick a chapter', true);
+
+    suite10Step = 'teacher sets a bad status';
+    const badUpdateDenied = await expectDenied('teacher sets an unknown status', () =>
+      updateDoc(doc(teacher.db, 'syllabusTopics', topicId), { status: 'weird' })
+    );
+    check('an update cannot set an unknown status', badUpdateDenied);
+
+    suite10Step = 'teacher moves the chapter org';
+    const moveOrgDenied = await expectDenied('teacher moves a chapter to another centre', () =>
+      updateDoc(doc(teacher.db, 'syllabusTopics', topicId), { orgId: OTHER_ORG_ID })
+    );
+    check('the tenant of a chapter is pinned on update', moveOrgDenied);
+
+    // --- deletes: instructors/admins only -------------------------------------
+    suite10Step = 'student deletes a chapter';
+    const studentDeleteDenied = await expectDenied('student deletes a chapter', () =>
+      deleteDoc(doc(student.db, 'syllabusTopics', topicId))
+    );
+    check('a student cannot delete a chapter', studentDeleteDenied);
+
+    suite10Step = 'teacher deletes a chapter';
+    await deleteDoc(doc(teacher.db, 'syllabusTopics', topicId));
+    check('faculty may remove a chapter', true);
+
+    // --- tenant isolation -----------------------------------------------------
+    suite10Step = 'cross-org syllabus write';
+    const crossWriteDenied = await expectDenied('other-centre admin seeds a foreign syllabus', () =>
+      setDoc(doc(adminOther.db, 'syllabusTopics', `syl-foreign-${stamp}`), {
+        ...topicDoc(`syl-foreign-${stamp}`),
+        orgId: ORG_ID
+      })
+    );
+    check('the syllabus is tenant-isolated on write', crossWriteDenied);
+
+    suite10Step = 'cross-org syllabus read';
+    const foreignTopicId = `syl-foreign-read-${stamp}`;
+    await setDoc(doc(admin.db, 'syllabusTopics', foreignTopicId), topicDoc(foreignTopicId));
+    const crossReadDenied = await expectDenied('other-centre admin reads a foreign syllabus', () =>
+      getDoc(doc(adminOther.db, 'syllabusTopics', foreignTopicId))
+    );
+    check('the syllabus is tenant-isolated on read', crossReadDenied);
+  } catch (err) {
+    console.error(`\nSuite 10 failed at step: "${suite10Step}"`);
     throw err;
   }
 

@@ -18,7 +18,8 @@ import {
   LeaveRequest,
   TeacherAttendance,
   SalarySlip,
-  Expense
+  Expense,
+  SyllabusTopic
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
 
@@ -1504,3 +1505,59 @@ export const MOCK_EXPENSES: Expense[] = [
     notes: 'Two ceiling fans rewound.'
   })
 ];
+
+/**
+ * F7 — demo syllabus checklists so the coverage bars have something to show
+ * before an admin runs "Generate from template". Mixed statuses (2 done, 1 in
+ * progress, rest untouched) make the progress math visibly non-trivial.
+ */
+export const MOCK_SYLLABUS_TOPICS: SyllabusTopic[] = [
+  // batch-c10-math — CBSE Class 10 Mathematics (first 8 of 15 chapters seeded)
+  sylRow('syl-c10m-1', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 1, 'Real Numbers', 'completed', 'teach-anjali', '2026-09-08'),
+  sylRow('syl-c10m-2', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 2, 'Polynomials', 'completed', 'teach-anjali', '2026-09-15'),
+  sylRow('syl-c10m-3', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 3, 'Pair of Linear Equations in Two Variables', 'in_progress', 'teach-anjali', '2026-09-24'),
+  sylRow('syl-c10m-4', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 4, 'Quadratic Equations', 'not_started'),
+  sylRow('syl-c10m-5', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 5, 'Arithmetic Progressions', 'not_started'),
+  sylRow('syl-c10m-6', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 6, 'Triangles', 'not_started'),
+  sylRow('syl-c10m-7', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 7, 'Coordinate Geometry', 'not_started'),
+  sylRow('syl-c10m-8', 'batch-c10-math', 'Mathematics', 'Class 10', 'CBSE', 8, 'Introduction to Trigonometry', 'not_started'),
+
+  // batch-c12-phy — CBSE Class 12 Physics (first 6 of 14 chapters seeded)
+  sylRow('syl-c12p-1', 'batch-c12-phy', 'Physics', 'Class 12', 'CBSE', 1, 'Electric Charges and Fields', 'completed', 'teach-rohit', '2026-09-10'),
+  sylRow('syl-c12p-2', 'batch-c12-phy', 'Physics', 'Class 12', 'CBSE', 2, 'Electrostatic Potential and Capacitance', 'in_progress', 'teach-rohit', '2026-09-26'),
+  sylRow('syl-c12p-3', 'batch-c12-phy', 'Physics', 'Class 12', 'CBSE', 3, 'Current Electricity', 'not_started'),
+  sylRow('syl-c12p-4', 'batch-c12-phy', 'Physics', 'Class 12', 'CBSE', 4, 'Moving Charges and Magnetism', 'not_started'),
+  sylRow('syl-c12p-5', 'batch-c12-phy', 'Physics', 'Class 12', 'CBSE', 5, 'Magnetism and Matter', 'not_started'),
+  sylRow('syl-c12p-6', 'batch-c12-phy', 'Physics', 'Class 12', 'CBSE', 6, 'Electromagnetic Induction', 'not_started')
+];
+
+function sylRow(
+  id: string,
+  batchId: string,
+  subject: string,
+  classGrade: string,
+  board: SyllabusTopic['board'],
+  sequence: number,
+  title: string,
+  status: SyllabusTopic['status'],
+  coveredByTeacherId?: string,
+  coveredDate?: string
+): SyllabusTopic {
+  return {
+    id,
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    batchId,
+    subject,
+    classGrade,
+    board,
+    chapter: `Chapter ${sequence}`,
+    title,
+    sequence,
+    status,
+    coveredByTeacherId,
+    coveredAt: coveredDate ? `${coveredDate}T09:00:00.000Z` : undefined,
+    coveredDate,
+    createdAt: '2026-09-01T00:00:00.000Z'
+  };
+}

@@ -761,6 +761,44 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // SYLLABUS COVERAGE (F7) — chapter-by-chapter checklist per batch
+    // ------------------------------------------------------------------------
+    match /syllabusTopics/{topicId} {
+      // Every tenant member reads coverage — students & parents render their
+      // read-only progress bar from exactly these rows.
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId);
+
+      // Only instructors and centre admins seed or tick the syllabus. Students
+      // and the front desk (staff) may never write. A topic must be well-formed
+      // so a bad status can't skew the coverage percentage.
+      allow create: if isSignedIn() &&
+        isCenterInstructorOrAdmin(request.resource.data.orgId) &&
+        request.resource.data.status in ['not_started', 'in_progress', 'completed'] &&
+        request.resource.data.batchId is string &&
+        request.resource.data.subject is string &&
+        request.resource.data.classGrade is string &&
+        request.resource.data.chapter is string &&
+        request.resource.data.title is string &&
+        request.resource.data.sequence is number;
+
+      // Edits keep the topic inside its centre; the same well-formedness applies.
+      allow update: if isSignedIn() &&
+        isCenterInstructorOrAdmin(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId &&
+        request.resource.data.status in ['not_started', 'in_progress', 'completed'] &&
+        request.resource.data.batchId is string &&
+        request.resource.data.subject is string &&
+        request.resource.data.classGrade is string &&
+        request.resource.data.chapter is string &&
+        request.resource.data.title is string &&
+        request.resource.data.sequence is number;
+
+      allow delete: if isSignedIn() &&
+        isCenterInstructorOrAdmin(resource.data.orgId);
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 + F6 shipped ✅ · F7–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 shipped ✅ · F8–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -289,7 +289,7 @@ timetable + "Today" card renders the link with a **Join Class** button.
 
 ---
 
-## F7 — Syllabus / lesson-plan coverage tracker
+## F7 — Syllabus / lesson-plan coverage tracker — ✅ SHIPPED (2026-10-08)
 
 **Simple words:** Chapter-by-chapter checklist per batch: "Chapter 4 Quadratic Equations — done".
 Teachers tick coverage; students/parents see what's left.

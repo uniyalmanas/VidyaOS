@@ -70,6 +70,7 @@ import { LeavesModule } from './LeavesModule';
 import { StaffOpsModule } from '../staffops/StaffOpsModule';
 import { FinanceModule } from '../finance/FinanceModule';
 import { TimetableModule } from '../timetable/TimetableModule';
+import { SyllabusOverview } from '../syllabus/SyllabusOverview';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -83,6 +84,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   exams: { label: 'Diagnostic Tests & Marks', breadcrumb: 'Exams', subtitle: 'Schedule unit tests, record student marks, and track performance percentiles' },
   assignments: { label: 'Homework & Coursework', breadcrumb: 'Assignments', subtitle: 'Manage assigned coursework, submission deadlines, and student homework completion' },
   materials: { label: 'Study Material & Library', breadcrumb: 'Materials', subtitle: 'Curated NCERT solutions, formula sheets, lecture notes, and chapter summaries' },
+  syllabus: { label: 'Syllabus Coverage Tracker', breadcrumb: 'Syllabus', subtitle: 'Chapter-by-chapter lesson-plan coverage per batch — generate from a board template and watch it get ticked off' },
   teachers: { label: 'Faculty & Teachers Directory', breadcrumb: 'Teachers', subtitle: 'Instructor profiles, assigned subjects, contact details, and teaching schedules' },
   inquiries: { label: 'Admission Leads Pipeline', breadcrumb: 'Inquiries', subtitle: 'Walk-ins, calls & WhatsApp enquiries tracked from first hello to final admission' },
   leaves: { label: 'Leave Requests & Absences', breadcrumb: 'Leaves', subtitle: 'Absence asks from students & faculty — review, decide, and keep the centre register' },
@@ -152,7 +154,7 @@ export const AdminDashboard: React.FC = () => {
   // Staff see faculty salaries? No — pay stays owner/admin-only at the UI level
   // (the rules still permit staff writes per spec; this is product philosophy
   // matching the 'teachers' directory restriction).
-  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription'];
+  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus'];
 
   const currentModule = (!activeTab || activeTab === 'dashboard' || !MODULE_META[activeTab]) ? 'overview' : activeTab;
   const setCurrentModule = (tab: string) => {
@@ -2300,6 +2302,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 8. TIMETABLE (F6) — weekly schedule + live class links */}
       {currentModule === 'timetable' && <TimetableModule />}
+
+      {/* 8b. SYLLABUS COVERAGE (F7) */}
+      {currentModule === 'syllabus' && <SyllabusOverview />}
 
       {/* 9. ANNOUNCEMENTS */}
       {currentModule === 'announcements' && (

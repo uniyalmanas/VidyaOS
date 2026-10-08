@@ -24,7 +24,8 @@ import {
   UserCheck,
   MessageSquare,
   CalendarDays,
-  Video
+  Video,
+  ListChecks
 } from 'lucide-react';
 import {
   PageHeader,
@@ -38,6 +39,7 @@ import {
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
+import { SyllabusProgress } from '../syllabus/SyllabusProgress';
 import { motion } from 'motion/react';
 import { easings } from '../../lib/motion';
 
@@ -68,13 +70,14 @@ export const ParentPortal: React.FC = () => {
     mobileViewActive
   } = useApp();
 
-  const [activeParentTab, setActiveParentTab] = useState<'overview' | 'attendance' | 'fees' | 'results' | 'schedule' | 'materials' | 'discussions' | 'leave'>(() => {
+  const [activeParentTab, setActiveParentTab] = useState<'overview' | 'attendance' | 'fees' | 'results' | 'schedule' | 'materials' | 'syllabus' | 'discussions' | 'leave'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('/attendance')) return 'attendance';
       if (path.includes('/fees')) return 'fees';
       if (path.includes('/results')) return 'results';
       if (path.includes('/schedule')) return 'schedule';
+      if (path.includes('/syllabus')) return 'syllabus';
       if (path.includes('/materials')) return 'materials';
       if (path.includes('/discussions') || path.includes('/messages')) return 'discussions';
       if (path.includes('/leave')) return 'leave';
@@ -89,6 +92,7 @@ export const ParentPortal: React.FC = () => {
     else if (path.includes('/fees') && activeParentTab !== 'fees') setActiveParentTab('fees');
     else if (path.includes('/results') && activeParentTab !== 'results') setActiveParentTab('results');
     else if (path.includes('/schedule') && activeParentTab !== 'schedule') setActiveParentTab('schedule');
+    else if (path.includes('/syllabus') && activeParentTab !== 'syllabus') setActiveParentTab('syllabus');
     else if (path.includes('/materials') && activeParentTab !== 'materials') setActiveParentTab('materials');
     else if ((path.includes('/discussions') || path.includes('/messages')) && activeParentTab !== 'discussions') setActiveParentTab('discussions');
     else if (path.includes('/leave') && activeParentTab !== 'leave') setActiveParentTab('leave');
@@ -266,6 +270,7 @@ export const ParentPortal: React.FC = () => {
           { id: 'results', label: 'Report Cards & Exams', icon: Award },
           { id: 'schedule', label: 'Timetable', icon: Clock },
           { id: 'materials', label: 'Homework & Notes', icon: BookOpen },
+          { id: 'syllabus', label: 'Syllabus', icon: ListChecks },
           { id: 'leave', label: 'Apply Leave', icon: CalendarDays },
           { id: 'discussions', label: 'VidyaChat', icon: MessageSquare },
         ].map(tab => {
@@ -698,6 +703,14 @@ export const ParentPortal: React.FC = () => {
               ))}
           </div>
         </ConsoleCard>
+      )}
+
+      {/* TAB 5b: SYLLABUS PROGRESS (F7) — read-only */}
+      {activeParentTab === 'syllabus' && (
+        <SyllabusProgress
+          batchIds={childBatches.map(b => b.id)}
+          title={`${selectedChild.name.split(' ')[0]}'s syllabus progress`}
+        />
       )}
 
       {/* TAB 6: MATERIALS & HOMEWORK */}

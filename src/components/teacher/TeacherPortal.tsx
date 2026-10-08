@@ -22,7 +22,8 @@ import {
   UserPlus,
   Loader2,
   Trash2,
-  CalendarCheck
+  CalendarCheck,
+  ListChecks
 } from 'lucide-react';
 import { AttendanceStatus } from '../../types';
 import {
@@ -38,6 +39,7 @@ import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
 import { TeacherLeaveBoard } from '../leaves/TeacherLeaveBoard';
 import { MyDayPanel } from '../staffops/MyDayPanel';
+import { SyllabusTracker } from '../syllabus/SyllabusTracker';
 import { motion, AnimatePresence } from 'motion/react';
 import { easings } from '../../lib/motion';
 import { selectTeacherBatches, filterToBatches } from '../../lib/teacherScope';
@@ -65,11 +67,12 @@ export const TeacherPortal: React.FC = () => {
     mobileViewActive
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'marks' | 'assignments' | 'discussions' | 'myday'>(() => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'attendance' | 'marks' | 'assignments' | 'discussions' | 'myday' | 'syllabus'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('/marks')) return 'marks';
       if (path.includes('/assignments')) return 'assignments';
+      if (path.includes('/syllabus')) return 'syllabus';
       if (path.includes('/discussions') || path.includes('/messages')) return 'discussions';
       if (path.includes('/myday')) return 'myday';
       if (path.includes('/attendance')) return 'attendance';
@@ -84,6 +87,8 @@ export const TeacherPortal: React.FC = () => {
       setActiveTab('marks');
     } else if (path.includes('/assignments') && activeTab !== 'assignments') {
       setActiveTab('assignments');
+    } else if (path.includes('/syllabus') && activeTab !== 'syllabus') {
+      setActiveTab('syllabus');
     } else if ((path.includes('/discussions') || path.includes('/messages')) && activeTab !== 'discussions') {
       setActiveTab('discussions');
     } else if (path.includes('/myday') && activeTab !== 'myday') {
@@ -349,6 +354,8 @@ export const TeacherPortal: React.FC = () => {
                       ? 'TEST MARKS'
                       : activeTab === 'assignments'
                       ? 'HOMEWORK & NOTES'
+                      : activeTab === 'syllabus'
+                      ? 'SYLLABUS'
                       : activeTab === 'myday'
                       ? 'MY DAY & SALARY'
                       : 'VIDYACHAT'
@@ -408,6 +415,7 @@ export const TeacherPortal: React.FC = () => {
           { id: 'attendance', label: '1-Tap Attendance', icon: Calendar },
           { id: 'marks', label: 'Enter Test Marks', icon: Award },
           { id: 'assignments', label: 'Homework & Notes', icon: BookOpen },
+          { id: 'syllabus', label: 'Syllabus Tracker', icon: ListChecks },
           { id: 'discussions', label: 'VidyaChat', icon: MessageSquare }
         ].map(tab => {
           const Icon = tab.icon;
@@ -444,6 +452,10 @@ export const TeacherPortal: React.FC = () => {
         transition={{ duration: 0.26, ease: easings.outQuart }}
         className="space-y-6"
       >
+      {activeTab === 'syllabus' && (
+        <SyllabusTracker batches={hasBatches ? myBatches : []} teacherId={myTeacherRecord?.id} />
+      )}
+
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Quick Metrics */}

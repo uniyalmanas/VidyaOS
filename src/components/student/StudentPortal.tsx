@@ -12,11 +12,13 @@ import {
   Check,
   UserCheck,
   MessageSquare,
-  Video
+  Video,
+  ListChecks
 } from 'lucide-react';
 import { Student, User } from '../../types';
 import { MOCK_STUDENTS } from '../../data/mockData';
 import { normalizeMeetUrl, joinState } from '../../lib/timetable';
+import { SyllabusProgress } from '../syllabus/SyllabusProgress';
 import { getIndiaDayName } from '../../lib/date';
 import {
   PageHeader,
@@ -45,12 +47,13 @@ export const StudentPortal: React.FC = () => {
     announcements
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'schedule' | 'assignments' | 'results' | 'materials' | 'discussions' | 'leave'>(() => {
+  const [activeTab, setActiveTab] = useState<'schedule' | 'assignments' | 'results' | 'materials' | 'discussions' | 'leave' | 'syllabus'>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       if (path.includes('/assignments')) return 'assignments';
       if (path.includes('/results')) return 'results';
       if (path.includes('/materials')) return 'materials';
+      if (path.includes('/syllabus')) return 'syllabus';
       if (path.includes('/discussions') || path.includes('/messages')) return 'discussions';
       if (path.includes('/leave')) return 'leave';
     }
@@ -63,6 +66,7 @@ export const StudentPortal: React.FC = () => {
     if (path.includes('/assignments') && activeTab !== 'assignments') setActiveTab('assignments');
     else if (path.includes('/results') && activeTab !== 'results') setActiveTab('results');
     else if (path.includes('/materials') && activeTab !== 'materials') setActiveTab('materials');
+    else if (path.includes('/syllabus') && activeTab !== 'syllabus') setActiveTab('syllabus');
     else if ((path.includes('/discussions') || path.includes('/messages')) && activeTab !== 'discussions') setActiveTab('discussions');
     else if (path.includes('/leave') && activeTab !== 'leave') setActiveTab('leave');
     else if ((path === '/student' || path === '/student/' || path.includes('/schedule')) && activeTab !== 'schedule') {
@@ -212,6 +216,7 @@ export const StudentPortal: React.FC = () => {
           { id: 'assignments', label: 'Homework & Tasks', icon: BookOpen },
           { id: 'results', label: 'Exam Results', icon: Award },
           { id: 'materials', label: 'Study Vault', icon: FileText },
+          { id: 'syllabus', label: 'Syllabus', icon: ListChecks },
           { id: 'leave', label: 'Apply Leave', icon: Calendar },
           { id: 'discussions', label: 'VidyaChat', icon: MessageSquare }
         ].map(tab => {
@@ -421,6 +426,10 @@ export const StudentPortal: React.FC = () => {
       )}
 
       {/* TAB 6: APPLY LEAVE */}
+      {activeTab === 'syllabus' && (
+        <SyllabusProgress batchIds={enrolledBatches.map(b => b.id)} title="My Syllabus Progress" />
+      )}
+
       {activeTab === 'leave' && (
         <LeavePortalPanel requesterType="student" studentId={student.id} />
       )}

@@ -58,7 +58,7 @@ import {
   slipsForMonth,
   formatTimeHHMM
 } from './src/lib/staffOps';
-import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, TimetableSlot } from './src/types';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, TimetableSlot, SyllabusTopic, SyllabusStatus } from './src/types';
 import {
   monthKeyFromSalaryLabel,
   incomeForMonth,
@@ -89,6 +89,23 @@ import {
   isClashFree,
   validateTimetableSlot
 } from './src/lib/timetable';
+import {
+  SYLLABUS_TEMPLATES,
+  SYLLABUS_STATUSES,
+  findSyllabusTemplate,
+  syllabusTemplatesFor,
+  templateOptions,
+  buildTopicsFromTemplate,
+  countByStatus as countSyllabusByStatus,
+  coveragePct,
+  weightedCoveragePct,
+  sortTopicsBySequence,
+  topicsForBatch,
+  nextTopicForBatch,
+  batchCoverage,
+  advanceStatus,
+  validateSyllabusTopic
+} from './src/lib/syllabus';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -1239,6 +1256,120 @@ assert(validateTimetableSlot({ ...validSlotInput, startTime: '17:00', endTime: '
 assert(validateTimetableSlot({ ...validSlotInput, meetUrl: 'javascript:alert(1)' }) !== null, 'An unsafe class link is rejected');
 assert(validateTimetableSlot({ ...validSlotInput, meetUrl: 'meet.google.com/abc' }) === null, 'A valid (bare) class link is accepted');
 assert(validateTimetableSlot({ ...validSlotInput, meetUrl: '' }) === null, 'An empty class link is fine — the class is in-person');
+
+// ============================================================================
+// F7 — syllabus coverage: template generation, % coverage math, status transitions
+// ============================================================================
+
+// Template library ------------------------------------------------------------------
+assert(SYLLABUS_TEMPLATES.length >= 4, 'At least four board templates ship with VidyaOS');
+assert(SYLLABUS_TEMPLATES.every(t => t.chapters.length > 0), 'Every template carries a real chapter list');
+assert(SYLLABUS_TEMPLATES.every(t => t.chapters.every(c => c.trim().length > 0)), 'No template has a blank chapter');
+
+const t10Math = findSyllabusTemplate('CBSE', 'Class 10', 'Mathematics');
+assert(!!t10Math, 'A CBSE Class 10 Mathematics template exists');
+assert(t10Math!.chapters.includes('Quadratic Equations'), 'The Class 10 maths list includes Quadratic Equations');
+assert(findSyllabusTemplate('CBSE', 'CLASS 10', 'MATHEMATICS') === t10Math, 'Board/class/subject matching is case-insensitive');
+
+const sciFuzzy = findSyllabusTemplate('CBSE', 'Class 10', 'Science (Physics & Chemistry)');
+assert(!!sciFuzzy, 'A batch subject that wraps the template subject still matches');
+
+assert(findSyllabusTemplate('CBSE', 'Class 7', 'Mathematics') === undefined, 'A class with no template returns undefined');
+assert(findSyllabusTemplate('CBSE', 'Class 10', 'Basket Weaving') === undefined, 'An unknown subject returns undefined');
+
+assert(syllabusTemplatesFor('CBSE').length >= 5, 'Filtering by board returns several templates');
+assert(syllabusTemplatesFor('CBSE', 'Class 12').length >= 2, 'Filtering by board + class narrows correctly');
+
+const opts = templateOptions();
+assert(opts.boards.includes('CBSE'), 'The picker exposes the CBSE board');
+assert(opts.classes.includes('Class 10'), 'The picker exposes Class 10');
+assert(opts.subjects.includes('Physics'), 'The picker exposes Physics');
+
+// buildTopicsFromTemplate ---------------------------------------------------------
+const seedTopics = buildTopicsFromTemplate(t10Math!, {
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  batchId: 'batch-c10-math',
+  idPrefix: 'syl-test',
+  createdAt: '2026-10-08T00:00:00.000Z'
+});
+
+assert(seedTopics.length === t10Math!.chapters.length, 'One row is created per chapter');
+assert(seedTopics.every(t => t.status === 'not_started'), 'Seeded chapters all start not_started');
+assert(seedTopics[0].sequence === 1 && seedTopics[seedTopics.length - 1].sequence === seedTopics.length, 'Sequences run 1..n in teaching order');
+assert(seedTopics[3].id === 'syl-test-4', 'Row ids are deterministic and prefixed');
+assert(seedTopics[0].orgId === 'org-apex' && seedTopics[0].batchId === 'batch-c10-math', 'Tenant and batch are stamped on each row');
+assert(seedTopics[0].board === 'CBSE' && seedTopics[0].classGrade === 'Class 10', 'Board and class come from the template by default');
+assert(seedTopics.every(t => t.chapter === `Chapter ${t.sequence}`), 'Chapter labels track the sequence');
+
+const overrideMeta = buildTopicsFromTemplate(t10Math!, {
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  batchId: 'batch-jee-math',
+  subject: 'JEE Foundation Math',
+  classGrade: 'Class 12',
+  board: 'JEE Foundation',
+  idPrefix: 'syl-jee'
+});
+assert(overrideMeta[0].subject === 'JEE Foundation Math' && overrideMeta[0].board === 'JEE Foundation', 'Explicit meta overrides template subject/board');
+assert(overrideMeta[0].batchId === 'batch-jee-math', 'Explicit meta overrides the target batch');
+
+// Coverage math --------------------------------------------------------------------
+const statusFor = (i: number): SyllabusStatus => (i < 2 ? 'completed' : i < 4 ? 'in_progress' : 'not_started');
+const mixed: SyllabusTopic[] = seedTopics.map((t, i) => ({ ...t, status: statusFor(i) }));
+
+const counts = countSyllabusByStatus(mixed);
+assert(counts.completed === 2 && counts.in_progress === 2 && counts.not_started === seedTopics.length - 4, 'countByStatus tallies each bucket');
+
+assert(coveragePct([]) === 0, 'An empty syllabus is 0% covered');
+assert(coveragePct(mixed) === Math.round((2 / seedTopics.length) * 100), 'coveragePct is completed/total rounded');
+assert(coveragePct(mixed) === Math.round((2 / 15) * 100), 'Class 10 maths: 2 of 15 chapters = 13%');
+assert(coveragePct(seedTopics.map(t => ({ ...t, status: 'completed' }))) === 100, 'All completed = 100%');
+
+const weighted = weightedCoveragePct(mixed);
+assert(weighted === Math.round(((2 + 2 * 0.5) / 15) * 100), 'weightedCoveragePct counts in-progress as half');
+assert(weighted > coveragePct(mixed), 'Weighted progress is above the pure completed percentage');
+assert(weightedCoveragePct([]) === 0, 'Weighted coverage of an empty list is 0');
+
+// Ordering / selectors -------------------------------------------------------------
+const shuffled = [...mixed].reverse();
+const ordered = sortTopicsBySequence(shuffled);
+assert(ordered[0].sequence === 1 && ordered[1].sequence === 2, 'sortTopicsBySequence restores teaching order');
+assert(ordered[ordered.length - 1].sequence === seedTopics.length, 'The last chapter sorts last');
+
+assert(topicsForBatch(mixed, 'batch-c10-math').length === mixed.length, 'topicsForBatch keeps matching rows');
+assert(topicsForBatch(mixed, 'batch-nope').length === 0, 'topicsForBatch drops other batches');
+
+const withGap: SyllabusTopic[] = [
+  { ...seedTopics[0], status: 'completed' },
+  { ...seedTopics[1], status: 'not_started' },
+  { ...seedTopics[2], status: 'in_progress' },
+  { ...seedTopics[3], status: 'completed' }
+];
+assert(nextTopicForBatch(withGap, 'batch-c10-math')!.sequence === 2, 'nextTopicForBatch picks the first not-started chapter');
+const allDone: SyllabusTopic[] = mixed.map(t => ({ ...t, status: 'completed' }));
+assert(nextTopicForBatch(allDone, 'batch-c10-math') === undefined, 'A finished syllabus has no next topic');
+
+// batchCoverage --------------------------------------------------------------------
+const cov = batchCoverage(mixed, [{ id: 'batch-c10-math' }, { id: 'batch-c10-sci' }]);
+assert(cov.length === 2, 'batchCoverage returns a row for every batch');
+assert(cov[0].total === mixed.length && cov[0].completed === 2, 'The row counts that batch only');
+assert(cov[1].total === 0 && cov[1].pct === 0, 'A batch with no syllabus reports 0');
+
+// Status transitions -----------------------------------------------------------------
+assert(advanceStatus('not_started') === 'in_progress', 'One tap moves a chapter into progress');
+assert(advanceStatus('in_progress') === 'completed', 'A second tap completes it');
+assert(advanceStatus('completed') === 'not_started', 'A third tap resets it');
+assert(SYLLABUS_STATUSES.length === 3, 'Exactly three coverage statuses exist');
+
+// Validation -------------------------------------------------------------------------
+assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: 'Real Numbers', status: 'not_started', sequence: 1 }) === null, 'A complete topic passes validation');
+assert(validateSyllabusTopic({ batchId: '', chapter: 'Chapter 1', title: 'Real Numbers', status: 'not_started' }) !== null, 'A missing batch is rejected');
+assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: '  ', title: 'Real Numbers', status: 'not_started' }) !== null, 'A blank chapter is rejected');
+assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: '   ', status: 'not_started' }) !== null, 'A blank title is rejected');
+assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: 'X', status: 'weird' as SyllabusStatus }) !== null, 'An unknown status is rejected');
+assert(validateSyllabusTopic({ batchId: 'batch-1', chapter: 'Chapter 1', title: 'X', status: 'not_started', sequence: -3 }) !== null, 'A negative sequence is rejected');
+
 
 console.log('\n----------------------------------------');
 console.log(`Results: ${passed} passed, ${failed} failed.`);

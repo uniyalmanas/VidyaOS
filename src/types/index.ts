@@ -293,6 +293,34 @@ export interface TimetableSlot {
   meetPassword?: string;
 }
 
+/**
+ * F7 — syllabus / lesson-plan coverage. One row per chapter of a batch's
+ * syllabus; teachers tick coverage, admins seed them from a board template.
+ */
+export type SyllabusStatus = 'not_started' | 'in_progress' | 'completed';
+
+export interface SyllabusTopic {
+  id: string;
+  orgId: string;
+  branchId: string;
+  batchId: string;
+  subject: string;
+  classGrade: string;
+  board: IndianBoard;
+  chapter: string;
+  title: string;
+  sequence: number;
+  status: SyllabusStatus;
+  /** Teacher record id (not the user uid) that last marked it covered. */
+  coveredByTeacherId?: string;
+  /** ISO timestamp of the last status change. */
+  coveredAt?: string;
+  /** YYYY-MM-DD (India) of the last status change. */
+  coveredDate?: string;
+  note?: string;
+  createdAt: string;
+}
+
 export interface Announcement {
   id: string;
   orgId: string;
