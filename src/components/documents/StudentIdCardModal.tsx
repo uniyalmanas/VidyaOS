@@ -1,7 +1,7 @@
 import React from 'react';
 import { Printer, X, IdCard } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ConsoleButton } from '../ui';
+import { ConsoleButton, VidyaWatermark } from '../ui';
 import { Student } from '../../types';
 import { barcodeBars } from '../../lib/issuedDocuments';
 import { DocumentPrintStyles } from './DocumentPrintStyles';
@@ -72,8 +72,10 @@ export const StudentIdCardModal: React.FC<StudentIdCardModalProps> = ({ student,
           {/* --- printable card --- */}
           <div
             className="doc-print-area rounded-2xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.18)]"
-            style={{ width: '420px', maxWidth: '100%', background: '#ffffff', color: '#111111', fontFamily: 'inherit' }}
+            style={{ position: 'relative', width: '420px', maxWidth: '100%', background: '#ffffff', color: '#111111', fontFamily: 'inherit' }}
           >
+            <VidyaWatermark size={72} opacity={0.06} />
+            <div className="relative z-10">
             <div
               className="px-5 py-3 flex items-center justify-between"
               style={{ background: 'linear-gradient(135deg,#101828,#1A73E8)' }}
@@ -129,6 +131,7 @@ export const StudentIdCardModal: React.FC<StudentIdCardModalProps> = ({ student,
 
             <div className="px-5 py-1.5 text-[8px] text-center" style={{ background: '#F5F6F8', color: '#5F6368' }}>
               This card is the property of {currentOrg.name || 'the institute'} and must be produced on demand.
+            </div>
             </div>
           </div>
           {/* --- /printable card --- */}

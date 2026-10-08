@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Printer, Download, Share2, X, CheckCircle } from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { easings, tSpring, tDefault, fadeUp } from '../../lib/motion';
+import { VidyaWatermark, VidyaMonogram } from '../ui';
 
 /** Modal shell: spring pop-in that cascades header → receipt → actions. */
 const receiptPanelVariants: Variants = {
@@ -114,18 +115,23 @@ export const ReceiptModal: React.FC = () => {
             </motion.div>
 
             {/* Printable Area */}
-            <motion.div variants={paperSettleVariants} className="p-8 printable-area bg-white text-slate-900">
+            <motion.div variants={paperSettleVariants} className="relative overflow-hidden p-8 printable-area bg-white text-slate-900">
+          <VidyaWatermark size={58} opacity={0.06} />
+          <div className="relative z-10">
           {/* Institute Header */}
           <div className="border-b-2 border-slate-900 pb-5 mb-6 flex justify-between items-start">
-            <div>
-              <div className="text-2xl font-black tracking-tight text-slate-900 uppercase">
-                {currentOrg.name}
-              </div>
-              <p className="text-xs text-slate-600 font-medium">{currentOrg.tagline}</p>
-              <p className="text-xs text-slate-500 mt-1">{currentOrg.address}, {currentOrg.city}, {currentOrg.state}</p>
-              <div className="flex items-center gap-4 text-[11px] text-slate-500 mt-1">
-                <span>Phone: {currentOrg.phone}</span>
-                {currentOrg.gstin && <span>GSTIN: <strong className="font-mono">{currentOrg.gstin}</strong></span>}
+            <div className="flex items-start gap-3">
+              <VidyaMonogram size={46} />
+              <div>
+                <div className="text-2xl font-black tracking-tight text-slate-900 uppercase">
+                  {currentOrg.name}
+                </div>
+                <p className="text-xs text-slate-600 font-medium">{currentOrg.tagline}</p>
+                <p className="text-xs text-slate-500 mt-1">{currentOrg.address}, {currentOrg.city}, {currentOrg.state}</p>
+                <div className="flex items-center gap-4 text-[11px] text-slate-500 mt-1">
+                  <span>Phone: {currentOrg.phone}</span>
+                  {currentOrg.gstin && <span>GSTIN: <strong className="font-mono">{currentOrg.gstin}</strong></span>}
+                </div>
               </div>
             </div>
             <div className="text-right">
@@ -216,6 +222,7 @@ export const ReceiptModal: React.FC = () => {
               <div className="text-[11px] font-bold text-slate-700 mt-1 uppercase">Authorized Signatory / Seal</div>
               <div className="text-[10px] text-slate-400">{currentOrg.name}</div>
             </div>
+          </div>
           </div>
           </motion.div>
 
