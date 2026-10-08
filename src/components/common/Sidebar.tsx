@@ -164,6 +164,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
         { id: 'students', label: 'Students', icon: Users, badge: students.length },
         { id: 'batches', label: 'Batches', icon: BookOpen, badge: batches.length },
+        { id: 'rollover', label: 'New Academic Year', icon: CalendarDays },
         { id: 'attendance', label: 'Attendance', icon: CalendarCheck },
         {
           id: 'fees',
@@ -223,7 +224,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Role-based navigation filtering: Front Desk Staff cannot access faculty salaries/mgmt, center P&L analytics, reports, audit, settings, or SaaS billing
   // ('staffops' joins 'teachers' — salary slips stay owner/admin-only in the UI; the Firestore rules still allow staff writes per spec.)
-  const STAFF_RESTRICTED_TABS = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus'];
+  const STAFF_RESTRICTED_TABS = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus', 'rollover'];
   const isStaff = currentUser?.role === 'STAFF';
 
   const visibleNavGroups = navGroups.map(group => ({

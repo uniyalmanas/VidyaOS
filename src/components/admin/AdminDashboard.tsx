@@ -96,6 +96,7 @@ import { FinanceModule } from '../finance/FinanceModule';
 import { TimetableModule } from '../timetable/TimetableModule';
 import { SyllabusOverview } from '../syllabus/SyllabusOverview';
 import { PtmAdminPanel } from '../ptm/PtmAdminPanel';
+import { RolloverModule } from './RolloverModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -103,6 +104,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   overview: { label: 'Coaching & Education Center Overview', breadcrumb: 'Overview', subtitle: "Daily operations, today's schedule, fee collections, and key center performance metrics" },
   students: { label: 'Student Directory & Profiles', breadcrumb: 'Students', subtitle: 'Manage student admissions, batch allocations, academic profiles & parent contacts' },
   batches: { label: 'Coaching Batches & Classrooms', breadcrumb: 'Batches', subtitle: 'Configure course schedules, faculty assignments, classroom capacity, and fees' },
+  rollover: { label: 'New Academic Year (Rollover)', breadcrumb: 'New Academic Year', subtitle: 'Carry active batches and students into next year in one wizard — fresh batches, completed old ones, and first-month invoices' },
   attendance: { label: 'Daily Attendance Register', breadcrumb: 'Attendance', subtitle: 'Mark student presence, record late arrivals, and dispatch instant WhatsApp alerts to parents' },
   fees: { label: 'Fee Ledger & Payment Collection', breadcrumb: 'Fees', subtitle: 'Track monthly coaching invoices, record UPI/cash receipts, and send automated fee reminders' },
   timetable: { label: 'Master Institute Timetable', breadcrumb: 'Timetable', subtitle: 'Conflict-free schedule grid across all lecture halls and faculty timings' },
@@ -181,7 +183,7 @@ export const AdminDashboard: React.FC = () => {
   // Staff see faculty salaries? No — pay stays owner/admin-only at the UI level
   // (the rules still permit staff writes per spec; this is product philosophy
   // matching the 'teachers' directory restriction).
-  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus'];
+  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus', 'rollover'];
 
   const currentModule = (!activeTab || activeTab === 'dashboard' || !MODULE_META[activeTab]) ? 'overview' : activeTab;
   const setCurrentModule = (tab: string) => {
@@ -2604,6 +2606,9 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 8c. PTM SCHEDULER (F8) — parent–teacher meetings */}
       {currentModule === 'ptm' && <PtmAdminPanel />}
+
+      {/* 8d. SESSION ROLLOVER (F12) — new academic year wizard */}
+      {currentModule === 'rollover' && <RolloverModule />}
 
       {/* 9. ANNOUNCEMENTS */}
       {currentModule === 'announcements' && (
