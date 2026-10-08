@@ -1,13 +1,35 @@
 # VidyaOS Brand Illustration Kit
 
-_status: shipped — all assets are hand-authored inline SVG. No Cloud Storage, no binaries, no
-network requests, theme-aware, crisp at any DPI._
+_status: shipped — all brand artwork is hand-authored SVG. No Cloud Storage and no network
+requests, theme-aware, crisp at any DPI. The only binaries are the PWA icon rasters, which are
+generated from the SVG sources on demand (see "PWA / app icons")._
 
 The app's identity mark is **"The Vidya Radiant Prism"** — the sacred Diya/Jyoti flame fused with
 geometric crystalline OS layers. This kit extends that mark into supporting illustrations so the
 product reads as one coherent brand instead of text + generic icons.
 
-## Palette
+## PWA / app icons
+
+The installable-app mark is the Vidya Radiant Prism on a filled indigo → violet tile. It is
+authored as two SVG sources in `public/` and rasterized to PNG/ICO by a script — so the design is
+still SVG-first and reproducible, with no design files or uploads involved.
+
+| Source | Purpose | Design |
+|---|---|---|
+| `public/favicon.svg` | browser tab + manifest `any` | rounded brand tile (radius 116/512) with the prism centred |
+| `public/maskable-icon.svg` | Android adaptive / manifest `maskable` | full-bleed tile, prism kept inside the 80% safe circle |
+
+Regenerate the rasters after editing either SVG:
+
+```bash
+npm run icons   # node scripts/generate-icons.mjs
+```
+
+`scripts/generate-icons.mjs` uses `@resvg/resvg-js` (a prebuilt Rust rasterizer, devDependency) and
+writes: `favicon-16x16.png`, `favicon-32x32.png`, `favicon-192x192.png`, `favicon-512x512.png`,
+`favicon.png`, `apple-touch-icon.png` (180), `maskable-192.png`, `maskable-512.png`, and a
+PNG-in-ICO `favicon.ico` (16/32/48). `public/manifest.json` lists the `any` and `maskable` variants
+separately, and `public/sw.js` precaches them (currently `vidyaos-cache-v3`).
 
 | Token | Value | Use |
 |---|---|---|

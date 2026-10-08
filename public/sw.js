@@ -1,15 +1,20 @@
 // VidyaOS Progressive Web App Service Worker
-// Version: 2.5.0
-const CACHE_NAME = 'vidyaos-cache-v2';
+// Version: 2.6.0
+const CACHE_NAME = 'vidyaos-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/favicon.ico',
   '/favicon.svg',
+  '/favicon-16x16.png',
+  '/favicon-32x32.png',
   '/favicon-192x192.png',
   '/favicon-512x512.png',
-  '/favicon-32x32.png'
+  '/apple-touch-icon.png',
+  '/maskable-icon.svg',
+  '/maskable-192.png',
+  '/maskable-512.png'
 ];
 
 // Install: Cache critical core shell assets
