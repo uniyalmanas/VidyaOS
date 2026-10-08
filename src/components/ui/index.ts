@@ -6,5 +6,6 @@ export * from './PageHeader';
 export * from './ConsoleInput';
 export * from './DataTable';
 export * from './VidyaLogo';
+export * from './VidyaIllustrations';
 export * from './Reveal';
 export * from './CountUp';

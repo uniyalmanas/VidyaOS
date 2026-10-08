@@ -15,10 +15,40 @@ export interface VidyaLogoProps {
  * Concept: "The Vidya Radiant Prism"
  * Fuses the sacred Diya/Jyoti flame of wisdom with geometric crystalline OS layers.
  */
-export const VidyaIcon: React.FC<{ size?: number; className?: string }> = ({
+export const VidyaIcon: React.FC<{ size?: number; className?: string; mono?: boolean }> = ({
   size = 32,
-  className = ''
+  className = '',
+  mono = false
 }) => {
+  if (mono) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={`flex-shrink-0 ${className}`}
+        aria-hidden="true"
+      >
+        <path
+          d="M8 36.5C13.5 35 19 36 24 38.5C29 36 34.5 35 40 36.5C38 41 31.5 43.5 24 43.5C16.5 43.5 10 41 8 36.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M24 6.5C24 6.5 13 17 11 26C9.5 32.5 15.5 36.5 24 38.5C20.5 33 21 24 24 16.5V6.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M24 6.5V16.5C27 24 27.5 33 24 38.5C32.5 36.5 38.5 32.5 37 26C35 17 24 6.5 24 6.5Z"
+          fill="currentColor"
+          fillOpacity="0.7"
+        />
+        <path d="M24 18L27.5 24.5L24 31L20.5 24.5L24 18Z" fill="currentColor" fillOpacity="0.85" />
+      </svg>
+    );
+  }
+
   return (
     <svg
       width={size}
@@ -167,5 +197,41 @@ export const VidyaLogo: React.FC<VidyaLogoProps> = ({
         </div>
       )}
     </div>
+  );
+};
+
+/**
+ * VidyaMonogram — the app-icon lockup: the radiant prism in white sitting on
+ * the indigo→violet brand gradient. Used as the PWA-style mark, avatar tile and
+ * document letterhead seal.
+ */
+export const VidyaMonogram: React.FC<{ size?: number; className?: string; rounded?: number }> = ({
+  size = 40,
+  className = '',
+  rounded
+}) => {
+  const radius = rounded ?? Math.round(size * 0.28);
+  const glyph = Math.round(size * 0.6);
+
+  return (
+    <span
+      className={`relative inline-flex items-center justify-center flex-shrink-0 overflow-hidden ${className}`}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 50%, #7C3AED 100%)',
+        boxShadow: '0 4px 16px -4px rgba(79, 70, 229, 0.55)'
+      }}
+      aria-hidden="true"
+    >
+      <span
+        className="absolute -right-1/4 -top-1/4 h-2/3 w-2/3 rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.35), transparent 70%)' }}
+      />
+      <span className="relative" style={{ width: glyph, height: glyph, color: '#FFFFFF' }}>
+        <VidyaIcon size={glyph} mono className="w-full h-full" />
+      </span>
+    </span>
   );
 };
