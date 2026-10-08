@@ -804,6 +804,69 @@ export const MOCK_INVOICES: FeeInvoice[] = [
         receiptNo: 'REC-087-CASH'
       }
     ]
+  },
+  {
+    // F11 — a term fee split into a dated instalment plan. The first instalment
+    // is settled; the next two are still pending, so the ledger shows the
+    // 1/3 instalments-paid caption and the timeline's next-due collect button.
+    id: 'inv-term-aarav',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    studentId: 'stud-aarav-10',
+    batchId: 'batch-c10-math',
+    invoiceNo: 'INV/2026-27/088',
+    monthYear: 'Term Fee 2026-27',
+    title: 'Term Fee 2026-27 (3 instalments)',
+    amount: 6000,
+    discount: 0,
+    lateFee: 0,
+    netAmount: 6000,
+    paidAmount: 2000,
+    dueDate: '2026-09-10',
+    status: 'partially_paid',
+    createdAt: '2026-09-01',
+    payments: [
+      {
+        id: 'pay-5',
+        invoiceId: 'inv-term-aarav',
+        amount: 2000,
+        paymentDate: '2026-09-05',
+        paymentMethod: 'UPI',
+        transactionRef: 'UPI/260905/55667788',
+        receivedBy: 'Er. Manoj Verma',
+        receiptNo: 'REC-088-A',
+        upiApp: 'phonepe'
+      }
+    ],
+    installments: [
+      {
+        id: 'inst-1',
+        label: 'Instalment 1',
+        amount: 2000,
+        dueDate: '2026-09-10',
+        status: 'paid',
+        paidAmount: 2000,
+        paymentIds: ['pay-5']
+      },
+      {
+        id: 'inst-2',
+        label: 'Instalment 2',
+        amount: 2000,
+        dueDate: '2026-10-10',
+        status: 'pending',
+        paidAmount: 0,
+        paymentIds: []
+      },
+      {
+        id: 'inst-3',
+        label: 'Instalment 3',
+        amount: 2000,
+        dueDate: '2026-11-10',
+        status: 'pending',
+        paidAmount: 0,
+        paymentIds: []
+      }
+    ]
   }
 ];
 

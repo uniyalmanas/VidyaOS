@@ -191,6 +191,16 @@ export interface PaymentSubmission {
   rejectionReason?: string;
 }
 
+export interface Installment {
+  id: string;
+  label: string; // e.g. "Instalment 1"
+  amount: number;
+  dueDate: string; // YYYY-MM-DD
+  status: 'pending' | 'partially_paid' | 'paid';
+  paidAmount: number;
+  paymentIds: string[];
+}
+
 export interface FeeInvoice {
   id: string;
   orgId: string;
@@ -209,6 +219,9 @@ export interface FeeInvoice {
   status: 'paid' | 'pending' | 'partially_paid' | 'overdue' | 'verification_pending';
   payments: PaymentRecord[];
   createdAt: string;
+  // F11 — optional term/instalment plan. When present, payments are allocated to
+  // the next unpaid instalment and `status`/`paidAmount` derive from this list.
+  installments?: Installment[];
 }
 
 // F10 — mock series taxonomy. `mock`/`full_syllabus`/`board` are the kinds a

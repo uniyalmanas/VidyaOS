@@ -58,7 +58,7 @@ import {
   slipsForMonth,
   formatTimeHHMM
 } from './src/lib/staffOps';
-import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, TimetableSlot, SyllabusTopic, SyllabusStatus } from './src/types';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, Installment, TimetableSlot, SyllabusTopic, SyllabusStatus } from './src/types';
 import {
   monthKeyFromSalaryLabel,
   incomeForMonth,
@@ -158,6 +158,23 @@ import {
   externalStats,
   ExternalRankRow
 } from './src/lib/exams';
+import {
+  splitAmount,
+  addDays,
+  buildInstallments,
+  allocatePayment,
+  installmentBalance,
+  nextDueInstallment,
+  invoiceStatusFromInstallments,
+  installmentsSummary,
+  nextPaymentDueDate,
+  nextPaymentDueAmount,
+  isInstallmentOverdue,
+  formatInstallmentStatus,
+  clampInstallmentCount,
+  MIN_INSTALLMENTS,
+  MAX_INSTALLMENTS
+} from './src/lib/installments';
 import { PtmEvent, PtmSlot, IssuedDocument, ExamResult } from './src/types';
 
 function cleanPhone(phone: string): string {
@@ -1730,6 +1747,88 @@ assert(f10Stats.withAir === 2, 'externalStats counts only imported ranks');
 assert(f10Stats.bestRank === 12, 'externalStats reports the best (lowest) rank');
 assert(f10Stats.averagePercentile === 98.8, 'externalStats averages the imported percentiles');
 assert(externalStats(f10Merge.results, 'missing').total === 0, 'externalStats is empty for an unknown exam');
+
+
+// ============================================================================
+// F11 — Structured fee instalments
+// ============================================================================
+
+// Splitting money -------------------------------------------------------------------
+assert(splitAmount(6000, 3).join(',') === '2000,2000,2000', 'An even split divides cleanly');
+const uneven = splitAmount(100, 3);
+assert(Math.round(uneven.reduce((a, b) => a + b, 0) * 100) / 100 === 100, 'Uneven parts still sum to the whole');
+assert(uneven[0] === 33.34 && uneven[1] === 33.33 && uneven[2] === 33.33, 'Remainder paise land on the earliest parts');
+const onePaise = splitAmount(0.01, 2);
+assert(onePaise[0] === 0.01 && onePaise[1] === 0, 'A one-paise split keeps the paise on the first part');
+assert(splitAmount(500, 1)[0] === 500, 'A single-part split is the whole amount');
+
+// Date stepping ---------------------------------------------------------------------
+assert(addDays('2026-01-31', 1) === '2026-02-01', 'Adding days rolls the month over');
+assert(addDays('2026-12-31', 1) === '2027-01-01', 'Adding days rolls the year over');
+assert(addDays('not-a-date', 5) === 'not-a-date', 'A malformed date is returned unchanged');
+
+// Plan builder ----------------------------------------------------------------------
+assert(clampInstallmentCount(1) === MIN_INSTALLMENTS, 'Too few instalments are clamped up');
+assert(clampInstallmentCount(99) === MAX_INSTALLMENTS, 'Too many instalments are clamped down');
+assert(clampInstallmentCount(4) === 4, 'A sane instalment count is kept');
+
+const plan = buildInstallments(6000, 3, '2026-09-10', 30);
+assert(plan.length === 3, 'buildInstallments makes the requested number of parts');
+assert(plan.reduce((a, b) => a + b.amount, 0) === 6000, 'Plan amounts sum to the invoice total');
+assert(plan[0].dueDate === '2026-09-10' && plan[1].dueDate === '2026-10-10' && plan[2].dueDate === '2026-11-09', 'Due dates are evenly spaced by the interval');
+assert(plan.every(p => p.status === 'pending' && p.paidAmount === 0 && p.paymentIds.length === 0), 'A fresh plan starts fully unpaid');
+assert(buildInstallments(6000, 3, '2026-09-10').length === 3, 'The default interval still builds a plan');
+
+// Allocating payments ----------------------------------------------------------------
+const freshPlan = buildInstallments(6000, 3, '2026-09-10', 30);
+const part = allocatePayment(freshPlan, 2000, 'pay-a');
+assert(part.allocated === 2000, 'A full instalment payment is fully allocated');
+assert(part.installments[0].status === 'paid' && part.installments[0].paidAmount === 2000, 'The first instalment is marked paid');
+assert(part.installments[0].paymentIds.join(',') === 'pay-a', 'The payment id is stamped on the settled instalment');
+assert(nextDueInstallment(part.installments)?.id === 'inst-2', 'The next unpaid instalment advances');
+
+const partial = allocatePayment(part.installments, 1500, 'pay-b');
+assert(partial.installments[1].status === 'partially_paid' && partial.installments[1].paidAmount === 1500, 'A part payment marks the instalment part-paid');
+assert(partial.installments[2].paidAmount === 0, 'Untouched instalments stay at zero');
+assert(installmentBalance(partial.installments[1]) === 500, 'The part-paid instalment reports its remaining balance');
+
+const across = allocatePayment(partial.installments, 3000, 'pay-c');
+assert(across.allocated === 2500, 'Allocation applies only what the plan still owes');
+assert(across.installments[1].status === 'paid' && across.installments[1].paidAmount === 2000, 'A payment first tops up the part-paid instalment');
+assert(across.installments[2].paidAmount === 2000 && across.installments[2].status === 'paid', 'The remainder spills into the next instalment and settles it');
+assert(across.installments[2].paymentIds.join(',') === 'pay-c', 'The spilling payment is linked to every instalment it touched');
+
+const overpay = allocatePayment(freshPlan, 9999, 'pay-d');
+assert(overpay.allocated === 6000, 'Allocation stops at the plan total');
+assert(overpay.installments.every(i => i.status === 'paid'), 'An overpayment settles every instalment');
+assert(freshPlan[0].status === 'pending' && freshPlan[0].paidAmount === 0, 'Allocation never mutates the original plan');
+
+// Status derivation -----------------------------------------------------------------
+assert(invoiceStatusFromInstallments(buildInstallments(10, 2, '2026-01-01')) === 'pending', 'An untouched plan is pending');
+assert(invoiceStatusFromInstallments(overpay.installments) === 'paid', 'A fully covered plan is paid');
+assert(invoiceStatusFromInstallments(partial.installments) === 'partially_paid', 'A partially covered plan is part-paid');
+const overdueInst: Installment = { id: 'x', label: 'Instalment 1', amount: 1, dueDate: '2020-01-01', status: 'pending', paidAmount: 0, paymentIds: [] };
+assert(isInstallmentOverdue(overdueInst, '2026-01-01'), 'A past-due unpaid instalment is overdue');
+assert(!isInstallmentOverdue({ ...overdueInst, status: 'paid', paidAmount: 1 }, '2026-01-01'), 'A settled past-due instalment is not overdue');
+assert(formatInstallmentStatus('paid') === 'Paid' && formatInstallmentStatus('partially_paid') === 'Part-paid' && formatInstallmentStatus('pending') === 'Pending', 'Instalment labels render for all three states');
+
+// Summaries + next-due helpers ------------------------------------------------------
+const summary = installmentsSummary(partial.installments);
+assert(summary.count === 3 && summary.paidCount === 1, 'The summary counts paid instalments');
+assert(summary.total === 6000 && summary.paid === 3500 && summary.due === 2500, 'The summary totals paid + due correctly');
+assert(summary.nextDue?.id === 'inst-2', 'The summary points at the next unpaid instalment');
+
+const f11Invoice: Pick<FeeInvoice, 'installments' | 'dueDate' | 'netAmount' | 'paidAmount'> = {
+  installments: partial.installments,
+  dueDate: '2026-09-10',
+  netAmount: 6000,
+  paidAmount: 3500
+};
+assert(nextPaymentDueDate(f11Invoice) === '2026-10-10', 'The next payable date prefers the next instalment');
+assert(nextPaymentDueAmount(f11Invoice) === 500, 'The next payable amount is the open instalment balance');
+assert(nextPaymentDueDate({ dueDate: '2026-09-10' }) === '2026-09-10', 'Without a plan the invoice due date is used');
+assert(nextPaymentDueAmount({ netAmount: 1000, paidAmount: 400 }) === 600, 'Without a plan the whole remaining balance is due');
+assert(nextPaymentDueDate({ installments: [], dueDate: '2026-09-10' }) === '2026-09-10', 'An empty plan falls back to the invoice due date');
 
 
 console.log('\n----------------------------------------');

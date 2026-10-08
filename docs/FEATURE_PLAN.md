@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 + F10 shipped ✅ · F11–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 + F10 + F11 shipped ✅ · F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -394,7 +394,7 @@ where "All India Rank" becomes truthful (imported, not fabricated).
 
 ---
 
-## F11 — Structured fee installments
+## F11 — Structured fee installments — ✅ SHIPPED (2026-10-08)
 
 **Simple words:** "₹6,000 for the term — pay in 3 instalments of ₹2,000." The invoice splits
 into dated sub-parts; each is collected and receipted like today.

@@ -1813,6 +1813,95 @@ async function main(): Promise<void> {
     throw err;
   }
 
+  console.log('\nSuite 14: Fee installments (F11) — plan persists, submissions stay within the balance');
+  let suite14Step = 'setup';
+  try {
+    const invoiceDoc = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      studentId: 'stud-rules-1',
+      invoiceNo: `INV/2026-27/R-${id}`,
+      monthYear: 'Term 2026-27',
+      title: 'Term Fee (3 instalments)',
+      amount: 6000,
+      discount: 0,
+      lateFee: 0,
+      netAmount: 6000,
+      paidAmount: 2000,
+      dueDate: '2026-09-10',
+      status: 'partially_paid',
+      createdAt: '2026-09-01',
+      payments: [],
+      installments: [
+        { id: 'inst-1', label: 'Instalment 1', amount: 2000, dueDate: '2026-09-10', status: 'paid', paidAmount: 2000, paymentIds: ['pay-rules-1'] },
+        { id: 'inst-2', label: 'Instalment 2', amount: 2000, dueDate: '2026-10-10', status: 'pending', paidAmount: 0, paymentIds: [] },
+        { id: 'inst-3', label: 'Instalment 3', amount: 2000, dueDate: '2026-11-10', status: 'pending', paidAmount: 0, paymentIds: [] }
+      ],
+      ...over
+    });
+
+    suite14Step = 'admin raises an instalmented invoice';
+    await setDoc(doc(admin.db, 'invoices', 'inv-f11-rules'), invoiceDoc('inv-f11-rules'));
+    check('an admin may create an invoice carrying an instalment plan', true);
+
+    suite14Step = 'foreign admin raises an invoice';
+    const crossInvoiceDenied = await expectDenied('another centre creates an invoice in this centre', () =>
+      setDoc(doc(adminOther.db, 'invoices', 'inv-f11-foreign'), invoiceDoc('inv-f11-foreign'))
+    );
+    check('invoices are tenant-isolated on write', crossInvoiceDenied);
+
+    const learner = await makeClient('fee-learner');
+    await signInWithEmailAndPassword(
+      learner.auth,
+      `rules-student-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+    const learnerUid = learner.auth.currentUser!.uid;
+
+    const submissionDoc = (id: string, amount: number, over: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      invoiceId: 'inv-f11-rules',
+      studentId: 'stud-rules-1',
+      amount,
+      paymentMethod: 'UPI',
+      transactionRef: '428198273619',
+      submittedBy: learnerUid,
+      submittedByName: 'Rules Student',
+      submittedAt: new Date().toISOString(),
+      status: 'pending_verification',
+      ...over
+    });
+
+    suite14Step = 'learner submits against the open balance';
+    await setDoc(doc(learner.db, 'paymentSubmissions', 'sub-f11-balance-ok'), submissionDoc('sub-f11-balance-ok', 4000));
+    check('a learner may submit a payment up to the open invoice balance', true);
+
+    suite14Step = 'learner overpays';
+    const overpayDenied = await expectDenied('learner submits above netAmount - paidAmount', () =>
+      setDoc(doc(learner.db, 'paymentSubmissions', 'sub-f11-overpay'), submissionDoc('sub-f11-overpay', 5000))
+    );
+    check('a payment submission above the open balance is denied', overpayDenied);
+
+    suite14Step = 'foreign-centre invoice';
+    await setDoc(doc(adminOther.db, 'invoices', 'inv-f11-other'), {
+      ...invoiceDoc('inv-f11-other'),
+      orgId: OTHER_ORG_ID,
+      studentId: 'stud-rules-other'
+    });
+    const foreignSubmissionDenied = await expectDenied('learner submits against a foreign-centre invoice', () =>
+      setDoc(doc(learner.db, 'paymentSubmissions', 'sub-f11-foreign'), submissionDoc('sub-f11-foreign', 100, {
+        invoiceId: 'inv-f11-other',
+        orgId: OTHER_ORG_ID
+      }))
+    );
+    check('a learner cannot submit against another centre\'s invoice', foreignSubmissionDenied);
+  } catch (err) {
+    console.error(`\nSuite 14 failed at step: "${suite14Step}"`);
+    throw err;
+  }
+
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);
   console.log('----------------------------------------\n');

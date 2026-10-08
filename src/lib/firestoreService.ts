@@ -73,6 +73,7 @@ import {
   MOCK_ISSUED_DOCUMENTS
 } from '../data/mockData';
 import { applyBooking, applyCancel, BookingActor } from './ptm';
+import { allocatePayment, invoiceStatusFromInstallments } from './installments';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
   if (!import.meta.env.DEV) return [];
@@ -1242,10 +1243,20 @@ export async function recordPaymentAtomically(
         throw new Error('This payment reference has already been recorded.');
       }
       const paidAmount = invoice.paidAmount + payment.amount;
+      let installments = invoice.installments;
+      let status: FeeInvoice['status'];
+      if (installments && installments.length) {
+        const allocation = allocatePayment(installments, payment.amount, payment.id);
+        installments = allocation.installments;
+        status = invoiceStatusFromInstallments(installments);
+      } else {
+        status = paidAmount >= invoice.netAmount ? 'paid' : 'partially_paid';
+      }
       const updatedInvoice: FeeInvoice = {
         ...invoice,
         paidAmount,
-        status: paidAmount >= invoice.netAmount ? 'paid' : 'partially_paid',
+        ...(installments ? { installments } : {}),
+        status,
         payments: [...(invoice.payments || []), payment]
       };
       transaction.set(invoiceRef, cleanFirestoreData(updatedInvoice));
@@ -1319,10 +1330,20 @@ export async function verifyPaymentSubmission(
           verifiedAt
         };
         const paidAmount = invoice.paidAmount + submission.amount;
+        let installments = invoice.installments;
+        let status: FeeInvoice['status'];
+        if (installments && installments.length) {
+          const allocation = allocatePayment(installments, submission.amount, payment.id);
+          installments = allocation.installments;
+          status = invoiceStatusFromInstallments(installments);
+        } else {
+          status = paidAmount >= invoice.netAmount ? 'paid' : 'partially_paid';
+        }
         const updatedInvoice: FeeInvoice = {
           ...invoice,
           paidAmount,
-          status: paidAmount >= invoice.netAmount ? 'paid' : 'partially_paid',
+          ...(installments ? { installments } : {}),
+          status,
           payments: [...existingPayments, payment]
         };
 

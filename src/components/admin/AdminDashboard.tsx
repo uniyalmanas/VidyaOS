@@ -59,6 +59,21 @@ import {
   parseExternalRankSheet,
   externalStats
 } from '../../lib/exams';
+import {
+  buildInstallments,
+  allocatePayment,
+  invoiceStatusFromInstallments,
+  installmentsSummary,
+  installmentBalance,
+  nextPaymentDueDate,
+  nextPaymentDueAmount,
+  formatInstallmentStatus,
+  isInstallmentOverdue,
+  INSTALLMENT_INTERVAL_PRESETS,
+  MIN_INSTALLMENTS,
+  MAX_INSTALLMENTS,
+  DEFAULT_INSTALLMENT_INTERVAL_DAYS
+} from '../../lib/installments';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
 import { StudentIdCardModal } from '../documents/StudentIdCardModal';
@@ -240,6 +255,23 @@ export const AdminDashboard: React.FC = () => {
   const [collectAmount, setCollectAmount] = useState<number>(2000);
   const [collectMethod, setCollectMethod] = useState<'Cash' | 'UPI' | 'NetBanking'>('UPI');
   const [collectUtr, setCollectUtr] = useState<string>('');
+
+  // F11 — raise a fresh invoice, optionally split into a dated instalment plan.
+  const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState<boolean>(false);
+  const [genStudentId, setGenStudentId] = useState<string>('');
+  const [genTitle, setGenTitle] = useState<string>('');
+  const [genMonthYear, setGenMonthYear] = useState<string>(() =>
+    new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+  );
+  const [genAmount, setGenAmount] = useState<number>(6000);
+  const [genDiscount, setGenDiscount] = useState<number>(0);
+  const [genDueDate, setGenDueDate] = useState<string>(() => getIndiaDateString());
+  const [genSplit, setGenSplit] = useState<boolean>(true);
+  const [genCount, setGenCount] = useState<number>(3);
+  const [genIntervalDays, setGenIntervalDays] = useState<number>(DEFAULT_INSTALLMENT_INTERVAL_DAYS);
+  // F11 — per-invoice instalment timeline.
+  const [installmentInvoiceId, setInstallmentInvoiceId] = useState<string | null>(null);
+  const [showInstallmentsModal, setShowInstallmentsModal] = useState<boolean>(false);
 
   // Vacate / Remove confirmation states
   const [teacherToVacate, setTeacherToVacate] = useState<Teacher | null>(null);
@@ -964,18 +996,25 @@ export const AdminDashboard: React.FC = () => {
         paymentMethod: collectMethod,
         transactionRef: transactionRef || `CASH-${Date.now()}`
       });
-      const paidAmount = inv.paidAmount + payment.amount;
+      const paidAmount = Math.round((inv.paidAmount + payment.amount) * 100) / 100;
+      const nextInstallments = inv.installments && inv.installments.length
+        ? allocatePayment(inv.installments, payment.amount, payment.id).installments
+        : inv.installments;
+      const settled = nextInstallments && nextInstallments.length
+        ? invoiceStatusFromInstallments(nextInstallments) === 'paid'
+        : paidAmount >= inv.netAmount;
       const payerName = students.find(s => s.id === inv.studentId)?.name || 'student';
       recordAudit({
         action: 'verify',
         targetType: 'payment',
         targetId: inv.id,
-        summary: `Recorded ${collectMethod} payment of ₹${payment.amount.toLocaleString('en-IN')} on invoice ${inv.invoiceNo} for ${payerName} (${paidAmount >= inv.netAmount ? 'invoice settled' : 'partial payment'}).`
+        summary: `Recorded ${collectMethod} payment of ₹${payment.amount.toLocaleString('en-IN')} on invoice ${inv.invoiceNo} for ${payerName} (${settled ? 'invoice settled' : 'partial payment'}).`
       });
       setActiveReceiptInvoice({
         ...inv,
         paidAmount,
-        status: paidAmount >= inv.netAmount ? 'paid' : 'partially_paid',
+        ...(nextInstallments ? { installments: nextInstallments } : {}),
+        status: settled ? 'paid' : 'partially_paid',
         payments: [...(inv.payments || []), payment]
       });
       setShowCollectFeeModal(false);
@@ -984,6 +1023,81 @@ export const AdminDashboard: React.FC = () => {
       showToast(error instanceof Error ? error.message : 'Could not record this payment.', 'error');
     }
   };
+
+  // F11 — raise a fresh invoice, optionally split into dated instalments.
+  const handleGenerateInvoice = (e: React.FormEvent) => {
+    e.preventDefault();
+    const student = students.find(s => s.id === genStudentId);
+    if (!student) {
+      showToast('Select a student before raising the invoice.', 'error');
+      return;
+    }
+    const amount = Math.max(0, Number(genAmount) || 0);
+    const discount = Math.max(0, Number(genDiscount) || 0);
+    const net = Math.round((amount - discount) * 100) / 100;
+    if (net <= 0) {
+      showToast('Enter a fee amount greater than the discount.', 'error');
+      return;
+    }
+    if (!genDueDate) {
+      showToast('Pick the first due date for this fee.', 'error');
+      return;
+    }
+    const installments = genSplit
+      ? buildInstallments(net, genCount, genDueDate, genIntervalDays)
+      : undefined;
+    const monthYear = genMonthYear.trim() || new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    const title = genTitle.trim() || `Coaching Fees — ${monthYear}`;
+    const invoice = createInvoice({
+      branchId: student.branchId,
+      studentId: student.id,
+      batchId: student.batchIds?.[0],
+      monthYear,
+      title,
+      amount,
+      discount,
+      lateFee: 0,
+      netAmount: net,
+      paidAmount: 0,
+      dueDate: genDueDate,
+      status: 'pending',
+      installments
+    });
+    recordAudit({
+      action: 'create',
+      targetType: 'invoice',
+      targetId: invoice.id,
+      summary: installments
+        ? `Raised invoice ${invoice.invoiceNo} for ${student.name} — ₹${net.toLocaleString('en-IN')} split into ${installments.length} instalments.`
+        : `Raised fee invoice ${invoice.invoiceNo} of ₹${net.toLocaleString('en-IN')} for ${student.name}.`
+    });
+    showToast(
+      installments
+        ? `Invoice ${invoice.invoiceNo} created with ${installments.length} instalments.`
+        : `Invoice ${invoice.invoiceNo} generated.`,
+      'success'
+    );
+    setShowGenerateInvoiceModal(false);
+    setGenTitle('');
+    setGenDiscount(0);
+  };
+
+  const openCollectForInstallment = (invoice: FeeInvoice, installmentId: string) => {
+    const target = invoice.installments?.find(item => item.id === installmentId);
+    if (!target) return;
+    setShowInstallmentsModal(false);
+    setInstallmentInvoiceId(null);
+    setSelectedInvoiceToCollect(invoice.id);
+    setCollectAmount(installmentBalance(target));
+    setCollectMethod('UPI');
+    setCollectUtr('');
+    setShowCollectFeeModal(true);
+  };
+
+  const installmentInvoice = useMemo(
+    () => invoices.find(inv => inv.id === installmentInvoiceId) || null,
+    [invoices, installmentInvoiceId]
+  );
 
   const handleCreateNotice = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2246,7 +2360,16 @@ export const AdminDashboard: React.FC = () => {
             {
               key: 'dueDate',
               header: 'Due Date',
-              render: (inv) => <span className="text-[#5F6368] dark:text-[#9AA0A6]">{inv.dueDate}</span>
+              render: (inv) => (
+                <div>
+                  <div className="text-[#5F6368] dark:text-[#9AA0A6]">{nextPaymentDueDate(inv)}</div>
+                  {inv.installments && inv.installments.length > 0 && (
+                    <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
+                      {installmentsSummary(inv.installments).paidCount}/{inv.installments.length} instalments paid
+                    </div>
+                  )}
+                </div>
+              )
             },
             {
               key: 'status',
@@ -2276,6 +2399,20 @@ export const AdminDashboard: React.FC = () => {
 
                 return (
                   <div className="flex items-center justify-end space-x-1.5">
+                    {inv.installments && inv.installments.length > 0 && (
+                      <ConsoleButton
+                        variant="secondary"
+                        size="xs"
+                        icon={<Calendar className="w-3 h-3" />}
+                        onClick={() => {
+                          setInstallmentInvoiceId(inv.id);
+                          setShowInstallmentsModal(true);
+                        }}
+                      >
+                        Instalments
+                      </ConsoleButton>
+                    )}
+
                     {(inv.paidAmount ?? 0) > 0 && (
                       <ConsoleButton
                         variant="secondary"
@@ -2305,10 +2442,12 @@ export const AdminDashboard: React.FC = () => {
                           icon={<Share2 className="w-3 h-3 text-[#188038]" />}
                           onClick={() => {
                             const fatherPhone = student?.guardian.fatherPhone || student?.phone || '';
+                            const dueAmount = inv.installments && inv.installments.length ? nextPaymentDueAmount(inv) : (balance ?? 0);
+                            const dueOn = nextPaymentDueDate(inv);
                             setActiveWhatsappModal({
                               title: `Fee Due Reminder for ${student?.name}`,
                               phone: fatherPhone,
-                              message: `Dear Parent, gentle reminder that monthly coaching fee of ₹${(balance ?? 0).toLocaleString('en-IN')} for ${student?.name} is due on ${inv.dueDate} at ${currentOrg.name}. You can pay directly via UPI ID: ${currentOrg.upiId}.`
+                              message: `Dear Parent, gentle reminder that the coaching fee of ₹${dueAmount.toLocaleString('en-IN')} for ${student?.name} is due on ${dueOn} at ${currentOrg.name}. You can pay directly via UPI ID: ${currentOrg.upiId}.`
                             });
                           }}
                         >
@@ -2325,19 +2464,33 @@ export const AdminDashboard: React.FC = () => {
           keyExtractor={(inv) => inv.id}
           searchPlaceholder="Search invoices by student, number..."
           toolbarActions={
-            <ConsoleButton
-              variant="primary"
-              size="sm"
-              icon={<CreditCard className="w-3.5 h-3.5" />}
-              onClick={() => {
-                if (invoices.length > 0) {
-                  setSelectedInvoiceToCollect(invoices[0].id);
-                  setShowCollectFeeModal(true);
-                }
-              }}
-            >
-              Record Fee
-            </ConsoleButton>
+            <div className="flex items-center gap-2">
+              <ConsoleButton
+                variant="secondary"
+                size="sm"
+                icon={<Plus className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  setGenStudentId(prev => prev || students[0]?.id || '');
+                  setGenDueDate(getIndiaDateString());
+                  setShowGenerateInvoiceModal(true);
+                }}
+              >
+                Generate Invoice
+              </ConsoleButton>
+              <ConsoleButton
+                variant="primary"
+                size="sm"
+                icon={<CreditCard className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  if (invoices.length > 0) {
+                    setSelectedInvoiceToCollect(invoices[0].id);
+                    setShowCollectFeeModal(true);
+                  }
+                }}
+              >
+                Record Fee
+              </ConsoleButton>
+            </div>
           }
         />
         </div>
@@ -4046,6 +4199,273 @@ export const AdminDashboard: React.FC = () => {
                 </ConsoleButton>
               </div>
             </form>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      {/* MODAL 3b: Generate Invoice (F11 — optional instalment plan) */}
+      <AnimatePresence>
+      {showGenerateInvoiceModal && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-lg rounded-2xl p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+              Generate Fee Invoice
+            </h3>
+            <form onSubmit={handleGenerateInvoice} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Student</label>
+                <select
+                  required
+                  value={genStudentId}
+                  onChange={e => setGenStudentId(e.target.value)}
+                  className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-medium"
+                >
+                  <option value="">Select student…</option>
+                  {students.filter(s => s.status !== 'inactive').map(s => (
+                    <option key={s.id} value={s.id}>{s.name} · {s.classGrade}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Invoice Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Term Fee — Class 10"
+                    value={genTitle}
+                    onChange={e => setGenTitle(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Month / Period</label>
+                  <input
+                    type="text"
+                    value={genMonthYear}
+                    onChange={e => setGenMonthYear(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Gross (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={genAmount}
+                    onChange={e => setGenAmount(Number(e.target.value))}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Discount (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={genDiscount}
+                    onChange={e => setGenDiscount(Number(e.target.value))}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">First Due</label>
+                  <input
+                    type="date"
+                    value={genDueDate}
+                    onChange={e => setGenDueDate(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] p-3 space-y-3">
+                <label className="flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="font-semibold text-[#202124] dark:text-[#E8EAED]">Split into instalments</span>
+                  <input
+                    type="checkbox"
+                    checked={genSplit}
+                    onChange={e => setGenSplit(e.target.checked)}
+                    className="w-4 h-4 accent-[#1A73E8]"
+                  />
+                </label>
+                {genSplit && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">No. of instalments</label>
+                        <input
+                          type="number"
+                          min={MIN_INSTALLMENTS}
+                          max={MAX_INSTALLMENTS}
+                          value={genCount}
+                          onChange={e => setGenCount(Math.min(MAX_INSTALLMENTS, Math.max(MIN_INSTALLMENTS, Number(e.target.value) || MIN_INSTALLMENTS)))}
+                          className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Spacing</label>
+                        <select
+                          value={genIntervalDays}
+                          onChange={e => setGenIntervalDays(Number(e.target.value))}
+                          className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-medium"
+                        >
+                          {INSTALLMENT_INTERVAL_PRESETS.map(preset => (
+                            <option key={preset.days} value={preset.days}>{preset.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-[#5F6368] dark:text-[#9AA0A6]">Plan preview</div>
+                      {buildInstallments(
+                        Math.max(0, Math.round(((Number(genAmount) || 0) - (Number(genDiscount) || 0)) * 100) / 100),
+                        genCount,
+                        genDueDate || getIndiaDateString(),
+                        genIntervalDays
+                      ).map(inst => (
+                        <div key={inst.id} className="flex items-center justify-between gap-2 rounded-lg bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] px-3 py-2">
+                          <span className="font-semibold text-[#202124] dark:text-[#E8EAED]">{inst.label}</span>
+                          <span className="font-mono font-bold text-[#202124] dark:text-[#E8EAED]">₹{inst.amount.toLocaleString('en-IN')}</span>
+                          <span className="text-[#5F6368] dark:text-[#9AA0A6]">Due {inst.dueDate}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
+                <ConsoleButton type="button" variant="ghost" onClick={() => setShowGenerateInvoiceModal(false)}>
+                  Cancel
+                </ConsoleButton>
+                <ConsoleButton type="submit" variant="primary">
+                  Create Invoice
+                </ConsoleButton>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      {/* MODAL 3c: Instalment timeline (F11) */}
+      <AnimatePresence>
+      {showInstallmentsModal && installmentInvoice && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-lg rounded-2xl p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <div>
+              <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
+                Instalment Plan
+              </h3>
+              <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6]">
+                {students.find(s => s.id === installmentInvoice.studentId)?.name || 'Student'} · {installmentInvoice.invoiceNo}
+              </p>
+            </div>
+            {(() => {
+              const list = installmentInvoice.installments || [];
+              const summary = installmentsSummary(list);
+              const today = getIndiaDateString();
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="rounded-xl bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] p-2">
+                      <div className="font-mono font-bold text-[#202124] dark:text-[#E8EAED]">₹{summary.total.toLocaleString('en-IN')}</div>
+                      <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">Total</div>
+                    </div>
+                    <div className="rounded-xl bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] p-2">
+                      <div className="font-mono font-bold text-[#188038] dark:text-[#81C995]">₹{summary.paid.toLocaleString('en-IN')}</div>
+                      <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">{summary.paidCount}/{summary.count} paid</div>
+                    </div>
+                    <div className="rounded-xl bg-[#F8F9FA] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] p-2">
+                      <div className="font-mono font-bold text-[#D93025] dark:text-[#F28B82]">₹{summary.due.toLocaleString('en-IN')}</div>
+                      <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">Balance</div>
+                    </div>
+                  </div>
+
+                  {list.length === 0 ? (
+                    <p className="text-xs text-center text-[#5F6368] dark:text-[#9AA0A6] py-6">
+                      This invoice has no instalments — it is a single-due fee.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {list.map(inst => {
+                        const overdue = isInstallmentOverdue(inst, today);
+                        return (
+                          <div
+                            key={inst.id}
+                            className="rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] p-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-semibold text-[#202124] dark:text-[#E8EAED]">{inst.label}</div>
+                              <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
+                                Due {inst.dueDate}{overdue ? ' · overdue' : ''}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-mono font-bold text-[#202124] dark:text-[#E8EAED]">₹{inst.amount.toLocaleString('en-IN')}</div>
+                              <div className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">Paid ₹{inst.paidAmount.toLocaleString('en-IN')}</div>
+                            </div>
+                            <StatusChip
+                              label={overdue ? 'Overdue' : formatInstallmentStatus(inst.status)}
+                              variant={inst.status === 'paid' ? 'success' : overdue ? 'error' : inst.status === 'partially_paid' ? 'info' : 'warning'}
+                              size="xs"
+                            />
+                            {inst.status !== 'paid' && (
+                              <ConsoleButton
+                                variant="primary"
+                                size="xs"
+                                onClick={() => openCollectForInstallment(installmentInvoice, inst.id)}
+                              >
+                                Collect ₹{installmentBalance(inst).toLocaleString('en-IN')}
+                              </ConsoleButton>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+            <div className="flex justify-end pt-2 border-t border-[#DADCE0] dark:border-[#3C4043]">
+              <ConsoleButton
+                variant="ghost"
+                onClick={() => {
+                  setShowInstallmentsModal(false);
+                  setInstallmentInvoiceId(null);
+                }}
+              >
+                Close
+              </ConsoleButton>
+            </div>
           </motion.div>
         </motion.div>
       )}

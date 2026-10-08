@@ -163,8 +163,16 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
 
   const createInvoice = (data: Omit<FeeInvoice, 'id' | 'orgId' | 'invoiceNo' | 'payments' | 'createdAt'>): FeeInvoice => {
     const invoiceNo = `INV/${new Date().getFullYear()}/${Date.now().toString().slice(-4)}`;
+    // F11 — when a plan is supplied, the invoice total is exactly the sum of the
+    // instalments so the balance maths stays consistent to the paise.
+    const installments = data.installments && data.installments.length ? data.installments : undefined;
+    const netAmount = installments
+      ? Math.round(installments.reduce((sum, item) => sum + item.amount, 0) * 100) / 100
+      : data.netAmount;
     const newInvoice: FeeInvoice = {
       ...data,
+      netAmount,
+      ...(installments ? { installments } : {}),
       id: `inv-${Date.now()}`,
       orgId: currentOrg.id,
       invoiceNo,
