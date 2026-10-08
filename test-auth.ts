@@ -126,7 +126,25 @@ import {
   PTM_MIN_SLOT_MINUTES,
   PTM_MAX_SLOT_MINUTES
 } from './src/lib/ptm';
-import { PtmEvent, PtmSlot } from './src/types';
+import {
+  issueYear,
+  tcNumberPrefix,
+  formatTcNumber,
+  parseTcNumber,
+  nextTcSequence,
+  nextTcNumber,
+  formatAccessionNo,
+  nextAccessionNo,
+  barcodeBars,
+  validateTcInput,
+  issuedForStudent,
+  latestIssued,
+  documentTypeLabel,
+  TC_NUMBER_PAD,
+  MAX_TC_REMARKS,
+  ISSUED_DOCUMENT_LABEL
+} from './src/lib/issuedDocuments';
+import { PtmEvent, PtmSlot, IssuedDocument } from './src/types';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -1527,6 +1545,83 @@ assert(teacherNameFor([{ id: 'teach-a', name: 'Anjali Sharma' } as never], 'teac
 assert(teacherNameFor([], 'teach-z') === 'Faculty', 'teacherNameFor falls back for an unknown id');
 assert(PTM_DEFAULT_SLOT_MINUTES === 15 && PTM_MIN_SLOT_MINUTES === 10 && PTM_MAX_SLOT_MINUTES === 60, 'Slot length bounds are 10–60 minutes, default 15');
 assert(formatPtmSlotRange(claimed) === '4:00 – 4:15 PM', 'formatSlotRange formats a slot for the grid');
+
+
+// ============================================================================
+// F9 — Student ID card + Transfer Certificate: numbering, accession, barcode
+// ============================================================================
+
+const issuedDocFor = (over: Partial<IssuedDocument> = {}): IssuedDocument => ({
+  id: 'doc-test-1',
+  orgId: 'org-apex',
+  branchId: 'branch-rajpur',
+  studentId: 'stud-x',
+  type: 'id_card',
+  tcNo: null,
+  leavingDate: null,
+  remarks: null,
+  issuedAt: '2026-04-01T09:00:00.000Z',
+  issuedByUserId: 'user-admin',
+  issuedByName: 'Apex Admin',
+  ...over
+});
+
+// Year / prefix ----------------------------------------------------------------------
+assert(issueYear('2026-10-08T00:00:00.000Z') === '2026', 'issueYear reads the India calendar year');
+assert(issueYear('2025-12-31T20:00:00.000Z') === '2026', 'issueYear rolls over at IST midnight, not UTC');
+assert(issueYear('not-a-date') === issueYear(), 'issueYear falls back to today on junk input');
+assert(tcNumberPrefix({ slug: 'apex-academy', logoText: 'APEX', name: 'Apex Coaching Academy' }) === 'APEXACADEMY', 'tcNumberPrefix slugifies the org');
+assert(tcNumberPrefix({ slug: '', logoText: '', name: '  City  Tutorials ' }) === 'CITYTUTORIALS', 'tcNumberPrefix falls back to the name');
+assert(tcNumberPrefix({ slug: '', logoText: '', name: '!!!' }) === 'TC', 'tcNumberPrefix never returns an empty prefix');
+
+// Serial format + parsing ------------------------------------------------------------
+assert(formatTcNumber('APEXACADEMY', '2026', 1) === 'APEXACADEMY/2026/001', 'formatTcNumber pads the sequence to three digits');
+assert(formatTcNumber('APEXACADEMY', '2026', 1000) === 'APEXACADEMY/2026/1000', 'formatTcNumber grows past 999 without truncating');
+assert(TC_NUMBER_PAD === 3, 'TC sequence pad is three digits');
+assert(parseTcNumber('APEXACADEMY/2026/007', 'APEXACADEMY', '2026') === 7, 'parseTcNumber reads a matching serial');
+assert(parseTcNumber('APEXACADEMY/2026/007', 'APEXACADEMY', '2025') === null, 'parseTcNumber rejects another year');
+assert(parseTcNumber('APEXACADEMY/2026/007', 'OTHERPREFIX', '2026') === null, 'parseTcNumber rejects another prefix');
+assert(parseTcNumber('garbage', 'APEXACADEMY', '2026') === null, 'parseTcNumber rejects junk serials');
+
+// Increment uses the max — never the count — so a gap can't reuse a number ----------
+const register: IssuedDocument[] = [
+  issuedDocFor({ id: 'd1', type: 'tc', tcNo: 'APEXACADEMY/2026/001', issuedAt: '2026-04-01T10:00:00.000Z' }),
+  issuedDocFor({ id: 'd2', type: 'tc', tcNo: 'APEXACADEMY/2026/003', issuedAt: '2026-04-02T10:00:00.000Z' }),
+  issuedDocFor({ id: 'd3', type: 'tc', tcNo: 'APEXACADEMY/2025/009', issuedAt: '2025-04-02T10:00:00.000Z' }),
+  issuedDocFor({ id: 'd4', type: 'id_card', issuedAt: '2026-04-03T10:00:00.000Z' })
+];
+assert(nextTcSequence(register, 'APEXACADEMY', '2026') === 4, 'nextTcSequence is max+1 for the year, ignoring gaps and other years');
+assert(nextTcNumber(register, 'APEXACADEMY', '2026') === 'APEXACADEMY/2026/004', 'nextTcNumber formats the incremented serial');
+assert(nextTcNumber([], 'APEXACADEMY', '2026') === 'APEXACADEMY/2026/001', 'The first TC of a year is 001');
+assert(nextTcNumber(register, 'APEXACADEMY', '2027') === 'APEXACADEMY/2027/001', 'A new year restarts the sequence at 001');
+
+// Accession number ------------------------------------------------------------------
+assert(formatAccessionNo(1) === 'ACC-0001', 'Accession numbers are zero-padded');
+assert(nextAccessionNo([]) === 'ACC-0001', 'The first issued document is ACC-0001');
+assert(nextAccessionNo(register) === 'ACC-0005', 'Accession counts every issued document, regardless of type');
+
+// Barcode encoding ------------------------------------------------------------------
+const bars = barcodeBars('APX10-0042');
+assert(bars.length === 40, 'Barcode has the requested bar count');
+assert(bars.every(w => w >= 1 && w <= 3), 'Barcode widths stay within 1–3px');
+assert(barcodeBars('APX10-0042').join(',') === bars.join(','), 'Barcode is deterministic for an enrollment number');
+assert(barcodeBars('APX10-0099').join(',') !== bars.join(','), 'Different enrollment numbers produce different barcodes');
+assert(barcodeBars('', 12).length === 12, 'Barcode tolerates an empty value');
+
+// Validation ------------------------------------------------------------------------
+assert(validateTcInput({}) === null, 'An empty TC input is valid (dates/remarks optional)');
+assert(validateTcInput({ leavingDate: '2026-03-31' }) === null, 'A well-formed leaving date passes');
+assert(validateTcInput({ leavingDate: '31-03-2026' }) !== null, 'A non-ISO leaving date is rejected');
+assert(validateTcInput({ remarks: 'x'.repeat(MAX_TC_REMARKS) }) === null, 'Remarks at the limit pass');
+assert(validateTcInput({ remarks: 'x'.repeat(MAX_TC_REMARKS + 1) }) !== null, 'Over-long remarks are rejected');
+
+// Selectors -------------------------------------------------------------------------
+assert(issuedForStudent(register, 'nobody').length === 0, 'A student with no documents returns nothing');
+assert(issuedForStudent(register, 'stud-x').length === 4, 'issuedForStudent collects every document for a learner');
+assert(latestIssued(register, 'stud-x', 'tc')?.tcNo === 'APEXACADEMY/2026/003', 'latestIssued returns the newest TC');
+assert(latestIssued(register, 'stud-x', 'id_card')?.id === 'd4', 'latestIssued finds the ID card');
+assert(documentTypeLabel('tc') === 'Transfer Certificate', 'documentTypeLabel names a TC');
+assert(ISSUED_DOCUMENT_LABEL.id_card === 'Student ID Card', 'The ID card label is present');
 
 
 console.log('\n----------------------------------------');

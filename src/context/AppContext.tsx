@@ -34,7 +34,9 @@ import {
   SyllabusStatus,
   PtmEvent,
   PtmEventInput,
-  PtmSlot
+  PtmSlot,
+  IssuedDocument,
+  TcIssueInput
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -83,6 +85,10 @@ import {
   PtmCreateResult,
   PtmBookingResult
 } from './slices/PtmContext';
+import {
+  IssuedDocsProvider,
+  useIssuedDocs
+} from './slices/IssuedDocsContext';
 import { NewExpenseInput } from '../lib/finance';
 
 // Export domain hooks for direct fine-grained consumption
@@ -92,6 +98,7 @@ export { useAttendance } from './slices/AttendanceContext';
 export { useAcademics } from './slices/AcademicContext';
 export { useCommunication, useChat } from './slices/CommunicationContext';
 export { useAuditLog } from './slices/AuditContext';
+export { useIssuedDocs } from './slices/IssuedDocsContext';
 export { useInquiries } from './slices/InquiryContext';
 export { useLeaveRequests } from './slices/LeaveContext';
 export { useStaffOps } from './slices/StaffOpsContext';
@@ -190,6 +197,16 @@ export interface AppContextType {
   deleteEvent: (eventId: string) => void;
   myBookings: PtmSlot[];
   myTeacherSlots: PtmSlot[];
+
+  // Issued documents (F9) — student ID card + Transfer Certificate register
+  issuedDocuments: IssuedDocument[];
+  canIssueDocuments: boolean;
+  issueIdCard: (student: Student) => IssuedDocument | null;
+  issueTc: (student: Student, input: TcIssueInput) => IssuedDocument | null;
+  nextTcNo: () => string;
+  documentsForStudent: (studentId: string) => IssuedDocument[];
+  latestIdCardFor: (studentId: string) => IssuedDocument | null;
+  latestTcFor: (studentId: string) => IssuedDocument | null;
 
   // Data collections (Tenant-isolated)
   students: Student[];
@@ -427,7 +444,14 @@ const StudentDependentSlices: React.FC<CompositeProps & { isPlatformOwner: boole
                         currentUser={props.currentUser}
                         isPlatformOwner={props.isPlatformOwner}
                       >
-                        <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                        <IssuedDocsProvider
+                          currentOrg={props.currentOrg}
+                          selectedBranchId={props.selectedBranchId}
+                          currentUser={props.currentUser}
+                          isPlatformOwner={props.isPlatformOwner}
+                        >
+                          <UnifiedAppProvider {...props} studentSlice={studentSlice} />
+                        </IssuedDocsProvider>
                       </PtmProvider>
                     </FinanceProvider>
                   </StaffOpsProvider>
@@ -458,6 +482,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
   const financeSlice = useFinance();
   const syllabusSlice = useSyllabus();
   const ptmSlice = usePtm();
+  const issuedDocsSlice = useIssuedDocs();
 
   const fullContextValue: AppContextType = {
     // Tenancy & session
@@ -600,6 +625,16 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     deleteEvent: ptmSlice.deleteEvent,
     myBookings: ptmSlice.myBookings,
     myTeacherSlots: ptmSlice.myTeacherSlots,
+
+    // Issued documents (F9)
+    issuedDocuments: issuedDocsSlice.issuedDocuments,
+    canIssueDocuments: issuedDocsSlice.canIssue,
+    issueIdCard: issuedDocsSlice.issueIdCard,
+    issueTc: issuedDocsSlice.issueTc,
+    nextTcNo: issuedDocsSlice.nextTcNo,
+    documentsForStudent: issuedDocsSlice.documentsForStudent,
+    latestIdCardFor: issuedDocsSlice.latestIdCardFor,
+    latestTcFor: issuedDocsSlice.latestTcFor,
 
     chatChannels: commSlice.chatChannels,
     chatMessages: commSlice.chatMessages,

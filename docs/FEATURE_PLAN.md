@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 shipped ✅ · F9–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 shipped ✅ · F10–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -351,7 +351,7 @@ booking field-lock.
 
 ---
 
-## F9 — Student ID card + Transfer Certificate (print)
+## F9 — Student ID card + Transfer Certificate (print) — ✅ SHIPPED (2026-10-08)
 
 **Simple words:** One button → print-ready ID card with photo placeholder + enrollment QR;
 one button → official-looking TC with TC number. Browser print-to-PDF, no Storage needed.

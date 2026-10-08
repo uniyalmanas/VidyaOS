@@ -962,6 +962,61 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // ISSUED DOCUMENTS (F9) — append-only register behind ID cards & TCs
+    // ------------------------------------------------------------------------
+    function isValidIssuedDocument(data) {
+      return data.keys().hasOnly([
+          'id', 'orgId', 'branchId', 'studentId', 'type', 'tcNo',
+          'leavingDate', 'remarks', 'issuedAt', 'issuedByUserId', 'issuedByName'
+        ]) &&
+        data.keys().hasAll([
+          'id', 'orgId', 'branchId', 'studentId', 'type', 'issuedAt',
+          'issuedByUserId', 'issuedByName'
+        ]) &&
+        data.id is string && data.id.size() <= 120 &&
+        data.orgId is string && data.orgId.size() <= 100 &&
+        data.branchId is string && data.branchId.size() <= 100 &&
+        data.studentId is string && data.studentId.size() <= 150 &&
+        data.type in ['id_card', 'tc'] &&
+        (
+          data.type == 'tc'
+            ? (data.tcNo is string && data.tcNo.size() <= 60 &&
+               data.tcNo.matches('^[A-Z0-9]+/[0-9]{4}/[0-9]{3,}$'))
+            : (!('tcNo' in data) || data.tcNo == null)
+        ) &&
+        (!('leavingDate' in data) || data.leavingDate == null ||
+          (data.leavingDate is string && data.leavingDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))) &&
+        (!('remarks' in data) || data.remarks == null ||
+          (data.remarks is string && data.remarks.size() <= 500)) &&
+        data.issuedAt is string &&
+        data.issuedByUserId is string && data.issuedByUserId.size() <= 128 &&
+        data.issuedByName is string && data.issuedByName.size() <= 120;
+    }
+
+    match /issuedDocuments/{documentId} {
+      // Every tenant member may read the register, but a student/parent session
+      // only sees documents for a learner it is linked to. The app pins the
+      // query to `studentId` for those sessions, so the list stays provable.
+      allow read: if isSignedIn() &&
+        isTenantMember(resource.data.orgId) &&
+        (
+          !(isStudent() || isParent()) ||
+          isLinkedToStudent(resource.data.studentId)
+        );
+
+      // Desk-only issuance: staff/admin record the accession and cannot forge
+      // the operator. A learner never creates a register row.
+      allow create: if isSignedIn() &&
+        isCenterStaffOrAdmin(request.resource.data.orgId) &&
+        isValidIssuedDocument(request.resource.data) &&
+        request.resource.data.id == documentId &&
+        request.resource.data.issuedByUserId == request.auth.uid;
+
+      // Append-only: a printed serial and its audit trail can never be edited.
+      allow update, delete: if false;
+    }
+
+    // ------------------------------------------------------------------------
     // LOCKED CREDENTIALS COLLECTION (STRICTLY DISALLOWED TO PREVENT PLAINTEXT EXPOSURE)
     // ------------------------------------------------------------------------
     match /credentials/{phone} {

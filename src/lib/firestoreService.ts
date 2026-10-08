@@ -44,7 +44,8 @@ import {
   TimetableSlot,
   SyllabusTopic,
   PtmEvent,
-  PtmSlot
+  PtmSlot,
+  IssuedDocument
 } from '../types';
 import {
   MOCK_ORGANIZATIONS,
@@ -68,7 +69,8 @@ import {
   MOCK_TIMETABLE,
   MOCK_SYLLABUS_TOPICS,
   MOCK_PTM_EVENTS,
-  MOCK_PTM_SLOTS
+  MOCK_PTM_SLOTS,
+  MOCK_ISSUED_DOCUMENTS
 } from '../data/mockData';
 import { applyBooking, applyCancel, BookingActor } from './ptm';
 
@@ -744,6 +746,52 @@ export function subscribeToPtmSlots(
   } catch (e) {
     const fallback = developmentFallback(MOCK_PTM_SLOTS, orgId);
     if (import.meta.env.DEV) console.error('Could not start PTM slot listener:', e);
+    onData(fallback);
+    return () => {};
+  }
+}
+
+/**
+ * F9 — the issued-document accession register. Staff/admin read the whole org;
+ * a student (or parent) only sees documents for a student they are linked to,
+ * so their session pins `studentId` to the child's record — the `issuedDocuments`
+ * read rule only lets a non-staff reader through when the query is pinned that
+ * way (see firestore.rules).
+ */
+export function subscribeToIssuedDocuments(
+  onData: (documents: IssuedDocument[]) => void,
+  orgId?: string,
+  studentId?: string
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_ISSUED_DOCUMENTS, orgId);
+      onData(fallback);
+      return () => {};
+    }
+    let targetRef = orgId
+      ? query(collection(db, 'issuedDocuments'), where('orgId', '==', orgId), limit(1000))
+      : query(collection(db, 'issuedDocuments'), limit(1000));
+    if (studentId) {
+      targetRef = query(targetRef, where('studentId', '==', studentId));
+    }
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as IssuedDocument));
+        } else {
+          onData(developmentFallback(MOCK_ISSUED_DOCUMENTS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time issued documents', error);
+        onData(developmentFallback(MOCK_ISSUED_DOCUMENTS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_ISSUED_DOCUMENTS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start issued-document listener:', e);
     onData(fallback);
     return () => {};
   }
@@ -1672,6 +1720,19 @@ export async function deletePtmSlotFromFirestore(slotId: string): Promise<void> 
     await deleteDoc(doc(db, 'ptmSlots', slotId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `ptmSlots/${slotId}`);
+  }
+}
+
+/**
+ * F9 — append one row to the issued-document accession register. Writes are
+ * append-only (the `issuedDocuments` rules reject update/delete) so a TC serial
+ * recorded here can never be edited or reused.
+ */
+export async function persistIssuedDocumentToFirestore(document: IssuedDocument): Promise<void> {
+  try {
+    await setDoc(doc(db, 'issuedDocuments', document.id), cleanFirestoreData(document));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `issuedDocuments/${document.id}`);
   }
 }
 

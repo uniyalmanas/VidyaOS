@@ -379,6 +379,38 @@ export interface PtmEventInput {
   notes?: string;
 }
 
+/**
+ * F9 — print-ready documents issued to a student: a plastic-style ID card and
+ * a Transfer Certificate. `issuedDocuments` is the permanent accession
+ * register behind both prints (there is no file storage involved): it records
+ * who was issued what and when, and — for TCs — the serial number, so a
+ * certificate number is never handed out twice.
+ */
+export type IssuedDocumentType = 'id_card' | 'tc';
+
+export interface IssuedDocument {
+  id: string;
+  orgId: string;
+  branchId: string;
+  studentId: string;
+  type: IssuedDocumentType;
+  /** TC serial `${prefix}/${year}/${NNN}`; absent (null) for ID cards. */
+  tcNo?: string | null;
+  /** ISO date the TC student officially leaves; only meaningful for a TC. */
+  leavingDate?: string | null;
+  /** Free-text TC remarks (conduct, dues cleared, etc.). */
+  remarks?: string | null;
+  issuedAt: string;
+  issuedByUserId: string;
+  issuedByName: string;
+}
+
+/** What the "issue a TC" form collects (number/id/actor added by the slice). */
+export interface TcIssueInput {
+  leavingDate?: string;
+  remarks?: string;
+}
+
 export interface Announcement {
   id: string;
   orgId: string;

@@ -13,7 +13,8 @@ import {
   UserCheck,
   MessageSquare,
   Video,
-  ListChecks
+  ListChecks,
+  IdCard
 } from 'lucide-react';
 import { Student, User } from '../../types';
 import { MOCK_STUDENTS } from '../../data/mockData';
@@ -27,6 +28,7 @@ import {
   StatusChip
 } from '../ui';
 import { EditProfileModal } from '../profile/EditProfileModal';
+import { StudentIdCardModal } from '../documents/StudentIdCardModal';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
 import { LeavePortalPanel } from '../leaves/LeavePortalPanel';
 import { motion } from 'motion/react';
@@ -75,6 +77,7 @@ export const StudentPortal: React.FC = () => {
   }, [currentPath]);
 
   const [showEditProfileModal, setShowEditProfileModal] = useState<boolean>(false);
+  const [showIdCard, setShowIdCard] = useState<boolean>(false);
   // Starts empty — nothing is shown as submitted until the student submits it.
   const [submittedTasks, setSubmittedTasks] = useState<{ [id: string]: boolean }>({});
 
@@ -200,6 +203,14 @@ export const StudentPortal: React.FC = () => {
               onClick={() => setShowEditProfileModal(true)}
             >
               Profile
+            </ConsoleButton>
+            <ConsoleButton
+              variant="primary"
+              size="sm"
+              icon={<IdCard className="w-3.5 h-3.5" />}
+              onClick={() => setShowIdCard(true)}
+            >
+              ID Card
             </ConsoleButton>
             <span className="text-xs text-[#5F6368] dark:text-[#9AA0A6] font-medium hidden sm:inline">
               {enrolledBatches.length} Enrolled Batches
@@ -441,6 +452,7 @@ export const StudentPortal: React.FC = () => {
       </motion.div>
 
       {/* Edit Student Profile Modal */}
+      {/* Edit Student Profile Modal */}
       {showEditProfileModal && (
         <EditProfileModal
           isOpen={showEditProfileModal}
@@ -448,6 +460,9 @@ export const StudentPortal: React.FC = () => {
           onClose={() => setShowEditProfileModal(false)}
         />
       )}
+
+      {/* F9 — self-service ID card (view + print; no register write for learners) */}
+      {showIdCard && <StudentIdCardModal student={student} onClose={() => setShowIdCard(false)} />}
     </div>
   );
 };

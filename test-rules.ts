@@ -1640,6 +1640,121 @@ async function main(): Promise<void> {
     throw err;
   }
 
+  console.log('\nSuite 12: Issued documents (F9) — append-only ID card / TC register');
+  try {
+    const issuedDoc = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      orgId: ORG_ID,
+      branchId: 'branch-rules',
+      studentId: 'stud-rules-1',
+      type: 'id_card',
+      tcNo: null,
+      leavingDate: null,
+      remarks: null,
+      issuedAt: '2026-04-01T09:00:00.000Z',
+      issuedByUserId: adminUid,
+      issuedByName: 'Rules Admin',
+      ...over
+    });
+
+    // Sign the learner's linked account in so `isLinkedToStudent` is meaningful.
+    const studentReader = await makeClient('issued-student');
+    await signInWithEmailAndPassword(
+      studentReader.auth,
+      `rules-student-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+
+    // --- desk issues -----------------------------------------------------------
+    suite11Step = 'admin issues an ID card';
+    await setDoc(doc(admin.db, 'issuedDocuments', 'doc-issued-id'), issuedDoc('doc-issued-id'));
+    check('staff/admin may record an ID card in the register', true);
+
+    suite11Step = 'admin issues a TC';
+    await setDoc(
+      doc(admin.db, 'issuedDocuments', 'doc-issued-tc'),
+      issuedDoc('doc-issued-tc', { type: 'tc', tcNo: 'RULES/2026/001', leavingDate: '2026-03-31', remarks: 'Dues cleared.' })
+    );
+    check('staff/admin may record a numbered Transfer Certificate', true);
+
+    // A doc for another learner in the same centre, for the read test below.
+    await setDoc(
+      doc(admin.db, 'issuedDocuments', 'doc-issued-other'),
+      issuedDoc('doc-issued-other', { studentId: 'stud-rules-2' })
+    );
+
+    // --- learners / faculty cannot create -------------------------------------
+    suite11Step = 'student creates';
+    const studentCreateDenied = await expectDenied('a learner creates a register row', () =>
+      setDoc(doc(studentReader.db, 'issuedDocuments', 'doc-student-try'), issuedDoc('doc-student-try'))
+    );
+    check('a learner cannot create an issued document', studentCreateDenied);
+
+    suite11Step = 'teacher creates';
+    const teacherCreateDenied = await expectDenied('a teacher creates a register row', () =>
+      setDoc(doc(teacher.db, 'issuedDocuments', 'doc-teacher-try'), issuedDoc('doc-teacher-try'))
+    );
+    check('faculty cannot create an issued document (desk-only)', teacherCreateDenied);
+
+    // --- well-formedness -------------------------------------------------------
+    suite11Step = 'TC without a serial';
+    const tcNoMissingDenied = await expectDenied('a TC with no serial', () =>
+      setDoc(doc(admin.db, 'issuedDocuments', 'doc-bad-tc'), issuedDoc('doc-bad-tc', { type: 'tc', tcNo: null }))
+    );
+    check('a Transfer Certificate must carry a serial', tcNoMissingDenied);
+
+    suite11Step = 'ID card with a serial';
+    const idCardTcNoDenied = await expectDenied('an ID card carrying a serial', () =>
+      setDoc(doc(admin.db, 'issuedDocuments', 'doc-bad-id'), issuedDoc('doc-bad-id', { tcNo: 'RULES/2026/099' }))
+    );
+    check('an ID card must not carry a serial', idCardTcNoDenied);
+
+    suite11Step = 'forged operator';
+    const forgedActorDenied = await expectDenied('an entry claiming someone else as issuer', () =>
+      setDoc(doc(admin.db, 'issuedDocuments', 'doc-forged'), issuedDoc('doc-forged', { issuedByUserId: 'somebody-else' }))
+    );
+    check('the issuer stamp cannot be forged', forgedActorDenied);
+
+    suite11Step = 'unknown type';
+    const badTypeDenied = await expectDenied('an unknown document type', () =>
+      setDoc(doc(admin.db, 'issuedDocuments', 'doc-bad-type'), issuedDoc('doc-bad-type', { type: 'bonus' }))
+    );
+    check('only id_card/tc document types are accepted', badTypeDenied);
+
+    // --- read scoping ----------------------------------------------------------
+    suite11Step = 'student reads own';
+    const ownSnap = await getDoc(doc(studentReader.db, 'issuedDocuments', 'doc-issued-id'));
+    check('a learner may read their own issued document', ownSnap.exists());
+
+    suite11Step = 'student reads other learner';
+    const otherReadDenied = await expectDenied('a learner reads another learner’s document', () =>
+      getDoc(doc(studentReader.db, 'issuedDocuments', 'doc-issued-other'))
+    );
+    check('a learner cannot read another learner’s documents', otherReadDenied);
+
+    suite11Step = 'cross-org read';
+    const crossOrgReadDenied = await expectDenied('another centre reads the register', () =>
+      getDoc(doc(adminOther.db, 'issuedDocuments', 'doc-issued-id'))
+    );
+    check('the register is tenant-isolated', crossOrgReadDenied);
+
+    // --- append-only -----------------------------------------------------------
+    suite11Step = 'update';
+    const updateDenied = await expectDenied('admin edits a register row', () =>
+      updateDoc(doc(admin.db, 'issuedDocuments', 'doc-issued-id'), { remarks: 'tampered' })
+    );
+    check('register rows cannot be updated (serial is immutable)', updateDenied);
+
+    suite11Step = 'delete';
+    const deleteDenied = await expectDenied('admin deletes a register row', () =>
+      deleteDoc(doc(admin.db, 'issuedDocuments', 'doc-issued-id'))
+    );
+    check('a register row cannot be deleted (serial is never reused)', deleteDenied);
+  } catch (err) {
+    console.error(`\nSuite 12 failed at step: "${suite11Step}"`);
+    throw err;
+  }
+
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);
   console.log('----------------------------------------\n');

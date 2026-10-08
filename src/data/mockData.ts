@@ -21,7 +21,8 @@ import {
   Expense,
   SyllabusTopic,
   PtmEvent,
-  PtmSlot
+  PtmSlot,
+  IssuedDocument
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
 import { generatePtmSlots } from '../lib/ptm';
@@ -1608,3 +1609,38 @@ export const MOCK_PTM_SLOTS: PtmSlot[] = generatePtmSlots(MOCK_PTM_EVENT).map(sl
       : null;
   return claim ? { ...slot, status: 'booked' as const, ...claim } : slot;
 });
+
+// ---------------------------------------------------------------------------
+// F9 — issued-document accession register demo rows.
+// One ID card already printed for a Class 10 learner, and one Transfer
+// Certificate already issued (APEXACADEMY/2026/001) so the register view and
+// the auto-increment show a non-empty history out of the box.
+// ---------------------------------------------------------------------------
+export const MOCK_ISSUED_DOCUMENTS: IssuedDocument[] = [
+  {
+    id: 'doc-idcard-rahul',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    studentId: 'stud-rahul-10',
+    type: 'id_card',
+    tcNo: null,
+    leavingDate: null,
+    remarks: null,
+    issuedAt: '2026-04-06T09:30:00.000Z',
+    issuedByUserId: 'user-apex-admin',
+    issuedByName: 'Apex Front Desk'
+  },
+  {
+    id: 'doc-tc-priya',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    studentId: 'stud-priya-8',
+    type: 'tc',
+    tcNo: 'APEXACADEMY/2026/001',
+    leavingDate: '2026-03-31',
+    remarks: 'Course completed with distinction. All dues cleared. Conduct: Excellent.',
+    issuedAt: '2026-04-02T11:15:00.000Z',
+    issuedByUserId: 'user-apex-admin',
+    issuedByName: 'Apex Admin'
+  }
+];

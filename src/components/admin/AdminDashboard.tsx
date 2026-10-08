@@ -47,6 +47,7 @@ import {
   EyeOff,
   KeyRound,
   UserCog,
+  IdCard,
   X,
   Loader2
 } from 'lucide-react';
@@ -54,6 +55,8 @@ import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, 
 import { uploadFileToStorage } from '../../lib/firebase';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
+import { StudentIdCardModal } from '../documents/StudentIdCardModal';
+import { TransferCertificateModal } from '../documents/TransferCertificateModal';
 import {
   PageHeader,
   MetricCard,
@@ -179,6 +182,9 @@ export const AdminDashboard: React.FC = () => {
   // Modals state
   const [editingPerson, setEditingPerson] = useState<User | null>(null);
   const [showAddStudentModal, setShowAddStudentModal] = useState<boolean>(false);
+  // F9 — print flows: the student whose ID card / TC modal is open.
+  const [idCardStudent, setIdCardStudent] = useState<Student | null>(null);
+  const [tcStudent, setTcStudent] = useState<Student | null>(null);
   // F2 conversion handoff — set when the Inquiries board asks to admit a lead.
   // handleCreateStudent consumes it to mark the inquiry joined + linked after the
   // admission succeeds.
@@ -1734,6 +1740,24 @@ export const AdminDashboard: React.FC = () => {
                     }}
                   >
                     WhatsApp
+                  </ConsoleButton>
+                  <ConsoleButton
+                    variant="secondary"
+                    size="xs"
+                    icon={<IdCard className="w-3 h-3 text-[#1A73E8]" />}
+                    onClick={() => setIdCardStudent(s)}
+                    title="Print student ID card"
+                  >
+                    ID Card
+                  </ConsoleButton>
+                  <ConsoleButton
+                    variant="secondary"
+                    size="xs"
+                    icon={<FileText className="w-3 h-3 text-[#EA580C]" />}
+                    onClick={() => setTcStudent(s)}
+                    title="Issue Transfer Certificate"
+                  >
+                    TC
                   </ConsoleButton>
                 </div>
               )
@@ -4387,6 +4411,10 @@ export const AdminDashboard: React.FC = () => {
           onSaved={() => setEditingPerson(null)}
         />
       )}
+
+      {/* F9 — print-ready student ID card + Transfer Certificate */}
+      <StudentIdCardModal student={idCardStudent} onClose={() => setIdCardStudent(null)} />
+      <TransferCertificateModal student={tcStudent} onClose={() => setTcStudent(null)} />
     </div>
   );
 };
