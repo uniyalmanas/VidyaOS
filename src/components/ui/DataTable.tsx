@@ -3,6 +3,7 @@ import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Filter, RefreshCw } fro
 import { motion } from 'motion/react';
 import { ConsoleButton } from './ConsoleButton';
 import { fadeIn, staggerContainerFast } from '../../lib/motion';
+import { EmptyStateIllustration } from './VidyaIllustrations';
 
 export interface Column<T> {
   key: string;
@@ -26,6 +27,7 @@ export interface DataTableProps<T> {
     title: string;
     description: string;
     icon?: React.ReactNode;
+    illustration?: React.ReactNode;
     action?: React.ReactNode;
   };
   onRowClick?: (row: T) => void;
@@ -134,9 +136,15 @@ export function DataTable<T>({
                 <td colSpan={columns.length} className="py-12 text-center text-[#86868B]">
                   {emptyState ? (
                     <div className="max-w-xs mx-auto space-y-2">
-                      {emptyState.icon && (
+                      {emptyState.illustration ? (
+                        <div className="flex justify-center pb-1">{emptyState.illustration}</div>
+                      ) : emptyState.icon ? (
                         <div className="w-10 h-10 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] mx-auto flex items-center justify-center text-[#86868B]">
                           {emptyState.icon}
+                        </div>
+                      ) : (
+                        <div className="flex justify-center pb-1">
+                          <EmptyStateIllustration variant="generic" size={124} />
                         </div>
                       )}
                       <h4 className="font-bold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">
@@ -148,7 +156,17 @@ export function DataTable<T>({
                       {emptyState.action && <div className="pt-2">{emptyState.action}</div>}
                     </div>
                   ) : (
-                    <span className="font-apple-text">No records found.</span>
+                    <div className="max-w-xs mx-auto space-y-2 py-2">
+                      <div className="flex justify-center pb-1">
+                        <EmptyStateIllustration variant="generic" size={128} />
+                      </div>
+                      <h4 className="font-bold text-sm text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">
+                        No records found
+                      </h4>
+                      <p className="text-xs text-[#86868B] font-apple-text">
+                        Nothing matches the current view yet. New entries will appear here.
+                      </p>
+                    </div>
                   )}
                 </td>
               </tr>
