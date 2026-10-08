@@ -27,8 +27,108 @@
     <meta name="apple-mobile-web-app-title" content="VidyaOS" />
     <meta name="format-detection" content="telephone=no" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Google+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      /* Branded boot splash — pure inline SVG/CSS so no asset or network is
+         needed. Fades itself out (and stops intercepting input) on its own. */
+      #vidya-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        pointer-events: none;
+        background: linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 100%);
+        animation: vidya-splash-out 1.5s ease forwards;
+      }
+      @media (prefers-color-scheme: dark) {
+        #vidya-splash { background: linear-gradient(180deg, #000000 0%, #0D0D0F 100%); }
+      }
+      #vidya-splash .vs-mark {
+        width: 84px;
+        height: 84px;
+        filter: drop-shadow(0 10px 28px rgba(255, 61, 0, 0.38));
+        animation: vidya-splash-pop 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      #vidya-splash .vs-word {
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        font-weight: 800;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+      #vidya-splash .vs-word .vs-v {
+        background: linear-gradient(120deg, #4F46E5, #7C3AED 45%, #EA580C);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      #vidya-splash .vs-word .vs-os { color: #1D1D1F; }
+      @media (prefers-color-scheme: dark) {
+        #vidya-splash .vs-word .vs-os { color: #F5F5F7; }
+      }
+      #vidya-splash .vs-bar {
+        width: 128px;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #6366F1, #7C3AED, #EA580C, #7C3AED, #6366F1);
+        background-size: 200% auto;
+        animation: vidya-splash-bar 1.2s linear infinite;
+      }
+      @keyframes vidya-splash-bar {
+        0% { background-position: 0% 50%; }
+        100% { background-position: 200% 50%; }
+      }
+      @keyframes vidya-splash-pop {
+        0% { opacity: 0; transform: scale(0.82) translateY(6px); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      @keyframes vidya-splash-out {
+        0%, 62% { opacity: 1; visibility: visible; }
+        100% { opacity: 0; visibility: hidden; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #vidya-splash { animation-duration: 0.01s; }
+        #vidya-splash .vs-mark { animation: none; }
+        #vidya-splash .vs-bar { animation: none; }
+      }
+    </style>
   </head>
   <body class="bg-[#F3F4F8] dark:bg-[#111116] text-[#1D1D1F] dark:text-[#F5F5F7] antialiased selection:bg-[#4F46E5]/20 selection:text-[#4F46E5] font-apple-text">
+    <div id="vidya-splash" aria-hidden="true">
+      <svg class="vs-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="vs-splash-left" x1="12" y1="4" x2="24" y2="34" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#FF1744" />
+            <stop offset="100%" stop-color="#D50000" />
+          </linearGradient>
+          <linearGradient id="vs-splash-right" x1="36" y1="4" x2="24" y2="34" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#FFAB00" />
+            <stop offset="45%" stop-color="#FF6D00" />
+            <stop offset="100%" stop-color="#FF3D00" />
+          </linearGradient>
+          <linearGradient id="vs-splash-core" x1="24" y1="6" x2="24" y2="30" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#FFE082" />
+            <stop offset="60%" stop-color="#FF9100" />
+            <stop offset="100%" stop-color="#FF3D00" />
+          </linearGradient>
+          <linearGradient id="vs-splash-base" x1="8" y1="36" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#D50000" />
+            <stop offset="50%" stop-color="#FF3D00" />
+            <stop offset="100%" stop-color="#FF6D00" />
+          </linearGradient>
+        </defs>
+        <circle cx="24" cy="24" r="22" fill="#FF3D00" fill-opacity="0.12" />
+        <path d="M8 36.5C13.5 35 19 36 24 38.5C29 36 34.5 35 40 36.5C38 41 31.5 43.5 24 43.5C16.5 43.5 10 41 8 36.5Z" fill="url(#vs-splash-base)" />
+        <path d="M24 6.5C24 6.5 13 17 11 26C9.5 32.5 15.5 36.5 24 38.5C20.5 33 21 24 24 16.5V6.5Z" fill="url(#vs-splash-left)" />
+        <path d="M24 6.5V16.5C27 24 27.5 33 24 38.5C32.5 36.5 38.5 32.5 37 26C35 17 24 6.5 24 6.5Z" fill="url(#vs-splash-right)" />
+        <path d="M24 18L27.5 24.5L24 31L20.5 24.5L24 18Z" fill="#FF3D00" stroke="#FFD54F" stroke-width="0.8" />
+        <path d="M24 8.5L24.8 20L24 34" stroke="url(#vs-splash-core)" stroke-width="2" stroke-linecap="round" />
+      </svg>
+      <div class="vs-word"><span class="vs-v">Vidya</span><span class="vs-os">OS</span></div>
+      <div class="vs-bar"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
