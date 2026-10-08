@@ -21,6 +21,7 @@ import { MOCK_STUDENTS } from '../../data/mockData';
 import { normalizeMeetUrl, joinState } from '../../lib/timetable';
 import { SyllabusProgress } from '../syllabus/SyllabusProgress';
 import { getIndiaDayName } from '../../lib/date';
+import { formatAllIndiaRank } from '../../lib/exams';
 import {
   PageHeader,
   ConsoleCard,
@@ -396,6 +397,12 @@ export const StudentPortal: React.FC = () => {
                     <div>Percentile: <strong className="text-[#0071E3] dark:text-[#2997FF] font-apple-text">{res.percentile}th</strong></div>
                     <span className="text-[#86868B] truncate font-apple-text">Faculty: "{res.teacherRemarks}"</span>
                   </div>
+                  {formatAllIndiaRank(res) && (
+                    <div className="rounded-xl bg-[#FFF8E1] dark:bg-[#3A2E00] border border-[#FFE082] dark:border-[#5C4B00] px-3 py-2 text-[11px] font-bold text-[#B26A00] dark:text-[#FFD54F] font-apple-text">
+                      🇮🇳 All-India Rank {formatAllIndiaRank(res)}
+                      {res.externalPercentile != null ? ` · ${res.externalPercentile}th percentile nationally` : ''}
+                    </div>
+                  )}
                 </div>
               );
             })}

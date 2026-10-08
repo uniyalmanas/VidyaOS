@@ -211,6 +211,10 @@ export interface FeeInvoice {
   createdAt: string;
 }
 
+// F10 — mock series taxonomy. `mock`/`full_syllabus`/`board` are the kinds a
+// real JEE/NEET center sells with an all-India ranking sheet attached.
+export type ExamKind = 'unit' | 'mock' | 'full_syllabus' | 'board';
+
 export interface Exam {
   id: string;
   orgId: string;
@@ -223,6 +227,8 @@ export interface Exam {
   maxMarks: number;
   passingMarks: number;
   status: 'upcoming' | 'completed' | 'graded';
+  examKind?: ExamKind; // defaults to 'unit' when absent
+  isAllIndia?: boolean; // true when the center imports an external ranking sheet
 }
 
 export interface ExamResult {
@@ -235,6 +241,11 @@ export interface ExamResult {
   percentile?: number;
   teacherRemarks?: string;
   status: 'graded' | 'absent';
+  // F10 — imported external (all-India) standing. Kept separate from the
+  // internal batch rank/percentile so the two are never conflated.
+  externalRank?: number;
+  externalTotalStudents?: number;
+  externalPercentile?: number;
 }
 
 export interface Assignment {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useApp } from '../../context/AppContext';
 import { getIndiaDayName } from '../../lib/date';
+import { formatAllIndiaRank } from '../../lib/exams';
 import { normalizeMeetUrl, joinState } from '../../lib/timetable';
 import {
   Calendar,
@@ -664,6 +665,12 @@ export const ParentPortal: React.FC = () => {
                     <div>Percentile: <strong className="text-indigo-600 dark:text-indigo-400">{res.percentile || 90}th</strong></div>
                     <div className="text-slate-500 dark:text-neutral-400 truncate">Feedback: "{res.teacherRemarks}"</div>
                   </div>
+                  {formatAllIndiaRank(res) && (
+                    <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                      🇮🇳 All-India Rank {formatAllIndiaRank(res)}
+                      {res.externalPercentile != null ? ` · ${res.externalPercentile}th percentile nationally` : ''}
+                    </div>
+                  )}
                 </div>
               );
             })}

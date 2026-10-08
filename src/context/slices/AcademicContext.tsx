@@ -36,6 +36,7 @@ import {
   deleteTimetableSlotFromFirestore
 } from '../../lib/firestoreService';
 import { normalizeMeetUrl } from '../../lib/timetable';
+import { ExternalRankRow, mergeExternalResults } from '../../lib/exams';
 
 export interface AcademicContextType {
   teachers: Teacher[];
@@ -50,6 +51,7 @@ export interface AcademicContextType {
   createExam: (exam: Omit<Exam, 'id' | 'orgId'>) => Exam;
   deleteExam: (examId: string) => void;
   saveExamResults: (examId: string, marksData: { studentId: string; marksObtained: number; remarks?: string }[]) => void;
+  importExternalResults: (examId: string, rows: ExternalRankRow[]) => { updated: number; created: number };
   createAssignment: (assign: Omit<Assignment, 'id' | 'orgId' | 'submissions'>) => Assignment;
   deleteAssignment: (assignId: string) => void;
   addStudyMaterial: (mat: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>) => StudyMaterial;
@@ -375,6 +377,21 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
     persistExamResultsToFirestore(examId, newResults, currentOrg.id);
   };
 
+  // F10 — merge an imported all-India ranking sheet onto existing results. New
+  // rows are created for students who had no internal marks yet so the imported
+  // AIR is never lost; internal rank/percentile stay untouched.
+  const importExternalResults = (examId: string, rows: ExternalRankRow[]): { updated: number; created: number } => {
+    const exam = exams.find(e => e.id === examId);
+    if (!exam) return { updated: 0, created: 0 };
+
+    const { results, updated, created } = mergeExternalResults(examResults, examId, rows);
+    setExamResults(results);
+
+    const examRows = results.filter(r => r.examId === examId);
+    persistExamResultsToFirestore(examId, examRows, currentOrg.id);
+    return { updated, created };
+  };
+
   const createAssignment = (data: Omit<Assignment, 'id' | 'orgId' | 'submissions'>): Assignment => {
     const newAssign: Assignment = {
       ...data,
@@ -492,6 +509,7 @@ export const AcademicProvider: React.FC<AcademicProviderProps> = ({
         createExam,
         deleteExam,
         saveExamResults,
+        importExternalResults,
         createAssignment,
         deleteAssignment,
         addStudyMaterial,

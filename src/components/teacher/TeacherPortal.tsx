@@ -45,6 +45,7 @@ import { TeacherPtmDiary } from '../ptm/TeacherPtmDiary';
 import { motion, AnimatePresence } from 'motion/react';
 import { easings } from '../../lib/motion';
 import { selectTeacherBatches, filterToBatches } from '../../lib/teacherScope';
+import { airBadge } from '../../lib/exams';
 
 export const TeacherPortal: React.FC = () => {
   const { currentPath, navigate } = useRouter();
@@ -861,6 +862,7 @@ export const TeacherPortal: React.FC = () => {
               // Blank until a score is entered. It used to default to 40, so an
               // untouched sheet looked graded and one click saved fabricated marks.
               const currentVal = marksState[student.id] ?? '';
+              const air = airBadge(examResults.find(r => r.examId === activeExam.id && r.studentId === student.id) || {});
 
               return (
                 <div key={student.id} className="py-3 flex items-center justify-between text-xs gap-3">
@@ -877,6 +879,11 @@ export const TeacherPortal: React.FC = () => {
                   </div>
 
                   <div className="flex items-center space-x-2">
+                    {air && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-[#FFF8E1] dark:bg-[#3A2E00] text-[#B26A00] dark:text-[#FFD54F] text-[10px] font-bold whitespace-nowrap">
+                        {air}
+                      </span>
+                    )}
                     <input
                       type="number"
                       max={activeExam.maxMarks}

@@ -819,7 +819,8 @@ export const MOCK_EXAMS: Exam[] = [
     timeSlot: '05:00 PM - 06:30 PM',
     maxMarks: 50,
     passingMarks: 18,
-    status: 'graded'
+    status: 'graded',
+    examKind: 'unit'
   },
   {
     id: 'exam-c10-sci-mid',
@@ -832,7 +833,8 @@ export const MOCK_EXAMS: Exam[] = [
     timeSlot: '05:00 PM - 06:30 PM',
     maxMarks: 40,
     passingMarks: 15,
-    status: 'graded'
+    status: 'graded',
+    examKind: 'unit'
   },
   {
     id: 'exam-c10-math-boardprep',
@@ -845,7 +847,24 @@ export const MOCK_EXAMS: Exam[] = [
     timeSlot: '04:30 PM - 07:30 PM',
     maxMarks: 80,
     passingMarks: 27,
-    status: 'upcoming'
+    status: 'upcoming',
+    examKind: 'board',
+    isAllIndia: true
+  },
+  {
+    id: 'exam-c10-air-mock',
+    orgId: 'org-apex',
+    branchId: 'branch-rajpur',
+    batchId: 'batch-c10-math',
+    title: 'All-India Mock Series — Test 3 (JEE Foundation)',
+    subject: 'Mathematics',
+    examDate: '2026-09-28',
+    timeSlot: '04:30 PM - 07:30 PM',
+    maxMarks: 100,
+    passingMarks: 33,
+    status: 'graded',
+    examKind: 'mock',
+    isAllIndia: true
   }
 ];
 
@@ -893,6 +912,48 @@ export const MOCK_EXAM_RESULTS: ExamResult[] = [
     percentile: 95,
     teacherRemarks: 'Ray diagrams were neatly drawn with arrows. Keep it up!',
     status: 'graded'
+  },
+  {
+    id: 'res-air-1',
+    examId: 'exam-c10-air-mock',
+    studentId: 'stud-rahul-10',
+    marksObtained: 88,
+    percentage: 88,
+    rank: 2,
+    percentile: 92,
+    teacherRemarks: 'Strong national standing — tighten the algebra to crack the top 100.',
+    status: 'graded',
+    externalRank: 247,
+    externalTotalStudents: 4500,
+    externalPercentile: 94.5
+  },
+  {
+    id: 'res-air-2',
+    examId: 'exam-c10-air-mock',
+    studentId: 'stud-aarav-10',
+    marksObtained: 94,
+    percentage: 94,
+    rank: 1,
+    percentile: 98,
+    teacherRemarks: 'All-India topper material. Consistent and accurate.',
+    status: 'graded',
+    externalRank: 61,
+    externalTotalStudents: 4500,
+    externalPercentile: 98.6
+  },
+  {
+    id: 'res-air-3',
+    examId: 'exam-c10-air-mock',
+    studentId: 'stud-sneha-10',
+    marksObtained: 71,
+    percentage: 71,
+    rank: 3,
+    percentile: 80,
+    teacherRemarks: 'Good national placement. Focus on time management in Section C.',
+    status: 'graded',
+    externalRank: 1284,
+    externalTotalStudents: 4500,
+    externalPercentile: 71.5
   }
 ];
 

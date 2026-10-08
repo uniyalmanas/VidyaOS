@@ -250,6 +250,7 @@ export interface AppContextType {
   
   createExam: (exam: Omit<Exam, 'id' | 'orgId'>) => Exam;
   saveExamResults: (examId: string, marksData: { studentId: string; marksObtained: number; remarks?: string }[]) => void;
+  importExternalResults: (examId: string, rows: { studentId: string; externalRank: number; externalTotalStudents?: number; externalPercentile?: number }[]) => { updated: number; created: number };
   
   createAssignment: (assign: Omit<Assignment, 'id' | 'orgId' | 'submissions'>) => Assignment;
   addStudyMaterial: (mat: Omit<StudyMaterial, 'id' | 'orgId' | 'uploadedAt'>) => StudyMaterial;
@@ -563,6 +564,7 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     deduplicateTeachers: academicSlice.deduplicateTeachers,
     createExam: academicSlice.createExam,
     saveExamResults: academicSlice.saveExamResults,
+    importExternalResults: academicSlice.importExternalResults,
     createAssignment: academicSlice.createAssignment,
     addStudyMaterial: academicSlice.addStudyMaterial,
     deleteStudyMaterial: academicSlice.deleteStudyMaterial,

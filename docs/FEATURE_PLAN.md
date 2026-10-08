@@ -1,6 +1,6 @@
 # VidyaOS Real-World Feature Plan (12 Features)
 
-_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 shipped ✅ · F10–F12 pending. Each feature ships one at a time in the order below._
+_status: F1 + F2 + F3 + F4 + F5 + F6 + F7 + F8 + F9 + F10 shipped ✅ · F11–F12 pending. Each feature ships one at a time in the order below._
 
 Everything here follows the existing house pattern:
 
@@ -371,7 +371,7 @@ one button → official-looking TC with TC number. Browser print-to-PDF, no Stor
 
 ---
 
-## F10 — Mock test series + all-India rank import
+## F10 — Mock test series + all-India rank import ✅ SHIPPED (2026-10-08)
 
 **Simple words:** Real JEE/NEET centers sell "mock test with all-India rank". We add a flag on
 exams + a bulk paste-in of external scores so ranks show in results.

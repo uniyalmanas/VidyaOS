@@ -144,7 +144,21 @@ import {
   MAX_TC_REMARKS,
   ISSUED_DOCUMENT_LABEL
 } from './src/lib/issuedDocuments';
-import { PtmEvent, PtmSlot, IssuedDocument } from './src/types';
+import {
+  EXAM_KINDS,
+  EXAM_KIND_LABEL,
+  examKindLabel,
+  isAllIndiaExam,
+  percentileFromRank,
+  parseExternalRankSheet,
+  mergeExternalResults,
+  formatIndianNumber,
+  formatAllIndiaRank,
+  airBadge,
+  externalStats,
+  ExternalRankRow
+} from './src/lib/exams';
+import { PtmEvent, PtmSlot, IssuedDocument, ExamResult } from './src/types';
 
 function cleanPhone(phone: string): string {
   const digits = phone.replace(/[^0-9]/g, '');
@@ -1622,6 +1636,100 @@ assert(latestIssued(register, 'stud-x', 'tc')?.tcNo === 'APEXACADEMY/2026/003', 
 assert(latestIssued(register, 'stud-x', 'id_card')?.id === 'd4', 'latestIssued finds the ID card');
 assert(documentTypeLabel('tc') === 'Transfer Certificate', 'documentTypeLabel names a TC');
 assert(ISSUED_DOCUMENT_LABEL.id_card === 'Student ID Card', 'The ID card label is present');
+
+
+// ============================================================================
+// F10 — Mock series + all-India rank import
+// ============================================================================
+
+const f10Roster = [
+  { id: 's1', enrollmentNo: 'APX10-0001', rollNo: '1', name: 'Aarav Sharma' },
+  { id: 's2', enrollmentNo: 'APX10-0002', rollNo: '2', name: 'Rahul Verma' },
+  { id: 's3', enrollmentNo: 'APX10-0003', rollNo: '3', name: 'Sneha Iyer' }
+] as unknown as Student[];
+
+// Exam taxonomy ---------------------------------------------------------------------
+assert(EXAM_KINDS.length === 4, 'Four exam kinds are supported');
+assert(examKindLabel(undefined) === 'Unit Test', 'A missing kind defaults to a unit test');
+assert(examKindLabel('mock') === 'Mock Test', 'Mock kind is labelled');
+assert(examKindLabel('board') === 'Board Pattern Test', 'Board kind is labelled');
+assert(EXAM_KIND_LABEL.full_syllabus === 'Full Syllabus Test', 'Full-syllabus label is present');
+assert(isAllIndiaExam({ isAllIndia: true }) === true, 'isAllIndiaExam reads the flag');
+assert(isAllIndiaExam({ isAllIndia: false }) === false, 'isAllIndiaExam is false when unset');
+
+// Number formatting + percentile ----------------------------------------------------
+assert(formatIndianNumber(247) === '247', 'Three-digit numbers are ungrouped');
+assert(formatIndianNumber(4500) === '4,500', 'Four-digit numbers use Indian grouping');
+assert(formatIndianNumber(450000) === '4,50,000', 'Lakhs use Indian grouping');
+assert(percentileFromRank(1, 100) === 100, 'The top rank sits at the 100th percentile');
+assert(percentileFromRank(100, 100) === 1, 'The last rank sits at the 1st percentile');
+assert(percentileFromRank(50, 100) === 51, 'Mid ranks match the saveExamResults formula');
+
+// Parsing a pasted ranking sheet ----------------------------------------------------
+const sheet = [
+  'Roll No, All-India Rank, Total Students, Percentile',
+  'APX10-0001, 247, 4500, 94.5',
+  '2, 61, 4500',
+  'Sneha Iyer, 1284, 4500, 71.5'
+].join('\n');
+const parsed = parseExternalRankSheet(sheet, f10Roster);
+assert(parsed.rows.length === 3, 'Every valid line is parsed');
+assert(parsed.errors.length === 0, 'A clean sheet produces no errors');
+assert(parsed.rows[0].studentId === 's1' && parsed.rows[0].externalRank === 247, 'Enrollment number resolves to a student');
+assert(parsed.rows[0].externalTotalStudents === 4500 && parsed.rows[0].externalPercentile === 94.5, 'Explicit total + percentile are kept');
+assert(parsed.rows[1].studentId === 's2' && parsed.rows[1].externalPercentile === 99, 'A missing percentile is derived from rank/total');
+assert(parsed.rows[2].studentId === 's3' && parsed.rows[2].externalRank === 1284, 'A name resolves to a student');
+
+const headerOnly = parseExternalRankSheet('Rank, Student\nNobody Here, 123', f10Roster);
+assert(headerOnly.rows.length === 0 && headerOnly.errors.length === 1, 'Header rows are skipped, unknown students are errors');
+
+const junk = parseExternalRankSheet('APX10-0001, abc\nAPX10-0002, -3\nAPX10-0003, 0', f10Roster);
+assert(junk.rows.length === 0 && junk.errors.length === 0, 'Unparseable / non-positive ranks are ignored quietly');
+
+const badTotal = parseExternalRankSheet('APX10-0001, 500, 100', f10Roster);
+assert(badTotal.rows.length === 0 && badTotal.errors.length === 1, 'A total below the rank is rejected');
+const badPct = parseExternalRankSheet('APX10-0001, 5, 100, 140', f10Roster);
+assert(badPct.rows.length === 0 && badPct.errors.length === 1, 'A percentile above 100 is rejected');
+const dupe = parseExternalRankSheet('APX10-0001, 5\n1, 7', f10Roster);
+assert(dupe.rows.length === 1 && dupe.errors.length === 1, 'A duplicate student is reported and ignored');
+const tabsAndSemicolons = parseExternalRankSheet('APX10-0001\t5\t100;94', f10Roster);
+assert(tabsAndSemicolons.rows.length === 1 && tabsAndSemicolons.rows[0].externalPercentile === 94, 'Tabs and semicolons are accepted separators');
+
+// Merging onto internal results -----------------------------------------------------
+const f10Existing: ExamResult[] = [
+  { id: 'r1', examId: 'e1', studentId: 's1', marksObtained: 88, percentage: 88, rank: 2, percentile: 92, status: 'graded' },
+  { id: 'r2', examId: 'e1', studentId: 's2', marksObtained: 94, percentage: 94, rank: 1, percentile: 98, status: 'graded' },
+  { id: 'r3', examId: 'e2', studentId: 's1', marksObtained: 70, percentage: 70, rank: 1, percentile: 100, status: 'graded' }
+];
+const f10Rows: ExternalRankRow[] = [
+  { studentId: 's1', externalRank: 12, externalTotalStudents: 1000, externalPercentile: 98.8 },
+  { studentId: 's3', externalRank: 400, externalTotalStudents: 1000 }
+];
+const f10Merge = mergeExternalResults(f10Existing, 'e1', f10Rows);
+assert(f10Merge.updated === 1, 'An existing result is updated, not duplicated');
+assert(f10Merge.created === 1, 'A learner with no internal result gets a row so the AIR is kept');
+assert(f10Merge.results.length === f10Existing.length + 1, 'Exactly one row is added');
+const mergedS1 = f10Merge.results.find(r => r.examId === 'e1' && r.studentId === 's1')!;
+assert(f10Merge.results.find(r => r.examId === 'e2')!.externalRank === undefined, 'Other exams are left untouched');
+assert(f10Merge.results.find(r => r.examId === 'e2' && r.studentId === 's1')!.marksObtained === 70, 'Other exams keep their internal marks');
+assert(f10Merge.results.find(r => r.examId === 'e1' && r.studentId === 's2')!.externalRank === undefined, 'A student absent from the sheet is untouched');
+assert(mergedS1.externalRank === 12 && mergedS1.externalTotalStudents === 1000, 'Imported rank + total are upserted');
+assert(mergedS1.marksObtained === 88 && mergedS1.rank === 2, 'Internal marks/rank are preserved through the import');
+assert(f10Merge.results.find(r => r.examId === 'e1' && r.studentId === 's3')!.marksObtained === 0, 'A created row starts with zero internal marks');
+
+// Display + aggregate helpers -------------------------------------------------------
+assert(formatAllIndiaRank({ externalRank: 247, externalTotalStudents: 4500 }) === '#247 of 4,500', 'AIR formats with the total');
+assert(formatAllIndiaRank({ externalRank: 12 }) === '#12', 'AIR formats without a total');
+assert(formatAllIndiaRank({}) === null, 'No imported rank returns null (caller falls back to batch rank)');
+assert(airBadge({ externalRank: 247 }) === 'AIR 247', 'AIR badge is compact');
+assert(airBadge({ externalRank: undefined }) === null, 'AIR badge is null without a rank');
+
+const f10Stats = externalStats(f10Merge.results, 'e1');
+assert(f10Stats.total === 3, 'externalStats counts every result for the exam');
+assert(f10Stats.withAir === 2, 'externalStats counts only imported ranks');
+assert(f10Stats.bestRank === 12, 'externalStats reports the best (lowest) rank');
+assert(f10Stats.averagePercentile === 98.8, 'externalStats averages the imported percentiles');
+assert(externalStats(f10Merge.results, 'missing').total === 0, 'externalStats is empty for an unknown exam');
 
 
 console.log('\n----------------------------------------');

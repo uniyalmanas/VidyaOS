@@ -51,8 +51,14 @@ import {
   X,
   Loader2
 } from 'lucide-react';
-import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry } from '../../types';
+import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry, ExamKind } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
+import {
+  EXAM_KINDS,
+  EXAM_KIND_LABEL,
+  parseExternalRankSheet,
+  externalStats
+} from '../../lib/exams';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
 import { StudentIdCardModal } from '../documents/StudentIdCardModal';
@@ -135,6 +141,7 @@ export const AdminDashboard: React.FC = () => {
     rejectPayment,
     createInvoice,
     createExam,
+    importExternalResults,
     createAnnouncement,
     setActiveReceiptInvoice,
     setActiveUpiModalInvoice,
@@ -205,6 +212,20 @@ export const AdminDashboard: React.FC = () => {
   const [teacherSalary, setTeacherSalary] = useState<number>(35000);
   const [showCollectFeeModal, setShowCollectFeeModal] = useState<boolean>(false);
   const [showNewExamModal, setShowNewExamModal] = useState<boolean>(false);
+  // F10 — new exam form fields (kind + all-India flag).
+  const [examTitle, setExamTitle] = useState<string>('');
+  const [examSubject, setExamSubject] = useState<string>('Mathematics');
+  const [examBatchId, setExamBatchId] = useState<string>(batches[0]?.id || '');
+  const [examDate, setExamDate] = useState<string>(() => getIndiaDateString());
+  const [examTimeSlot, setExamTimeSlot] = useState<string>('05:00 PM - 06:30 PM');
+  const [examMaxMarks, setExamMaxMarks] = useState<number>(100);
+  const [examPassingMarks, setExamPassingMarks] = useState<number>(33);
+  const [examKind, setExamKind] = useState<ExamKind>('mock');
+  const [examIsAllIndia, setExamIsAllIndia] = useState<boolean>(true);
+  // F10 — bulk all-India ranking sheet paste.
+  const [airExamId, setAirExamId] = useState<string | null>(null);
+  const [showImportAirModal, setShowImportAirModal] = useState<boolean>(false);
+  const [airSheet, setAirSheet] = useState<string>('');
   const [showNewNoticeModal, setShowNewNoticeModal] = useState<boolean>(false);
   const [showUploadMaterialModal, setShowUploadMaterialModal] = useState<boolean>(false);
   const [materialTitle, setMaterialTitle] = useState<string>('');
@@ -309,6 +330,69 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setUploadingMaterial(false);
     }
+  };
+
+  // F10 — schedule a test. Unit exams never carry an all-India flag.
+  const handleCreateExam = (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = examTitle.trim();
+    if (!title || !examBatchId) return;
+    const batch = batches.find(b => b.id === examBatchId);
+    const created = createExam({
+      branchId: batch?.branchId || currentOrg.branches?.[0]?.id || 'branch-1',
+      batchId: examBatchId,
+      title,
+      subject: examSubject,
+      examDate,
+      timeSlot: examTimeSlot,
+      maxMarks: examMaxMarks,
+      passingMarks: examPassingMarks,
+      status: 'upcoming',
+      examKind,
+      isAllIndia: examKind === 'unit' ? false : examIsAllIndia
+    });
+    recordAudit({
+      action: 'create',
+      targetType: 'exam',
+      targetId: created.id,
+      summary: `Scheduled ${EXAM_KIND_LABEL[examKind]} "${title}" for ${batch?.name || 'a batch'}${created.isAllIndia ? ' with all-India rank' : ''}.`
+    });
+    showToast(
+      `${EXAM_KIND_LABEL[examKind]} scheduled${created.isAllIndia ? ' — import the ranking sheet once results are out' : ''}.`,
+      'success'
+    );
+    setShowNewExamModal(false);
+    setExamTitle('');
+  };
+
+  // F10 — paste an external ranking sheet and publish all-India ranks.
+  const parsedAirSheet = useMemo(
+    () => (showImportAirModal ? parseExternalRankSheet(airSheet, students) : { rows: [], errors: [] }),
+    [showImportAirModal, airSheet, students]
+  );
+
+  const handleImportAir = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!airExamId) return;
+    const { rows, errors } = parseExternalRankSheet(airSheet, students);
+    if (rows.length === 0) {
+      showToast(errors[0] || 'No valid rank rows found in the pasted sheet.', 'warning');
+      return;
+    }
+    const { updated, created } = importExternalResults(airExamId, rows);
+    recordAudit({
+      action: 'update',
+      targetType: 'exam',
+      targetId: airExamId,
+      summary: `Imported all-India ranks for ${updated + created} student(s)${errors.length ? `, ${errors.length} line(s) skipped` : ''}.`
+    });
+    showToast(
+      `AIR published — ${updated + created} student(s) updated.${errors.length ? ` ${errors.length} line(s) skipped.` : ''}`,
+      errors.length ? 'warning' : 'success'
+    );
+    setShowImportAirModal(false);
+    setAirExamId(null);
+    setAirSheet('');
   };
 
   // Attendance state
@@ -2298,26 +2382,59 @@ export const AdminDashboard: React.FC = () => {
               {exams.map(exam => {
                 const batch = batches.find(b => b.id === exam.batchId);
                 const resultsCount = examResults.filter(r => r.examId === exam.id).length;
+                const air = exam.isAllIndia ? externalStats(examResults, exam.id) : null;
 
                 return (
                   <div
                     key={exam.id}
-                    className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex items-center justify-between text-xs"
+                    className="p-4 rounded-xl border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] flex flex-wrap items-center justify-between gap-3 text-xs"
                   >
-                    <div>
-                      <div className="font-bold text-sm text-[#202124] dark:text-[#E8EAED]">{exam.title}</div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-[#202124] dark:text-[#E8EAED] flex items-center gap-2">
+                        <span className="truncate">{exam.title}</span>
+                        {exam.isAllIndia && (
+                          <StatusChip
+                            label={air && air.withAir > 0 ? `AIR ${air.bestRank}` : 'AIR Ready'}
+                            variant="info"
+                            size="xs"
+                          />
+                        )}
+                      </div>
                       <div className="text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
                         Batch: {batch?.name} · Subject: {exam.subject}
                       </div>
                       <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
                         Date: {exam.examDate} · Max Marks: {exam.maxMarks}
                       </div>
+                      {air && air.withAir > 0 && (
+                        <div className="text-[11px] text-[#1A73E8] dark:text-[#8AB4F8] mt-1 font-semibold">
+                          All-India ranks imported for {air.withAir}/{air.total || air.withAir} learner(s)
+                          {air.bestRank ? ` · Best AIR ${air.bestRank}` : ''}
+                          {air.averagePercentile != null ? ` · Avg percentile ${air.averagePercentile}` : ''}
+                        </div>
+                      )}
                     </div>
-                    <StatusChip
-                      label={resultsCount > 0 ? `${resultsCount} Graded` : 'Scheduled'}
-                      variant={resultsCount > 0 ? 'success' : 'neutral'}
-                      size="xs"
-                    />
+                    <div className="flex items-center gap-2">
+                      <StatusChip
+                        label={resultsCount > 0 ? `${resultsCount} Graded` : 'Scheduled'}
+                        variant={resultsCount > 0 ? 'success' : 'neutral'}
+                        size="xs"
+                      />
+                      {exam.isAllIndia && (
+                        <ConsoleButton
+                          variant="blue"
+                          size="xs"
+                          icon={<Upload className="w-3 h-3" />}
+                          onClick={() => {
+                            setAirExamId(exam.id);
+                            setAirSheet('');
+                            setShowImportAirModal(true);
+                          }}
+                        >
+                          Import AIR
+                        </ConsoleButton>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -4411,6 +4528,236 @@ export const AdminDashboard: React.FC = () => {
           onSaved={() => setEditingPerson(null)}
         />
       )}
+
+      {/* F10 — Schedule Test (mock series + all-India flag) */}
+      <AnimatePresence>
+      {showNewExamModal && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-md rounded-2xl p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED] flex items-center gap-2">
+              <Award className="w-4 h-4 text-[#FFA000]" />
+              Schedule Test
+            </h3>
+            <form onSubmit={handleCreateExam} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Test Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. All-India Mock Test Series — Test 4"
+                  value={examTitle}
+                  onChange={e => setExamTitle(e.target.value)}
+                  className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Batch *</label>
+                  <select
+                    required
+                    value={examBatchId}
+                    onChange={e => setExamBatchId(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  >
+                    {batches.length === 0 && <option value="">No batches yet</option>}
+                    {batches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Subject</label>
+                  <input
+                    type="text"
+                    value={examSubject}
+                    onChange={e => setExamSubject(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Exam Date</label>
+                  <input
+                    type="date"
+                    value={examDate}
+                    onChange={e => setExamDate(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Time Slot</label>
+                  <input
+                    type="text"
+                    value={examTimeSlot}
+                    onChange={e => setExamTimeSlot(e.target.value)}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Max Marks</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={examMaxMarks}
+                    onChange={e => setExamMaxMarks(Number(e.target.value))}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Passing Marks</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={examPassingMarks}
+                    onChange={e => setExamPassingMarks(Number(e.target.value))}
+                    className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Test Type</label>
+                <select
+                  value={examKind}
+                  onChange={e => setExamKind(e.target.value as ExamKind)}
+                  className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                >
+                  {EXAM_KINDS.map(k => (
+                    <option key={k} value={k}>{EXAM_KIND_LABEL[k]}</option>
+                  ))}
+                </select>
+              </div>
+
+              {examKind !== 'unit' && (
+                <label className="flex items-center gap-2.5 p-3 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={examIsAllIndia}
+                    onChange={e => setExamIsAllIndia(e.target.checked)}
+                    className="w-4 h-4 accent-[#FFA000]"
+                  />
+                  <span className="text-[#202124] dark:text-[#E8EAED]">
+                    Mock series with All-India Rank — I will paste the external ranking sheet after the test.
+                  </span>
+                </label>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
+                <ConsoleButton type="button" variant="ghost" onClick={() => setShowNewExamModal(false)}>
+                  Cancel
+                </ConsoleButton>
+                <ConsoleButton type="submit" variant="primary" disabled={batches.length === 0}>
+                  Schedule Test
+                </ConsoleButton>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      {/* F10 — Import All-India Rank sheet for one exam */}
+      <AnimatePresence>
+      {showImportAirModal && (() => {
+        const targetExam = exams.find(e => e.id === airExamId);
+        return (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          <motion.div
+            className="bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] w-full max-w-lg rounded-2xl p-6 shadow-xl space-y-4"
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+          >
+            <div>
+              <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED] flex items-center gap-2">
+                <Award className="w-4 h-4 text-[#FFA000]" />
+                Import All-India Ranks
+              </h3>
+              <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                {targetExam ? `${targetExam.title} · ${targetExam.subject}` : 'Select an exam'}
+              </p>
+            </div>
+
+            <form onSubmit={handleImportAir} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">
+                  Paste ranking sheet (one student per line)
+                </label>
+                <textarea
+                  rows={7}
+                  required
+                  placeholder={'Roll / Enrollment / Name, rank[, total[, percentile]]\ne.g.\nAPX10-0042, 247, 4500, 94.5\nAarav Sharma, 12, 4500'}
+                  value={airSheet}
+                  onChange={e => setAirSheet(e.target.value)}
+                  className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-mono text-[11px]"
+                />
+              </div>
+
+              {airSheet.trim() && (
+                <div className="rounded-lg border border-[#DADCE0] dark:border-[#3C4043] bg-[#F8F9FA] dark:bg-[#282A2C] p-3 space-y-1.5">
+                  <div className="font-semibold text-[#202124] dark:text-[#E8EAED]">
+                    {parsedAirSheet.rows.length} row(s) ready
+                    {parsedAirSheet.errors.length ? ` · ${parsedAirSheet.errors.length} skipped` : ''}
+                  </div>
+                  {parsedAirSheet.rows.slice(0, 3).map(r => {
+                    const s = students.find(x => x.id === r.studentId);
+                    return (
+                      <div key={r.studentId} className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6]">
+                        {s?.name || r.studentId} → AIR {r.externalRank}
+                        {r.externalTotalStudents ? ` of ${r.externalTotalStudents}` : ''}
+                        {r.externalPercentile != null ? ` (${r.externalPercentile}th)` : ''}
+                      </div>
+                    );
+                  })}
+                  {parsedAirSheet.errors.slice(0, 2).map(err => (
+                    <div key={err} className="text-[11px] text-[#D93025] dark:text-[#F28B82]">{err}</div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#DADCE0] dark:border-[#3C4043]">
+                <ConsoleButton
+                  type="button"
+                  variant="ghost"
+                  onClick={() => { setShowImportAirModal(false); setAirExamId(null); setAirSheet(''); }}
+                >
+                  Cancel
+                </ConsoleButton>
+                <ConsoleButton type="submit" variant="primary" disabled={parsedAirSheet.rows.length === 0}>
+                  Publish AIR
+                </ConsoleButton>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+        );
+      })()}
+      </AnimatePresence>
 
       {/* F9 — print-ready student ID card + Transfer Certificate */}
       <StudentIdCardModal student={idCardStudent} onClose={() => setIdCardStudent(null)} />

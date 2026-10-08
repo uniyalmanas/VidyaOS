@@ -1755,6 +1755,64 @@ async function main(): Promise<void> {
     throw err;
   }
 
+  console.log('\nSuite 13: Exam results (F10) — instructors/admin publish marks + imported AIR');
+  let suite13Step = 'setup';
+  try {
+    const examResult = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      examId: 'exam-rules-1',
+      studentId: 'stud-rules-1',
+      marksObtained: 88,
+      percentage: 88,
+      rank: 2,
+      percentile: 92,
+      teacherRemarks: 'Strong national standing.',
+      status: 'graded',
+      externalRank: 247,
+      externalTotalStudents: 4500,
+      externalPercentile: 94.5,
+      orgId: ORG_ID,
+      ...over
+    });
+
+    const airReader = await makeClient('air-student');
+    await signInWithEmailAndPassword(
+      airReader.auth,
+      `rules-student-${stamp}@phone.vidyaos.in`,
+      PASSWORD
+    );
+
+    suite13Step = 'admin publishes imported AIR';
+    await setDoc(doc(admin.db, 'examResults', 'res-air-rules'), examResult('res-air-rules'));
+    check('staff/admin may publish a result carrying an all-India rank', true);
+
+    suite13Step = 'teacher publishes imported AIR';
+    await setDoc(
+      doc(teacher.db, 'examResults', 'res-air-teacher'),
+      examResult('res-air-teacher', { studentId: 'stud-rules-2' })
+    );
+    check('faculty may publish a result carrying an all-India rank', true);
+
+    suite13Step = 'student writes';
+    const studentWriteDenied = await expectDenied('a learner writes an exam result', () =>
+      setDoc(doc(airReader.db, 'examResults', 'res-air-student'), examResult('res-air-student'))
+    );
+    check('a learner cannot fabricate an exam result (AIR stays imported)', studentWriteDenied);
+
+    suite13Step = 'cross-org write';
+    const crossOrgWriteDenied = await expectDenied('another centre writes a result', () =>
+      setDoc(doc(adminOther.db, 'examResults', 'res-air-other'), examResult('res-air-other', { orgId: ORG_ID }))
+    );
+    check('exam results are tenant-isolated', crossOrgWriteDenied);
+
+    suite13Step = 'read';
+    const airRead = await getDoc(doc(airReader.db, 'examResults', 'res-air-rules'));
+    check('a learner may read their centre’s published result', airRead.exists());
+  } catch (err) {
+    console.error(`\nSuite 13 failed at step: "${suite13Step}"`);
+    throw err;
+  }
+
   console.log('\n----------------------------------------');
   console.log(`Results: ${passed} passed, ${failed} failed.`);
   console.log('----------------------------------------\n');
