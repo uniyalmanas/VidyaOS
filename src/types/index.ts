@@ -70,6 +70,14 @@ export interface Organization {
   createdAt: string;
   maxStudents: number;
   maxBranches: number;
+  /**
+   * Cloud-entitlement overrides ("free software, paid cloud"). Optional and
+   * partial — unresolved keys fall back to `FREE_ENTITLEMENTS` via
+   * `lib/entitlements.ts`, so existing orgs without this field keep working.
+   */
+  entitlements?: Partial<Entitlements>;
+  /** Rolling cloud-usage counters maintained by the metering service. */
+  usage?: OrgUsage;
 }
 
 export interface User {
@@ -494,6 +502,59 @@ export interface SubscriptionPlan {
   features: string[];
   popular?: boolean;
   description: string;
+}
+
+// ---------------------------------------------------------------------------
+// Cloud entitlements — "free software, paid cloud".
+// The core ERP is free; only cloud services are metered and sold. Catalog &
+// resolution logic live in `lib/entitlements.ts`.
+// ---------------------------------------------------------------------------
+
+/** Purchasable cloud add-ons. The core ERP is never gated. */
+export type CloudSkuId =
+  | 'media' // extra photo / file storage
+  | 'messaging' // automated WhatsApp / SMS / email credits
+  | 'brand' // custom domain, logo & theme
+  | 'app' // branded Play-Store Android app
+  | 'video' // hosted lectures + secure streaming
+  | 'ai' // Gemini AI credits
+  | 'pro'; // bundle of everything
+
+export type EntitlementPeriod = 'free' | 'trial' | 'active' | 'past_due' | 'suspended';
+
+/** Effective limits & capabilities for one organisation. */
+export interface Entitlements {
+  /** Free core ERP is always on. */
+  core: boolean;
+  period: EntitlementPeriod;
+  /** Caps; use -1 (UNLIMITED in lib/entitlements.ts) for no cap. */
+  maxStudents: number;
+  maxBranches: number;
+  maxStaff: number;
+  /** Cloud media quota in bytes. */
+  mediaBytesQuota: number;
+  /** Outbound WhatsApp / SMS / email credits. */
+  messagingCredits: number;
+  /** FCM push notifications (FCM is free — kept on for retention). */
+  pushEnabled: boolean;
+  customBrand: boolean;
+  brandedApp: boolean;
+  /** Hosted video minutes. */
+  videoMinutes: number;
+  /** Gemini AI credits. */
+  aiCredits: number;
+  /** Purchased add-ons currently active. */
+  skus: CloudSkuId[];
+  renewsAt?: string;
+}
+
+/** Rolling per-org cloud usage, written by the metering service. */
+export interface OrgUsage {
+  mediaBytes: number;
+  messagesSent: number;
+  videoMinutes: number;
+  aiCreditsUsed: number;
+  updatedAt: string;
 }
 
 export interface NotificationItem {

@@ -1,0 +1,22 @@
+{
+  "name": "vidyaos-functions",
+  "private": true,
+  "description": "VidyaOS Cloud Functions — the paid-cloud backend (metering, billing, messaging, push).",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.0.0",
+    "firebase-functions": "^6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

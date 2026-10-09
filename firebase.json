@@ -7,6 +7,16 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "functions": {
+    "source": "functions",
+    "codebase": "default",
+    "runtime": "nodejs20",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "*.log"
+    ]
+  },
   "hosting": {
     "public": "dist",
     "ignore": [

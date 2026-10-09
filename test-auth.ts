@@ -121,6 +121,22 @@ import {
   DEFAULT_LEVEL
 } from './src/lib/programs';
 import {
+  FREE_ENTITLEMENTS,
+  CLOUD_SKUS,
+  UNLIMITED,
+  getCloudSku,
+  resolveEntitlements,
+  hasSku,
+  isUnlimited,
+  remainingQuota,
+  isQuotaExceeded,
+  quotaPct,
+  withinStudentCap,
+  emptyUsage,
+  formatBytes,
+  entitlementSummary
+} from './src/lib/entitlements';
+import {
   generatePtmSlots,
   validatePtmEvent,
   parseClockMinutes,
@@ -2025,6 +2041,82 @@ const suggestion = suggestedRolloverYears([
 ]);
 assert(suggestion?.fromYear === '2026-2027' && suggestion?.toYear === '2027-2028', 'The latest academic year seeds the next rollover');
 assert(suggestedRolloverYears([]) === null, 'No batches means no year suggestion');
+
+// -------------------------------------------------------------
+// Cloud entitlements — "free software, paid cloud"
+// (the free tier must stay free; paid SKUs only unlock cloud services)
+// -------------------------------------------------------------
+console.log('\n===== Cloud entitlements & metering =====');
+
+// Free tier invariants
+assert(FREE_ENTITLEMENTS.core === true, 'Core ERP is included on the free tier');
+assert(FREE_ENTITLEMENTS.period === 'free', 'Free tier reports period "free"');
+assert(FREE_ENTITLEMENTS.maxStudents > 0, 'Free tier has a finite student cap');
+assert(FREE_ENTITLEMENTS.maxStaff === UNLIMITED, 'Staff are unlimited on the free tier');
+assert(FREE_ENTITLEMENTS.messagingCredits === 0, 'Free tier grants no paid message credits');
+assert(FREE_ENTITLEMENTS.customBrand === false, 'Free tier cannot use a custom brand');
+assert(FREE_ENTITLEMENTS.brandedApp === false, 'Free tier cannot publish a branded app');
+assert(FREE_ENTITLEMENTS.mediaBytesQuota > 0, 'Free tier includes a small media allowance');
+assert(FREE_ENTITLEMENTS.skus.length === 0, 'Free tier owns no cloud SKUs');
+
+// Resolution cascade: free base -> legacy caps -> explicit overrides -> SKU grants
+const freeResolved = resolveEntitlements({});
+assert(freeResolved.maxStudents === FREE_ENTITLEMENTS.maxStudents, 'Empty org resolves to the free caps');
+assert(freeResolved.core === true, 'Resolved org always keeps the free core ontology');
+
+const legacyResolved = resolveEntitlements({ maxStudents: 500, maxBranches: 3 } as any);
+assert(legacyResolved.maxStudents === 500 && legacyResolved.maxBranches === 3, 'Legacy stored caps are respected');
+
+const overrideResolved = resolveEntitlements({ maxStudents: 500, entitlements: { maxStudents: 50 } } as any);
+assert(overrideResolved.maxStudents === 50, 'Explicit entitlement override beats the legacy cap');
+
+const mediaResolved = resolveEntitlements({ entitlements: { skus: ['media'] } } as any);
+assert(mediaResolved.mediaBytesQuota === 10 * 1024 * 1024 * 1024, 'Media SKU grants 10 GB');
+assert(mediaResolved.period === 'active', 'Purchasing a SKU promotes the org to period "active"');
+
+const proResolved = resolveEntitlements({ entitlements: { skus: ['pro'] } } as any);
+assert(proResolved.customBrand && proResolved.brandedApp, 'Cloud Pro unlocks brand + branded app');
+assert(proResolved.messagingCredits > 0 && proResolved.aiCredits > 0, 'Cloud Pro unlocks messaging + AI credits');
+
+// SKU lookup & bundle satisfaction
+assert(getCloudSku('media')?.priceMonthly === 99, 'Media SKU is priced at ₹99/mo');
+assert(getCloudSku('nope' as any) === undefined, 'Unknown SKU id returns undefined');
+assert(hasSku(proResolved, 'brand') === true, 'Cloud Pro satisfies an individual SKU check');
+assert(hasSku(mediaResolved, 'brand') === false, 'A single SKU does not imply other SKUs');
+
+// Catalog hygiene
+assert(new Set(CLOUD_SKUS.map(s => s.id)).size === CLOUD_SKUS.length, 'Cloud SKU ids are unique');
+assert(CLOUD_SKUS.every(s => s.priceMonthly > 0), 'Every cloud SKU has a positive price');
+assert(CLOUD_SKUS.every(s => Object.keys(s.grants).length > 0), 'Every cloud SKU grants something');
+
+// resolveEntitlements must never mutate the shared free constant
+resolveEntitlements({ entitlements: { skus: ['pro', 'video'] } } as any);
+assert(FREE_ENTITLEMENTS.skus.length === 0, 'Resolving entitlements does not mutate the free constant');
+
+// Quota math
+assert(isUnlimited(UNLIMITED) === true && isUnlimited(0) === false, 'UNLIMITED sentinel recognised');
+assert(remainingQuota(100, 30) === 70, 'Remaining quota subtracts usage');
+assert(remainingQuota(UNLIMITED, 999) === Infinity, 'Unlimited quota reports Infinity remaining');
+assert(isQuotaExceeded(100, 101) === true && isQuotaExceeded(100, 100) === false, 'Quota overage detected past the cap');
+assert(isQuotaExceeded(UNLIMITED, 10_000_000) === false, 'Unlimited quota can never be exceeded');
+assert(quotaPct(100, 50) === 50, 'Quota percentage is computed');
+assert(quotaPct(100, 200) === 100, 'Quota percentage is clamped at 100');
+assert(quotaPct(UNLIMITED, 5) === 0, 'Unlimited quota renders no bar');
+assert(withinStudentCap(FREE_ENTITLEMENTS, FREE_ENTITLEMENTS.maxStudents - 1) === true, 'Can admit up to the student cap');
+assert(withinStudentCap(FREE_ENTITLEMENTS, FREE_ENTITLEMENTS.maxStudents) === false, 'Cannot admit past the student cap');
+
+// Formatting & usage
+assert(formatBytes(0) === '0 B', 'Zero bytes formats cleanly');
+assert(formatBytes(1024) === '1 KB', 'KB formatting works');
+assert(formatBytes(1536) === '1.5 KB', 'Fractional KB formatting works');
+assert(formatBytes(1024 * 1024) === '1 MB', 'MB formatting works');
+assert(formatBytes(1024 * 1024 * 1024) === '1 GB', 'GB formatting works');
+const freshUsage = emptyUsage();
+assert(
+  freshUsage.mediaBytes === 0 && freshUsage.messagesSent === 0 && freshUsage.aiCreditsUsed === 0,
+  'Empty usage starts at zero'
+);
+assert(entitlementSummary(FREE_ENTITLEMENTS).some(line => line.includes('students')), 'Entitlement summary lists student allowance');
 
 
 console.log('\n----------------------------------------');
