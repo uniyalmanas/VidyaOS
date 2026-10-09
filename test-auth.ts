@@ -58,7 +58,7 @@ import {
   slipsForMonth,
   formatTimeHHMM
 } from './src/lib/staffOps';
-import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, Installment, TimetableSlot, SyllabusTopic, SyllabusStatus } from './src/types';
+import { Inquiry, LeaveRequest, Student, Teacher, Batch, AttendanceRecord, TeacherAttendance, SalarySlip, Expense, FeeInvoice, Installment, TimetableSlot, SyllabusTopic, SyllabusStatus, IndianBoard } from './src/types';
 import {
   monthKeyFromSalaryLabel,
   incomeForMonth,
@@ -106,6 +106,20 @@ import {
   advanceStatus,
   validateSyllabusTopic
 } from './src/lib/syllabus';
+import {
+  PROGRAM_TRACKS,
+  PROGRAM_CATEGORIES,
+  getProgramTrack,
+  programLabel,
+  tracksByCategory,
+  levelsForTrack,
+  subjectsForTrack,
+  allLevels,
+  allSubjects,
+  levelOptionsFor,
+  DEFAULT_TRACK,
+  DEFAULT_LEVEL
+} from './src/lib/programs';
 import {
   generatePtmSlots,
   validatePtmEvent,
@@ -1367,6 +1381,40 @@ const opts = templateOptions();
 assert(opts.boards.includes('CBSE'), 'The picker exposes the CBSE board');
 assert(opts.classes.includes('Class 10'), 'The picker exposes Class 10');
 assert(opts.subjects.includes('Physics'), 'The picker exposes Physics');
+
+// ============================================================================
+// Program catalog — school, competitive & government-exam tracks
+// ============================================================================
+assert(PROGRAM_TRACKS.length >= 20, 'The catalog lists a broad set of tracks');
+assert(new Set(PROGRAM_TRACKS.map(t => t.id)).size === PROGRAM_TRACKS.length, 'Every track id is unique');
+assert(PROGRAM_TRACKS.every(t => PROGRAM_CATEGORIES.includes(t.category)), 'Every track belongs to a known category');
+assert(PROGRAM_TRACKS.every(t => t.label.trim().length > 0), 'Every track has a label');
+assert(PROGRAM_TRACKS.every(t => t.levels.length > 0), 'Every track suggests at least one level');
+assert(PROGRAM_TRACKS.every(t => t.subjects.length > 0), 'Every track suggests at least one subject');
+
+assert(!!getProgramTrack('SSC') && !!getProgramTrack('Banking') && !!getProgramTrack('UPSC & State PSC'), 'Government-exam tracks exist');
+assert(!!getProgramTrack('Railways') && !!getProgramTrack('Defence') && !!getProgramTrack('Teaching Exams'), 'More government-exam tracks exist');
+assert(getProgramTrack('SSC')!.levels.includes('SSC CGL'), 'SSC offers CGL as a level');
+assert(levelsForTrack('Banking').includes('IBPS PO'), 'Banking offers IBPS PO as a level');
+assert(subjectsForTrack('Railways').includes('General Science'), 'Railways lists General Science');
+assert(getProgramTrack(DEFAULT_TRACK)!.levels.includes(DEFAULT_LEVEL), 'Default track/level pair is valid for onboarding');
+
+const grouped = tracksByCategory();
+assert(grouped.length === PROGRAM_CATEGORIES.length, 'tracksByCategory returns every category');
+assert(grouped.some(g => g.category === 'Government Exams' && g.tracks.length >= 5), 'Government Exams is a populated group');
+
+assert(allLevels().includes('SSC CGL') && allLevels().includes('Class 10'), 'allLevels merges school and govt levels');
+assert(allSubjects().includes('Quantitative Aptitude'), 'allSubjects merges school and govt subjects');
+assert(levelOptionsFor('SSC').includes('SSC CHSL'), 'levelOptionsFor returns the track levels');
+assert(levelOptionsFor('State PSC – Mains' as IndianBoard).length > 0, 'An unknown custom track still gets fallback level options');
+assert(programLabel('SSC') !== 'SSC', 'programLabel returns the friendly label');
+
+// Government-exam syllabus templates are wired in -------------------------------
+assert(!!findSyllabusTemplate('SSC', 'SSC CGL', 'Quantitative Aptitude'), 'An SSC CGL Quant template exists');
+assert(!!findSyllabusTemplate('Banking', 'IBPS PO', 'Reasoning'), 'A Banking Reasoning template exists');
+assert(!!findSyllabusTemplate('UPSC & State PSC', 'UPSC CSE Prelims', 'Indian Polity'), 'A UPSC Polity template exists');
+assert(syllabusTemplatesFor('SSC').length >= 3, 'SSC exposes several templates to the generator');
+assert(templateOptions().boards.includes('Banking'), 'The syllabus picker exposes government-exam boards');
 
 // buildTopicsFromTemplate ---------------------------------------------------------
 const seedTopics = buildTopicsFromTemplate(t10Math!, {

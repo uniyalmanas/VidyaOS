@@ -62,7 +62,7 @@ const features = [
     text: 'Faculty marks entire batch attendance in seconds with 1-tap presets. Absent students automatically trigger real-time WhatsApp alerts to parents.',
     points: ['Real-time Absent Alerts to Parents', 'Monthly % Attendance Log'] },
   { icon: Building2, tint: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300', title: 'Multi-Branch & Batch Topology',
-    text: 'Organize morning, evening, and weekend batches across multiple branches. Supports CBSE, ICSE, State Boards, IIT-JEE, and NEET curriculums.',
+    text: 'Organize morning, evening, and weekend batches across multiple branches — school boards (CBSE, ICSE, State), IIT-JEE/NEET, and government-exam coaching (SSC, Banking, Railways, UPSC & State PSC).',
     points: ['Branch-Level Revenue Ledgers', 'Shared Faculty Timetable Slots'] },
   { icon: Sparkles, tint: 'bg-[#AF52DE]/12 text-[#AF52DE] dark:text-[#BF5AF2]', title: 'AI Study Assistant (Gemini)',
     text: 'Integrated Google Gemini intelligence grounds syllabus questions, creates instant test diagnostic summaries, and helps students review tricky concepts.',

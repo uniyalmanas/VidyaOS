@@ -141,6 +141,261 @@ export const SYLLABUS_TEMPLATES: SyllabusTemplate[] = [
       'Surface Areas and Volumes',
       'Statistics'
     ]
+  },
+
+  // --- Government / competitive exam templates ------------------------------
+  {
+    board: 'SSC',
+    classGrade: 'SSC CGL',
+    subject: 'Quantitative Aptitude',
+    chapters: [
+      'Number System',
+      'HCF & LCM',
+      'Simplification & Approximation',
+      'Percentage',
+      'Ratio & Proportion',
+      'Average',
+      'Profit, Loss & Discount',
+      'Simple Interest',
+      'Compound Interest',
+      'Time & Work',
+      'Time, Speed & Distance',
+      'Mixture & Alligation',
+      'Partnership',
+      'Pipes & Cisterns',
+      'Algebra',
+      'Geometry',
+      'Mensuration',
+      'Trigonometry',
+      'Data Interpretation'
+    ]
+  },
+  {
+    board: 'SSC',
+    classGrade: 'SSC CGL',
+    subject: 'Reasoning',
+    chapters: [
+      'Analogy',
+      'Classification',
+      'Series (Number & Alphabet)',
+      'Coding-Decoding',
+      'Blood Relations',
+      'Direction Sense',
+      'Ranking & Order',
+      'Syllogism',
+      'Seating Arrangement',
+      'Puzzles',
+      'Mathematical Operations',
+      'Venn Diagrams',
+      'Mirror & Water Images',
+      'Paper Folding & Cutting',
+      'Statement & Decision Making'
+    ]
+  },
+  {
+    board: 'SSC',
+    classGrade: 'SSC CGL',
+    subject: 'General Awareness',
+    chapters: [
+      'History & Culture',
+      'Indian Polity & Constitution',
+      'Geography',
+      'Indian Economy',
+      'General Science (Physics)',
+      'General Science (Chemistry)',
+      'General Science (Biology)',
+      'Static GK',
+      'Current Affairs',
+      'Books & Authors',
+      'Awards & Honours',
+      'Sports',
+      'Important Days'
+    ]
+  },
+  {
+    board: 'Banking',
+    classGrade: 'IBPS PO',
+    subject: 'Quantitative Aptitude',
+    chapters: [
+      'Number Series',
+      'Quadratic Equations',
+      'Simplification',
+      'Data Interpretation',
+      'Percentage',
+      'Ratio & Proportion',
+      'Average',
+      'Profit & Loss',
+      'Simple & Compound Interest',
+      'Time & Work',
+      'Speed, Time & Distance',
+      'Boats & Streams',
+      'Mixture & Alligation',
+      'Permutation & Combination',
+      'Probability',
+      'Mensuration',
+      'Approximation'
+    ]
+  },
+  {
+    board: 'Banking',
+    classGrade: 'IBPS PO',
+    subject: 'Reasoning',
+    chapters: [
+      'Puzzles & Seating Arrangement',
+      'Syllogism',
+      'Inequality',
+      'Coding-Decoding',
+      'Blood Relations',
+      'Direction Sense',
+      'Order & Ranking',
+      'Input-Output',
+      'Alphanumeric Series',
+      'Data Sufficiency',
+      'Logical Reasoning',
+      'Statement & Assumption',
+      'Causes & Effects'
+    ]
+  },
+  {
+    board: 'Banking',
+    classGrade: 'IBPS PO',
+    subject: 'Banking Awareness',
+    chapters: [
+      'Banking History & RBI',
+      'Types of Banks',
+      'Monetary Policy',
+      'Money & Money Supply',
+      'Banking Products & Services',
+      'NEFT, RTGS & UPI',
+      'Financial Inclusion',
+      'Insurance & Mutual Funds',
+      'Capital Markets',
+      'Basics of Accounting',
+      'GDP & National Income',
+      'Budget & Taxation',
+      'International Financial Institutions',
+      'Static GK',
+      'Current Affairs'
+    ]
+  },
+  {
+    board: 'Railways',
+    classGrade: 'RRB NTPC',
+    subject: 'Mathematics',
+    chapters: [
+      'Number System',
+      'Decimals & Fractions',
+      'HCF & LCM',
+      'Ratio & Proportion',
+      'Percentage',
+      'Mensuration',
+      'Time & Work',
+      'Time & Distance',
+      'Simple & Compound Interest',
+      'Profit & Loss',
+      'Algebra',
+      'Geometry',
+      'Trigonometry',
+      'Elementary Statistics'
+    ]
+  },
+  {
+    board: 'Railways',
+    classGrade: 'RRB NTPC',
+    subject: 'General Science',
+    chapters: [
+      'Physics: Units & Measurements',
+      'Physics: Motion & Force',
+      'Physics: Work, Energy & Power',
+      'Physics: Light & Sound',
+      'Physics: Electricity & Magnetism',
+      'Chemistry: Matter',
+      'Chemistry: Atoms & Molecules',
+      'Chemistry: Acids, Bases & Salts',
+      'Chemistry: Metals & Non-metals',
+      'Biology: Cell & Tissues',
+      'Biology: Human Body Systems',
+      'Biology: Nutrition & Health',
+      'Biology: Plants & Environment',
+      'Scientific Instruments & Inventions'
+    ]
+  },
+  {
+    board: 'UPSC & State PSC',
+    classGrade: 'UPSC CSE Prelims',
+    subject: 'Indian Polity',
+    chapters: [
+      'Historical Background of the Constitution',
+      'Making of the Constitution',
+      'Salient Features',
+      'Preamble',
+      'Union & its Territory',
+      'Citizenship',
+      'Fundamental Rights',
+      'Directive Principles',
+      'Fundamental Duties',
+      'President & Vice-President',
+      'Prime Minister & Council of Ministers',
+      'Parliament',
+      'Supreme Court & Judicial Review',
+      'State Government',
+      'Local Government (Panchayati Raj)',
+      'Constitutional Bodies',
+      'Elections & Electoral Reforms',
+      'Emergency Provisions',
+      'Amendments'
+    ]
+  },
+  {
+    board: 'Defence',
+    classGrade: 'NDA',
+    subject: 'Mathematics',
+    chapters: [
+      'Sets, Relations & Functions',
+      'Complex Numbers',
+      'Quadratic Equations',
+      'Sequences & Series',
+      'Permutations & Combinations',
+      'Binomial Theorem',
+      'Matrices & Determinants',
+      'Trigonometric Ratios & Identities',
+      'Trigonometric Equations',
+      'Inverse Trigonometric Functions',
+      'Properties of Triangles',
+      'Cartesian Coordinate System',
+      'Straight Lines',
+      'Conic Sections',
+      '3D Geometry',
+      'Vectors',
+      'Statistics',
+      'Probability',
+      'Limits & Continuity',
+      'Differentiation',
+      'Integration',
+      'Differential Equations'
+    ]
+  },
+  {
+    board: 'Teaching Exams',
+    classGrade: 'CTET',
+    subject: 'Mathematics',
+    chapters: [
+      'Number System',
+      'Addition & Subtraction',
+      'Multiplication & Division',
+      'Fractions',
+      'Geometry',
+      'Measurement',
+      'Time & Money',
+      'Data Handling',
+      'Patterns',
+      'Pedagogy of Mathematics',
+      'Nature of Mathematics',
+      'Place of Mathematics in Curriculum',
+      'Language of Mathematics',
+      'Community Mathematics',
+      'Remedial Teaching'
+    ]
   }
 ];
 

@@ -1,6 +1,40 @@
 export type UserRole = 'PLATFORM_OWNER' | 'CENTER_ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT';
 
-export type IndianBoard = 'Board level' | 'Coaching' | 'Board level & Coaching' | 'CBSE' | 'ICSE' | 'State Board' | 'JEE Foundation' | 'NEET Foundation' | 'Skill Training';
+/**
+ * The programme / exam track an institute prepares students for. Despite the
+ * historic name it is no longer school-only — it spans school boards,
+ * competitive entrance exams (JEE/NEET/CUET), government exams (SSC, Banking,
+ * Railways, UPSC & State PSC, Defence, Teaching, Police) and skill courses.
+ * The canonical list (with levels & subjects) lives in `lib/programs.ts`.
+ */
+export type IndianBoard =
+  // School & board
+  | 'Board level'
+  | 'Coaching'
+  | 'Board level & Coaching'
+  | 'CBSE'
+  | 'ICSE'
+  | 'State Board'
+  | 'Tuition (All Subjects)'
+  // Competitive entrances
+  | 'JEE Foundation'
+  | 'NEET Foundation'
+  | 'JEE Main & Advanced'
+  | 'NEET UG'
+  | 'CUET'
+  | 'Olympiad & NTSE'
+  // Government / competitive exams
+  | 'SSC'
+  | 'Banking'
+  | 'Railways'
+  | 'UPSC & State PSC'
+  | 'Defence'
+  | 'Teaching Exams'
+  | 'Police & SI'
+  // Skills & others
+  | 'Skill Training'
+  | 'Spoken English'
+  | 'Computer & IT Skills';
 
 export interface Branch {
   id: string;

@@ -27,9 +27,7 @@ import {
   isTerminalInquiryStatus
 } from '../../lib/inquiries';
 import { motion, AnimatePresence } from 'motion/react';
-
-const CLASS_OPTIONS = ['Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
-const BOARD_OPTIONS: IndianBoard[] = ['Board level', 'Coaching', 'Board level & Coaching', 'CBSE', 'ICSE', 'State Board', 'JEE Foundation', 'NEET Foundation', 'Skill Training'];
+import { ProgramTrackSelect, ProgramLevelSelect } from '../common/ProgramSelect';
 
 const STATUS_META: Record<InquiryStatus, { label: string; variant: StatusChipVariant; accent: string }> = {
   new: { label: 'New', variant: 'info', accent: '#1A73E8' },
@@ -553,20 +551,12 @@ export const InquiriesModule: React.FC<InquiriesModuleProps> = ({ onConvert }) =
                   <input value={fEmail} onChange={e => setFEmail(e.target.value)} placeholder="parent@example.com" className={formField} />
                 </div>
                 <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Class</label>
-                  <select value={fClass} onChange={e => setFClass(e.target.value)} className={formField}>
-                    {CLASS_OPTIONS.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Program / Track</label>
+                  <ProgramTrackSelect value={fBoard} onChange={setFBoard} className={formField} />
                 </div>
                 <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Board / Level</label>
-                  <select value={fBoard} onChange={e => setFBoard(e.target.value as IndianBoard)} className={formField}>
-                    {BOARD_OPTIONS.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Class / Exam Level</label>
+                  <ProgramLevelSelect value={fClass} onChange={setFClass} track={fBoard} className={formField} />
                 </div>
                 <div>
                   <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Subjects</label>

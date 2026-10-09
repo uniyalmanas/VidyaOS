@@ -60,6 +60,27 @@ const PRESET_QUERIES = [
     query: 'What are the current CUET UG domain subject requirements and registration guidelines for central universities in India?',
     icon: Globe,
     tag: 'CUET'
+  },
+  {
+    title: 'SSC CGL / CHSL Latest Notification',
+    desc: 'Exam calendar, vacancies, tier pattern & syllabus',
+    query: 'What are the latest official SSC CGL and CHSL notifications, exam calendar, vacancies and tier-wise pattern?',
+    icon: Award,
+    tag: 'SSC'
+  },
+  {
+    title: 'IBPS & SBI Banking Exam Updates',
+    desc: 'PO/Clerk notifications, prelims & mains dates',
+    query: 'What are the latest IBPS and SBI PO and Clerk notifications, exam dates and selection process?',
+    icon: BookOpen,
+    tag: 'Banking'
+  },
+  {
+    title: 'UPSC & State PSC Notifications',
+    desc: 'Civil services calendar, syllabus & eligibility',
+    query: 'What are the latest UPSC Civil Services and State PSC notifications, exam dates, syllabus and eligibility?',
+    icon: Globe,
+    tag: 'UPSC'
   }
 ];
 
@@ -161,7 +182,7 @@ export const SearchGroundingModal: React.FC<SearchGroundingModalProps> = ({ isOp
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search latest CBSE dates, JEE/NEET syllabus, CUET updates..."
+              placeholder="Search CBSE dates, JEE/NEET/CUET syllabus, SSC & UPSC updates..."
               className="w-full pl-11 pr-28 py-3.5 bg-[#F8F9FA] dark:bg-[#303134] border border-[#DADCE0] dark:border-[#5F6368] rounded-2xl text-sm text-[#202124] dark:text-[#E3E3E3] placeholder-[#80868B] focus:outline-none focus:ring-2 focus:ring-[#1A73E8] focus:border-transparent transition"
             />
             <Search className="w-5 h-5 text-[#80868B] absolute left-3.5" />

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { IndianBoard } from '../../types';
+import { PROGRAM_TRACKS } from '../../lib/programs';
 import {
   Upload,
   FileSpreadsheet,
@@ -97,11 +98,23 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
 
       const name = cells[0] || '';
       const classGrade = cells[1] || 'Class 11';
-      const rawBoard = (cells[2] || 'Board level').toUpperCase();
+      const rawBoard = (cells[2] || 'Board level').trim();
+      // Resolve the program/track written in the CSV against the catalog:
+      // exact id first, then a friendly keyword match, then sane fallbacks.
       let board: IndianBoard = 'Board level';
-      if (rawBoard.includes('COACHING') || rawBoard.includes('JEE') || rawBoard.includes('NEET')) board = 'Coaching';
-      else if (rawBoard.includes('BOTH') || rawBoard.includes('INTEGRATED')) board = 'Board level & Coaching';
-      else if (rawBoard.includes('BOARD') || rawBoard.includes('CBSE') || rawBoard.includes('ICSE') || rawBoard.includes('STATE')) board = 'Board level';
+      const exact = PROGRAM_TRACKS.find(t => t.id.toLowerCase() === rawBoard.toLowerCase());
+      if (exact) {
+        board = exact.id;
+      } else {
+        const upper = rawBoard.toUpperCase();
+        const keyword = PROGRAM_TRACKS.find(
+          t => upper.includes(t.id.toUpperCase()) || t.label.toUpperCase().includes(upper)
+        );
+        if (keyword) board = keyword.id;
+        else if (upper.includes('JEE')) board = 'JEE Main & Advanced';
+        else if (upper.includes('NEET')) board = 'NEET UG';
+        else if (upper.includes('BOTH') || upper.includes('INTEGRATED')) board = 'Board level & Coaching';
+      }
 
       const schoolName = cells[3] || 'City High School';
       const fatherName = cells[4] || 'Guardian Name';

@@ -76,6 +76,8 @@ import {
 } from '../../lib/installments';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
+import { ProgramTrackSelect, ProgramLevelSelect } from '../common/ProgramSelect';
+import { allLevels } from '../../lib/programs';
 import { StudentIdCardModal } from '../documents/StudentIdCardModal';
 import { TransferCertificateModal } from '../documents/TransferCertificateModal';
 import {
@@ -3708,30 +3710,21 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Class</label>
-                  <select
-                    value={stClass}
-                    onChange={e => setStClass(e.target.value)}
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Program / Track</label>
+                  <ProgramTrackSelect
+                    value={stBoard}
+                    onChange={setStBoard}
                     className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
-                  >
-                    <option value="Class 8">Class 8</option>
-                    <option value="Class 9">Class 9</option>
-                    <option value="Class 10">Class 10</option>
-                    <option value="Class 11">Class 11</option>
-                    <option value="Class 12">Class 12</option>
-                  </select>
+                  />
                 </div>
                 <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Level / Stream</label>
-                  <select
-                    value={stBoard}
-                    onChange={e => setStBoard(e.target.value as any)}
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Class / Exam Level</label>
+                  <ProgramLevelSelect
+                    value={stClass}
+                    onChange={setStClass}
+                    track={stBoard}
                     className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
-                  >
-                    <option value="Board level">Board level</option>
-                    <option value="Coaching">Coaching</option>
-                    <option value="Board level & Coaching">Board level & Coaching</option>
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -3882,7 +3875,7 @@ export const AdminDashboard: React.FC = () => {
             transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
           >
             <h3 className="font-google-sans font-bold text-base text-[#202124] dark:text-[#E8EAED]">
-              Create New Coaching Batch
+              Create New Batch
             </h3>
             <form onSubmit={handleCreateBatch} className="space-y-3 text-xs">
               <div>
@@ -3890,11 +3883,29 @@ export const AdminDashboard: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Class 11 Chemistry - Target NEET"
+                  placeholder="e.g. Class 11 Chemistry - Target NEET, SSC CGL Batch A"
                   value={batchName}
                   onChange={e => setBatchName(e.target.value)}
                   className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Class / Exam Level</label>
+                <input
+                  type="text"
+                  required
+                  list="vidyaos-level-options"
+                  value={batchClassGrade}
+                  onChange={e => setBatchClassGrade(e.target.value)}
+                  placeholder="e.g. Class 10, SSC CGL, IBPS PO, UPSC CSE Prelims"
+                  className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5"
+                />
+                <datalist id="vidyaos-level-options">
+                  {allLevels().map(level => (
+                    <option key={level} value={level} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="grid grid-cols-2 gap-2">

@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { IndianBoard } from '../../types';
 import { ConsoleButton, VidyaLogo } from '../ui';
+import { ProgramTrackSelect } from '../common/ProgramSelect';
+import { programLabel } from '../../lib/programs';
 import { fadeIn, easings, scaleIn, tDefault, tSpring } from '../../lib/motion';
 
 interface RegisterCenterModalProps {
@@ -136,7 +138,7 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
         state: state.trim() || 'Delhi NCR',
         upiId: `${cleanCenter.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`,
         upiMerchantName: cleanCenter.toUpperCase(),
-        tagline: centerType === 'Board level' ? 'Premier Board Level Institute' : centerType === 'Coaching' ? 'Premier Coaching Institute' : 'Premier Board Level & Coaching Institute',
+        tagline: `Premier ${programLabel(centerType)} Institute`,
         planId: selectedPlanId
       });
       const profileResult = await updateUserProfile({ orgId: newOrg.id, role: 'CENTER_ADMIN' });
@@ -194,7 +196,7 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
         state: state.trim() || 'Delhi NCR',
         upiId: `${cleanCenter.toLowerCase().replace(/[^a-z0-9]/g, '')}@okaxis`,
         upiMerchantName: cleanCenter.toUpperCase(),
-        tagline: centerType === 'Board level' ? 'Premier Board Level Institute' : centerType === 'Coaching' ? 'Premier Coaching Institute' : 'Premier Board Level & Coaching Institute',
+        tagline: `Premier ${programLabel(centerType)} Institute`,
         planId: selectedPlanId
       });
 
@@ -550,15 +552,11 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
                     <label className="block text-xs font-semibold text-[#202124] dark:text-[#E8EAED] mb-1">
                       Institute Focus / Program
                     </label>
-                    <select
+                    <ProgramTrackSelect
                       value={centerType}
-                      onChange={e => setCenterType(e.target.value as IndianBoard)}
+                      onChange={setCenterType}
                       className="w-full px-3 py-2 text-xs border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFA000]/40"
-                    >
-                      <option value="Board level">Board level</option>
-                      <option value="Coaching">Coaching</option>
-                      <option value="Board level & Coaching">Board level & Coaching</option>
-                    </select>
+                    />
                   </div>
                 </div>
 
@@ -617,15 +615,11 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
                     <label className="block text-xs font-semibold text-[#202124] dark:text-[#E8EAED] mb-1">
                       Institute Focus / Program
                     </label>
-                    <select
+                    <ProgramTrackSelect
                       value={centerType}
-                      onChange={e => setCenterType(e.target.value as IndianBoard)}
+                      onChange={setCenterType}
                       className="w-full px-3 py-2 text-xs border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/40"
-                    >
-                      <option value="Board level">Board level</option>
-                      <option value="Coaching">Coaching</option>
-                      <option value="Board level & Coaching">Board level & Coaching</option>
-                    </select>
+                    />
                   </div>
                 </div>
 
