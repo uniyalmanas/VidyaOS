@@ -141,6 +141,11 @@ import {
   applyLiveFirstPage
 } from './src/lib/paginationUtils';
 import {
+  DEFAULT_PUSH_PREFS,
+  mergePushPrefs,
+  togglePushPref
+} from './src/lib/pushPrefs';
+import {
   generatePtmSlots,
   validatePtmEvent,
   parseClockMinutes,
@@ -2152,6 +2157,32 @@ assert(tailMap.size === 5, 'Merged set is complete and deduplicated');
 const emptiedMap = new Map<string, string>([['a', 'a'], ['b', 'b']]);
 applyLiveFirstPage(emptiedMap, [], s => s, 3);
 assert(emptiedMap.size === 0, 'An empty live page clears the first-page buffer');
+
+// -------------------------------------------------------------
+// G2 — push notification preferences (pure helpers)
+// -------------------------------------------------------------
+console.log('\n===== Push notification preferences =====');
+
+const defaultPrefs = mergePushPrefs(undefined);
+assert(
+  defaultPrefs.alerts === true && defaultPrefs.feeDue === true &&
+  defaultPrefs.results === true && defaultPrefs.announcements === true,
+  'Default push prefs enable every category'
+);
+assert(
+  DEFAULT_PUSH_PREFS.alerts === true && Object.keys(DEFAULT_PUSH_PREFS).length === 4,
+  'Default push prefs expose exactly the four known categories'
+);
+const partialPrefs = mergePushPrefs({ feeDue: false });
+assert(partialPrefs.feeDue === false && partialPrefs.results === true, 'Partial prefs merge over defaults');
+const flipped = togglePushPref(defaultPrefs, 'results');
+assert(flipped.results === false && flipped.alerts === true && flipped.feeDue === true, 'togglePushPref flips exactly one key');
+const restored = togglePushPref(flipped, 'results');
+assert(restored.results === true && restored.alerts === true, 'Toggling a key twice restores it');
+const oddPrefs = mergePushPrefs({ results: false, somethingElse: true } as any);
+assert(oddPrefs.results === false && oddPrefs.announcements === true, 'Unknown extra keys are ignored by merge');
+const nullPrefs = mergePushPrefs(null);
+assert(nullPrefs.feeDue === true && nullPrefs.announcements === true, 'Null prefs fall back to defaults');
 
 
 console.log('\n----------------------------------------');

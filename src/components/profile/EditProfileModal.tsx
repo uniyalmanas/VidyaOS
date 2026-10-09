@@ -31,6 +31,7 @@ import {
   ConsoleButton,
   StatusChip
 } from '../ui';
+import { PushNotificationsSection } from './PushNotificationsSection';
 
 export interface EditProfileModalProps {
   isOpen: boolean;
@@ -794,6 +795,9 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               )}
             </div>
           )}
+
+          {/* Push Notifications (G2) */}
+          <PushNotificationsSection />
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-[#DADCE0] dark:border-[#3C4043]">

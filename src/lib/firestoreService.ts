@@ -5,6 +5,8 @@ import {
   setDoc,
   deleteDoc,
   updateDoc,
+  arrayUnion,
+  arrayRemove,
   collection,
   onSnapshot,
   getDocs,
@@ -253,6 +255,31 @@ export function subscribeToOrganizations(
  */
 export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string) {
   return subscribeUsersPaginated(users => onData(users), orgId).unsubscribe;
+}
+
+// G2 — device push tokens, mirrored to the signed-in user's own doc
+// (self-update is already allowed by the security rules; role/orgId stay unchanged).
+export async function persistFcmTokenToFirestore(uid: string, token: string): Promise<void> {
+  if (!uid || !token) return;
+  try {
+    await updateDoc(doc(db, 'users', uid), {
+      fcmTokens: arrayUnion(token),
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn('Could not mirror FCM token to Firestore:', error);
+  }
+}
+
+export async function removeFcmTokenFromFirestore(uid: string, token: string): Promise<void> {
+  if (!uid || !token) return;
+  try {
+    await updateDoc(doc(db, 'users', uid), {
+      fcmTokens: arrayRemove(token)
+    });
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn('Could not remove FCM token from Firestore:', error);
+  }
 }
 
 export interface UsersSubscriptionHandle extends PaginatedLoadHandle<User> {}

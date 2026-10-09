@@ -6,6 +6,7 @@
   "firestoreDatabaseId": "(default)",
   "storageBucket": "vidyut-2bcb6.firebasestorage.app",
   "messagingSenderId": "714423407806",
+  "vapidKey": "",
   "measurementId": "G-3JEDSY1TW4",
   "oAuthClientId": "",
   "recaptchaSiteKey": ""

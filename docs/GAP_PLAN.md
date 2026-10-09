@@ -154,15 +154,20 @@ its entitlement; quotas enforce and alert.
 
 ### Phase 1 — Scale + retention essentials *(the "must-have" gaps)*
 
-**Build status:** G1 is implemented end-to-end (below). G2/G3/G5 are the next build items; G2 user facing
-tokens + G3 provider wiring are Blaze-gated for the send path but deployable in code now.
+**Build status:** G1 and G2 are implemented (below). G3/G5 are the next build items; the G3 send
+path and live G2 delivery are Blaze-gated, but all client code builds and ships now.
 
 - [x] **G1 — Pagination.** `lib/pagination.ts` cursor factory keeps the first page live
   (`onSnapshot`) and loads the rest with `startAfter` pages, deduped by document id. Wired for
   `users` (`subscribeUsersPaginated` + Auth Directory "Load more users" button); pure merge math
   in `paginationUtils.ts` is unit-tested. Remaining collections adopt the same factory.
-- **G2 — FCM push.** Web push first (service worker already registered), then Android. Token
-  registry per user, notification preferences, per-tenant rate limits.
+- [x] **G2 — FCM push (web).** `lib/pushNotifications.ts` — guarded FCM plumbing that attaches
+  messaging to the existing `sw.js` at runtime (merged worker, no scope fight), request/delete
+  token, foreground listener; `lib/pushPrefs.ts` — pure prefs model (alerts / fee due / results /
+  announcements) + localStorage; `hooks/usePushNotifications.ts` — opt-in hook that mirrors the
+  device token onto `users/{uid}.fcmTokens` (existing self-update rule covers the write); push
+  control rendered in the profile editor. Actual delivery needs the `sendPush` Function (Blaze)
+  + VAPID key in the project; everything degrades gracefully until then.
 - **G3 — Automated messaging.** WhatsApp Business Cloud API (Meta) + SMS (e.g. MSG91) + email;
   template registry (absent, fee due, receipt, result, PTM), opt-in/opt-out, delivery log,
   credits metering. Reuse and extend the existing `whatsappTemplate` field and the

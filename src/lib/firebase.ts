@@ -33,7 +33,9 @@ import {
   startAfter,
   documentId,
   writeBatch,
-  runTransaction
+  runTransaction,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import {
   getStorage,
@@ -53,9 +55,10 @@ export const firebaseConfig = {
   authDomain: (import.meta.env?.VITE_FIREBASE_AUTH_DOMAIN as string) || rawConfig.authDomain,
   storageBucket: (import.meta.env?.VITE_FIREBASE_STORAGE_BUCKET as string) || rawConfig.storageBucket,
   messagingSenderId: (import.meta.env?.VITE_FIREBASE_MESSAGING_SENDER_ID as string) || rawConfig.messagingSenderId,
+  vapidKey: (import.meta.env?.VITE_FIREBASE_VAPID_KEY as string) || rawConfig.vapidKey || '',
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 /**
  * Recursively removes keys with undefined values from objects before writing to Firestore.
@@ -306,6 +309,8 @@ export {
   documentId,
   writeBatch,
   runTransaction,
+  arrayUnion,
+  arrayRemove,
   ref,
   uploadBytes,
   uploadBytesResumable,
