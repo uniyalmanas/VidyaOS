@@ -29,6 +29,7 @@ import {
   FeeInvoice,
   PaymentSubmission,
   PaymentRecord,
+  RazorpayPaymentLink,
   AttendanceRecord,
   Exam,
   ExamResult,
@@ -72,10 +73,12 @@ import {
   MOCK_SYLLABUS_TOPICS,
   MOCK_PTM_EVENTS,
   MOCK_PTM_SLOTS,
-  MOCK_ISSUED_DOCUMENTS
+  MOCK_ISSUED_DOCUMENTS,
+  MOCK_PAYMENT_LINKS
 } from '../data/mockData';
 import { applyBooking, applyCancel, BookingActor } from './ptm';
 import { allocatePayment, invoiceStatusFromInstallments } from './installments';
+import { rzpAmountToPaise } from './rzp';
 import { subscribePaginated, PaginationMeta, PaginatedLoadHandle } from './pagination';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -1434,6 +1437,81 @@ export async function rejectPaymentSubmission(
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `paymentSubmissions/${submissionId}`);
+  }
+}
+
+// --- G5: Razorpay payment-link requests & the fulfilled-link subscription ---
+
+/**
+ * Queue a payment-link request for an invoice. The `createPaymentLink` Cloud
+ * Function (Blaze) picks it up, calls Razorpay, and fills in `url` + status
+ * `created`. Until then the link stays `requested` — the UPI/UTR flow below is
+ * the always-on zero-fee fallback.
+ */
+export async function requestPaymentLink(
+  orgId: string,
+  invoiceId: string,
+  opts: {
+    amountInr: number;
+    customerName?: string;
+    customerPhone?: string;
+    customerEmail?: string;
+    notes?: Record<string, string>;
+  }
+): Promise<RazorpayPaymentLink> {
+  const id = `link_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const link: RazorpayPaymentLink = {
+    id,
+    orgId,
+    invoiceId,
+    amountPaise: rzpAmountToPaise(opts.amountInr),
+    amount: Math.round((Number.isFinite(opts.amountInr) ? opts.amountInr : 0) * 100) / 100,
+    customerName: opts.customerName,
+    customerPhone: opts.customerPhone,
+    customerEmail: opts.customerEmail,
+    notes: { source: 'vidyaos', orgId, invoiceId, ...opts.notes },
+    status: 'requested',
+    createdAt: new Date().toISOString()
+  };
+  try {
+    await setDoc(doc(db, 'paymentLinks', id), cleanFirestoreData(link));
+    return link;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `paymentLinks/${id}`);
+  }
+}
+
+export function subscribeToPaymentLinks(
+  onData: (links: RazorpayPaymentLink[]) => void,
+  orgId?: string
+) {
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      onData(developmentFallback(MOCK_PAYMENT_LINKS, orgId));
+      return () => {};
+    }
+    const targetRef = orgId
+      ? query(collection(db, 'paymentLinks'), where('orgId', '==', orgId), limit(250))
+      : query(collection(db, 'paymentLinks'), limit(250));
+    return onSnapshot(
+      targetRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          onData(snapshot.docs.map(d => d.data() as RazorpayPaymentLink));
+        } else {
+          onData(developmentFallback(MOCK_PAYMENT_LINKS, orgId));
+        }
+      },
+      (error) => {
+        logListenerFallback('Real-time payment links', error);
+        onData(developmentFallback(MOCK_PAYMENT_LINKS, orgId));
+      }
+    );
+  } catch (e) {
+    const fallback = developmentFallback(MOCK_PAYMENT_LINKS, orgId);
+    if (import.meta.env.DEV) console.error('Could not start payment-links listener:', e);
+    onData(fallback);
+    return () => {};
   }
 }
 

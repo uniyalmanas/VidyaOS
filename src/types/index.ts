@@ -204,7 +204,7 @@ export interface PaymentRecord {
   invoiceId: string;
   amount: number;
   paymentDate: string;
-  paymentMethod: 'UPI' | 'Cash' | 'NetBanking' | 'Card' | 'Cheque';
+  paymentMethod: 'UPI' | 'Cash' | 'NetBanking' | 'Card' | 'Cheque' | 'Razorpay';
   transactionRef: string;
   receivedBy: string;
   receiptNo: string;
@@ -231,6 +231,30 @@ export interface PaymentSubmission {
   reviewedBy?: string;
   reviewedAt?: string;
   rejectionReason?: string;
+}
+
+// --- G5: Razorpay payment links & webhook auto-reconciliation ---
+
+export type PaymentLinkStatus = 'requested' | 'created' | 'paid' | 'expired' | 'failed';
+
+/** A payment-link request for one invoice; the createPaymentLink Function fulfils it. */
+export interface RazorpayPaymentLink {
+  id: string;
+  orgId: string;
+  invoiceId: string;
+  /** Amount in paise — the unit the Razorpay API uses. */
+  amountPaise: number;
+  /** Source amount in ₹ (display only). */
+  amount: number;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  notes: Record<string, string>;
+  status: PaymentLinkStatus;
+  rzpLinkId?: string;
+  url?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Installment {

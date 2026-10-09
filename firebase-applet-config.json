@@ -7,6 +7,8 @@
   "storageBucket": "vidyut-2bcb6.firebasestorage.app",
   "messagingSenderId": "714423407806",
   "vapidKey": "",
+  "rzpKeyId": "",
+  "rzpWebhookSecret": "",
   "measurementId": "G-3JEDSY1TW4",
   "oAuthClientId": "",
   "recaptchaSiteKey": ""

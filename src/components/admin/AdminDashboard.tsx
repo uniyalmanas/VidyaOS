@@ -49,9 +49,10 @@ import {
   UserCog,
   IdCard,
   X,
-  Loader2
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
-import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry, ExamKind } from '../../types';
+import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry, ExamKind, RazorpayPaymentLink } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
 import {
   EXAM_KINDS,
@@ -74,6 +75,7 @@ import {
   MAX_INSTALLMENTS,
   DEFAULT_INSTALLMENT_INTERVAL_DAYS
 } from '../../lib/installments';
+import { requestPaymentLink, subscribeToPaymentLinks } from '../../lib/firestoreService';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
 import { ProgramTrackSelect, ProgramLevelSelect } from '../common/ProgramSelect';
@@ -262,6 +264,15 @@ export const AdminDashboard: React.FC = () => {
   const [collectAmount, setCollectAmount] = useState<number>(2000);
   const [collectMethod, setCollectMethod] = useState<'Cash' | 'UPI' | 'NetBanking'>('UPI');
   const [collectUtr, setCollectUtr] = useState<string>('');
+  // G5 — Razorpay payment links for the currently selected invoice.
+  const [paymentLinks, setPaymentLinks] = useState<RazorpayPaymentLink[]>([]);
+  const [rzpBusy, setRzpBusy] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    const unsub = subscribeToPaymentLinks(setPaymentLinks, currentOrg.id);
+    return () => unsub?.();
+  }, [currentOrg?.id]);
 
   // F11 — raise a fresh invoice, optionally split into a dated instalment plan.
   const [showGenerateInvoiceModal, setShowGenerateInvoiceModal] = useState<boolean>(false);
@@ -981,6 +992,36 @@ export const AdminDashboard: React.FC = () => {
     const totalEnrolled = batches.reduce((acc, b) => acc + (b.studentIds?.length || 0), 0);
     return totalMax > 0 ? Math.round((totalEnrolled / totalMax) * 100) : 0;
   }, [batches]);
+
+  // G5 — active payment link for the invoice being collected.
+  const activePaymentLink = paymentLinks.find(l => l.invoiceId === selectedInvoiceToCollect);
+
+  const handleRequestPaymentLink = async () => {
+    if (!selectedInvoiceToCollect || rzpBusy) return;
+    const inv = invoices.find(i => i.id === selectedInvoiceToCollect);
+    if (!inv) {
+      showToast('Select the invoice first.', 'error');
+      return;
+    }
+    const student = students.find(s => s.id === inv.studentId);
+    setRzpBusy(true);
+    try {
+      const amount = Number(collectAmount) > 0 ? Number(collectAmount) : Math.max(1, inv.netAmount - inv.paidAmount);
+      await requestPaymentLink(currentOrg.id, inv.id, {
+        amountInr: amount,
+        customerName: student?.name ? `Parent of ${student.name}` : 'VidyaOS Parent',
+        customerPhone: student?.phone
+      });
+      showToast(
+        activePaymentLink ? 'Payment link refreshed.' : 'Razorpay link requested — it goes live once Cloud Billing is enabled.',
+        'success'
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not request the payment link.', 'error');
+    } finally {
+      setRzpBusy(false);
+    }
+  };
 
   const handleConfirmFeeCollection = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -4170,6 +4211,55 @@ export const AdminDashboard: React.FC = () => {
                     );
                   })}
                 </select>
+              </div>
+
+              {/* G5 — Razorpay payment link (auto-reconcile) */}
+              <div className="rounded-xl border border-[#1A73E8]/30 bg-[#1A73E8]/[0.04] dark:bg-[#1A73E8]/10 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[#202124] dark:text-[#E8EAED] flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-[#1A73E8]" />
+                    Razorpay auto-reconcile
+                  </span>
+                  <span className="text-[10px] font-semibold text-[#5F6368] dark:text-[#9AA0A6]">
+                    {activePaymentLink?.status === 'paid'
+                      ? 'Paid ✓ — auto-reconciled'
+                      : activePaymentLink?.url
+                      ? 'Ready to pay'
+                      : 'UPI/UTR works too (0% fee)'}
+                  </span>
+                </div>
+                {activePaymentLink?.url ? (
+                  <a
+                    href={activePaymentLink.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2 bg-[#1A73E8] hover:bg-[#1765CC] text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-blue-700/20 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>
+                      Open payment link · ₹{(activePaymentLink.amount || 0).toLocaleString('en-IN')}
+                    </span>
+                  </a>
+                ) : activePaymentLink ? (
+                  <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed">
+                    Link queued — it goes live once Cloud Billing is enabled. When Razorpay confirms the
+                    payment it is auto-verified (no UTR check needed).
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleRequestPaymentLink()}
+                    disabled={rzpBusy}
+                    className="w-full py-2 border border-[#1A73E8]/40 text-[#1A73E8] dark:text-[#8AB4F8] rounded-xl text-xs font-bold transition hover:bg-[#1A73E8]/10 disabled:opacity-50 flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    {rzpBusy ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5" />
+                    )}
+                    <span>Generate Razorpay payment link</span>
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">

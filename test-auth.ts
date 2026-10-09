@@ -161,6 +161,15 @@ import {
   estimateCreditCost
 } from './src/lib/messagingUtils';
 import {
+  rzpAmountToPaise,
+  rzpPaiseToAmount,
+  buildPaymentLinkRequest,
+  parseRzpWebhookEvent,
+  reconcileGatewayPayment,
+  rzpMethodLabel,
+  RZP_WEBHOOK_PAYMENT_EVENTS
+} from './src/lib/rzp';
+import {
   generatePtmSlots,
   validatePtmEvent,
   parseClockMinutes,
@@ -2269,6 +2278,120 @@ assert(
   remainingMessageCredits(ent50, drained, ym) === 0 && canSendMessage(ent50, drained, ym).allowed === false,
   'Exhausted window blocks sending exactly'
 );
+
+// -------------------------------------------------------------
+// G5 — Razorpay payment links & webhook auto-reconciliation (pure)
+// -------------------------------------------------------------
+console.log('\n===== Razorpay payment links & auto-reconcile =====');
+
+assert(rzpAmountToPaise(4200) === 420000, '₹4,200 → 420000 paise');
+assert(rzpAmountToPaise(0) === 0 && rzpAmountToPaise(999.99) === 99999, 'Paise conversion is exact');
+assert(rzpPaiseToAmount(200000) === 2000, 'Paise → ₹ round-trips');
+assert(RZP_WEBHOOK_PAYMENT_EVENTS.includes('payment.authorized'), 'authorized is a payment event');
+assert(rzpMethodLabel('upi') === 'UPI' && rzpMethodLabel('netbanking') === 'Net Banking' && rzpMethodLabel('weird') === 'weird', 'Razorpay method codes label nicely');
+
+const linkInvoice = {
+  id: 'inv-oct-rahul',
+  orgId: 'org-apex',
+  invoiceNo: 'INV/2026-27/084',
+  title: 'Monthly Coaching Fee — October 2026',
+  studentId: 'stud-rahul-10',
+  netAmount: 4000,
+  paidAmount: 2000,
+  dueDate: '2026-10-10'
+} as any;
+const linkReq = buildPaymentLinkRequest(linkInvoice, {
+  customer: { name: 'Mr. Rahul Sharma', contact: '+919898712345' }
+});
+assert(linkReq.amount === 200000, 'Link amount defaults to the remaining invoice balance in paise');
+assert(linkReq.currency === 'INR' && linkReq.accept_partial === false && linkReq.callback_method === 'get', 'Link carries Razorpay-required scalars');
+assert(
+  linkReq.notes.source === 'vidyaos' && linkReq.notes.orgId === 'org-apex' &&
+  linkReq.notes.invoiceId === 'inv-oct-rahul' && linkReq.notes.invoiceNo === 'INV/2026-27/084',
+  'Link notes carry the reconciliation keys'
+);
+assert(linkReq.customer.name === 'Mr. Rahul Sharma' && linkReq.customer.contact === '+919898712345', 'Customer block is echoed');
+const linkReqOverride = buildPaymentLinkRequest(linkInvoice, { amountInr: 1000 } as any);
+assert(linkReqOverride.amount === 100000, 'Explicit amount override wins');
+
+const webhook = parseRzpWebhookEvent({
+  event: 'payment.authorized',
+  payload: {
+    payment: {
+      entity: {
+        id: 'pay_29QQoUBi66xm2f',
+        order_id: 'order_E1qn66TtH5lqz8',
+        amount: 200000,
+        currency: 'INR',
+        method: 'upi',
+        notes: { source: 'vidyaos', orgId: 'org-apex', invoiceId: 'inv-oct-rahul', linkId: 'link_abc' },
+        created_at: 1759821900
+      }
+    }
+  }
+});
+assert(!!webhook && webhook.paymentId === 'pay_29QQoUBi66xm2f' && webhook.amountPaise === 200000, 'Payment webhook normalizes to a payment id + paise');
+assert(webhook?.method === 'upi' && webhook?.notes.invoiceId === 'inv-oct-rahul' && webhook?.notes.linkId === 'link_abc', 'Webhook notes survive parsing');
+assert(parseRzpWebhookEvent({ event: 'subscription.activated', payload: {} }) === null, 'Non-payment events are ignored');
+assert(parseRzpWebhookEvent({ event: 'payment.authorized', payload: {} }) === null, 'Malformed payment payloads are rejected');
+assert(parseRzpWebhookEvent(null) === null, 'Null webhook body is rejected');
+
+const partialInvoice = {
+  id: 'inv-oct-rahul',
+  orgId: 'org-apex',
+  netAmount: 4000,
+  paidAmount: 2000,
+  payments: [
+    {
+      id: 'pay-1', invoiceId: 'inv-oct-rahul', amount: 2000, paymentDate: '2026-09-27',
+      paymentMethod: 'UPI', transactionRef: 'UPI/260927/98432109', receivedBy: 'Er. Manoj Verma',
+      receiptNo: 'REC-084-A', status: 'verified'
+    }
+  ]
+} as any;
+const settled = reconcileGatewayPayment({ invoice: partialInvoice, paymentId: 'pay_29QQoUBi66xm2f', amountPaise: 200000, receivedAt: '2026-10-08T11:00:00.000Z' });
+assert(settled.ok === true && settled.duplicate === false, 'Gateway payment reconciles cleanly');
+if (settled.ok) {
+  assert(settled.payment.paymentMethod === 'Razorpay' && settled.payment.transactionRef === 'pay_29QQoUBi66xm2f', 'Reconciled payment is a verified gateway record');
+  assert(settled.payment.status === 'verified' && settled.payment.receivedBy === 'Razorpay Webhook', 'Gateway payments are auto-verified, no UTR review');
+  assert(settled.nextInvoice.paidAmount === 4000 && settled.nextInvoice.status === 'paid', 'Paying the balance settles the invoice');
+  assert(settled.nextInvoice.payments.length === 2, 'The gateway payment is appended to the invoice');
+}
+// Replaying the same webhook against the already-reconciled invoice is idempotent.
+const replay = reconcileGatewayPayment({
+  invoice: settled.ok ? settled.nextInvoice : (partialInvoice as any),
+  paymentId: 'pay_29QQoUBi66xm2f',
+  amountPaise: 200000
+});
+assert(replay.ok === true && replay.duplicate === true, 'Duplicate webhook delivery is idempotent (ok, not an error)');
+if (replay.ok) {
+  assert(replay.nextInvoice.payments.length === 2, 'A duplicate never double-applies the payment');
+}
+const rzpOverpay = reconcileGatewayPayment({ invoice: partialInvoice, paymentId: 'pay_overpay', amountPaise: 500000 });
+assert(rzpOverpay.ok === false && rzpOverpay.reason === 'amount_over_balance', 'An over-balance payment is rejected');
+
+const instalmentInvoice = {
+  id: 'inv-oct-rahul',
+  orgId: 'org-apex',
+  netAmount: 4000,
+  paidAmount: 2000,
+  installments: [
+    { id: 'inst-1', label: 'Instalment 1', amount: 2000, dueDate: '2026-09-10', status: 'paid', paidAmount: 2000, paymentIds: ['pay-1'] },
+    { id: 'inst-2', label: 'Instalment 2', amount: 2000, dueDate: '2026-10-10', status: 'pending', paidAmount: 0, paymentIds: [] }
+  ]
+} as any;
+const instPaid = reconcileGatewayPayment({ invoice: instalmentInvoice, paymentId: 'pay_inst2', amountPaise: 200000, receivedAt: '2026-10-08T11:00:00.000Z' });
+assert(instPaid.ok === true, 'Instalment invoice accepts the gateway payment');
+if (instPaid.ok) {
+  assert(instPaid.nextInvoice.status === 'paid', 'Paying the last instalment settles the plan');
+  assert(instPaid.nextInvoice.installments?.[1].status === 'paid' && instPaid.nextInvoice.installments?.[1].paidAmount === 2000, 'The open instalment is marked paid and allocated');
+}
+const partPaid = reconcileGatewayPayment({ invoice: instalmentInvoice, paymentId: 'pay_part', amountPaise: 100000, receivedAt: '2026-10-08T11:00:00.000Z' });
+assert(partPaid.ok === true, 'A partial gateway payment is allowed up to the balance');
+if (partPaid.ok) {
+  assert(partPaid.nextInvoice.status === 'partially_paid', 'Partial payment leaves the invoice part-paid');
+  assert(partPaid.nextInvoice.installments?.[1].status === 'partially_paid' && partPaid.nextInvoice.installments?.[1].paidAmount === 1000, 'The instalment takes the partial payment');
+}
 
 
 console.log('\n----------------------------------------');

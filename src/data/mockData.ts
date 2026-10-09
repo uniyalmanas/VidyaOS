@@ -22,7 +22,8 @@ import {
   SyllabusTopic,
   PtmEvent,
   PtmSlot,
-  IssuedDocument
+  IssuedDocument,
+  RazorpayPaymentLink
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
 import { generatePtmSlots } from '../lib/ptm';
@@ -868,6 +869,32 @@ export const MOCK_INVOICES: FeeInvoice[] = [
         paymentIds: []
       }
     ]
+  }
+];
+
+// G5 — demo Razorpay payment links. The demo org shows one fulfilled link for
+// the partially-paid October invoice so the admin can see the auto-reconcile
+// path; real links are created by the Cloud Function.
+export const MOCK_PAYMENT_LINKS: RazorpayPaymentLink[] = [
+  {
+    id: 'link-mock-oct-rahul',
+    orgId: 'org-apex',
+    invoiceId: 'inv-oct-rahul',
+    amountPaise: 200000,
+    amount: 2000,
+    customerName: 'Mr. Rahul Sharma',
+    notes: {
+      source: 'vidyaos',
+      orgId: 'org-apex',
+      invoiceId: 'inv-oct-rahul',
+      invoiceNo: 'INV/2026-27/084',
+      studentId: 'stud-rahul-10'
+    },
+    status: 'created',
+    rzpLinkId: 'plink_demo_oct_rahul',
+    url: 'https://rzp.io/l/vidyaos-demo-oct-rahul',
+    createdAt: '2026-10-08T09:30:00.000Z',
+    updatedAt: '2026-10-08T09:30:15.000Z'
   }
 ];
 

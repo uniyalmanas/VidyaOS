@@ -190,6 +190,36 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // PAYMENT LINKS (G5) — Razorpay link requests & reconciliation
+    // ------------------------------------------------------------------------
+    match /paymentLinks/{linkId} {
+      // Center members queue link requests for their own invoices
+      allow create: if isSignedIn() && hasUserDoc() &&
+        isTenantMember(request.resource.data.orgId) &&
+        request.resource.data.invoiceId is string;
+
+      // Members read their org's links; platform owner reads everything
+      allow read: if isSignedIn() && hasUserDoc() &&
+        (isPlatformOwner() || isTenantMember(resource.data.orgId));
+
+      // Status transitions + server fulfilment of the link URL
+      allow update: if isSignedIn() && hasUserDoc() &&
+        isTenantMember(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId;
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------------
+    // WEBHOOK LOG (G5) — server-only event journal for gateway callbacks
+    // ------------------------------------------------------------------------
+    match /webhookLog/{eventId} {
+      allow read: if isSignedIn() && hasUserDoc() && isPlatformOwner();
+      // Only Cloud Functions (admin SDK) write here.
+      allow write: if false;
+    }
+
+    // ------------------------------------------------------------------------
     // STUDENTS COLLECTION
     // ------------------------------------------------------------------------
     match /students/{studentId} {

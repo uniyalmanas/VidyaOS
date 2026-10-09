@@ -154,9 +154,10 @@ its entitlement; quotas enforce and alert.
 
 ### Phase 1 — Scale + retention essentials *(the "must-have" gaps)*
 
-**Build status:** G1, G2 and G3 are implemented (below). G5 is the next build item; the live send
-path for G3 (via the `sendMessage` Function) and live G2 delivery are Blaze-gated, but all client
-code ships now and free orgs are hard-capped at 0 message credits (the in-app upsell).
+**Build status:** G1–G3 and G5 implementations ship (below). Live delivery paths stay
+Blaze-gated (sendMessage Function, VAPID key, gateway webhooks + Razorpay secrets), but all
+client code builds now, free orgs are hard-capped (0 message credits / no link creation), and the
+UPI/UTR flow is the always-on zero-fee fallback.
 
 - [x] **G1 — Pagination.** `lib/pagination.ts` cursor factory keeps the first page live
   (`onSnapshot`) and loads the rest with `startAfter` pages, deduped by document id. Wired for
@@ -179,9 +180,17 @@ code ships now and free orgs are hard-capped at 0 message credits (the in-app up
   fee, report flows) gained channel pills, template picker, recipient email field, credit meter
   and the "Send via cloud (1 credit)" action. `outboundMessages` has its own append-only
   Firestore rules block; the demo org ships with 50 demo credits.
-- **G5 — Gateway + auto-reconcile.** Razorpay/Cashfree payment links + webhook that records the
-  payment and marks the installment paid automatically; keep the current UPI/UTR flow as the
-  zero-fee fallback.
+- [x] **G5 — Gateway + auto-reconcile (Razorpay).** `lib/rzp.ts` — pure Razorpay core:
+  ₹↔paise, `buildPaymentLinkRequest` (notes carry orgId/invoiceId/invoiceNo as reconciliation
+  keys + instalment-aware due-amount default), `parseRzpWebhookEvent` (payment.authorized /
+  payment.captured), and `reconcileGatewayPayment` — the exact balance → instalment-allocation
+  → status-derive math `recordPaymentAtomically` runs, with idempotent re-deliveries. The
+  admin "Record Fee Collection" modal gained a Razorpay panel (open link / queued / generate);
+  `outboundMessages`-style `paymentLinks` queue + rules, `webhookLog` (server-only), demo link
+  for the seed invoice, and a `billingWebhook` rewrite (HMAC-SHA256 signature check → reconcile
+  in a Firestore transaction → journal) + `createPaymentLink` Function (raw fetch to the
+  Razorpay API — zero new deps). `RZP_KEY_ID`/`RZP_KEY_SECRET`/`RZP_WEBHOOK_SECRET` env + config
+  slots land with Blaze; UPI/UTR stays the zero-fee fallback.
 
 **Revenue unlock:** Cloud Messaging can be launched at the end of this phase (the first
 recurring SKU).
