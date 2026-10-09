@@ -179,7 +179,39 @@ export const billingWebhook = onRequest(async (req, res) => {
     }
   }
 
-  // TODO(blaze): subscription/order.paid events → grant SKUs on the org.
+  // 4a. Cloud-store SKU purchase (payment link with notes.sku, no invoice):
+  // grant the entitlement on the org, server-side, exactly once.
+  if (verified && event && !invoiceId && event.notes.sku) {
+    const sku = event.notes.sku;
+    const knownSkus = ['media', 'messaging', 'brand', 'app', 'video', 'ai', 'pro'];
+    try {
+      await db.runTransaction(async txn => {
+        const orgRef = db.doc(`organizations/${event.notes.orgId}`);
+        const snapshot = await txn.get(orgRef);
+        if (!snapshot.exists || !knownSkus.includes(sku)) return;
+        if (event.amountPaise < 9900) return; // ₹99 floor — underpaid grants nothing
+        const data = snapshot.data();
+        const current: string[] = Array.isArray(data.entitlements?.skus) ? data.entitlements.skus : [];
+        if (current.includes(sku)) return;
+        txn.update(orgRef, {
+          entitlements: {
+            ...(data.entitlements || {}),
+            skus: [...current, sku],
+            period: 'active'
+          }
+        });
+        if (typeof event.notes.linkId === 'string') {
+          txn.update(db.doc(`paymentLinks/${event.notes.linkId}`), {
+            status: 'paid',
+            updatedAt: receivedAt
+          });
+        }
+      });
+    } catch (error) {
+      console.error('G5 sku grant failure:', error);
+    }
+  }
+
   res.status(200).json({ received: true, verified });
 });
 

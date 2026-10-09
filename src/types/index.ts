@@ -241,7 +241,8 @@ export type PaymentLinkStatus = 'requested' | 'created' | 'paid' | 'expired' | '
 export interface RazorpayPaymentLink {
   id: string;
   orgId: string;
-  invoiceId: string;
+  /** Present for invoice payments; SKU purchases from the cloud store omit it. */
+  invoiceId?: string;
   /** Amount in paise — the unit the Razorpay API uses. */
   amountPaise: number;
   /** Source amount in ₹ (display only). */

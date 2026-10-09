@@ -170,6 +170,13 @@ import {
   RZP_WEBHOOK_PAYMENT_EVENTS
 } from './src/lib/rzp';
 import {
+  buildSkuPurchaseLinkRequest,
+  usageBoard,
+  estimatedMonthlyCloudCost,
+  skuGrantLabel,
+  storeCatalog
+} from './src/lib/cloudStore';
+import {
   generatePtmSlots,
   validatePtmEvent,
   parseClockMinutes,
@@ -2392,6 +2399,79 @@ if (partPaid.ok) {
   assert(partPaid.nextInvoice.status === 'partially_paid', 'Partial payment leaves the invoice part-paid');
   assert(partPaid.nextInvoice.installments?.[1].status === 'partially_paid' && partPaid.nextInvoice.installments?.[1].paidAmount === 1000, 'The instalment takes the partial payment');
 }
+
+// -------------------------------------------------------------
+// Paywall & cost guardrail — cloud store (pure)
+// -------------------------------------------------------------
+console.log('\n===== Cloud store & cost guardrail =====');
+
+const catalog = storeCatalog();
+assert(catalog.length === 7, 'Store catalog lists every SKU (6 singles + the Pro bundle)');
+assert(catalog[catalog.length - 1].id === 'pro', 'Pro bundle is listed last');
+assert(skuGrantLabel(catalog.find(s => s.id === 'messaging') as any).startsWith('1,000'), 'Messaging grant label advertises the credits');
+assert(skuGrantLabel(catalog.find(s => s.id === 'app') as any) === 'Play-Store Android app under your brand', 'App grant label advertises the branded app');
+assert(skuGrantLabel(catalog.find(s => s.id === 'video') as any) === '1,200 video minutes / month', 'Video grant label advertises hosted minutes');
+
+const skuReq = buildSkuPurchaseLinkRequest('org-apex', 'messaging', { customer: { name: 'Apex Academy' } });
+assert(skuReq !== null && skuReq.amount === 49900, 'SKU purchase link prices the SKU in paise');
+assert(skuReq?.currency === 'INR' && skuReq?.accept_partial === false, 'SKU purchase carries Razorpay scalars');
+assert(
+  skuReq?.notes.sku === 'messaging' && skuReq?.notes.orgId === 'org-apex' && skuReq?.notes.source === 'vidyaos',
+  'SKU purchase notes carry the grant keys'
+);
+assert(buildSkuPurchaseLinkRequest('org-apex', 'nonsense' as any) === null, 'Unknown SKU ids are rejected');
+
+assert(estimatedMonthlyCloudCost(resolveEntitlements({ entitlements: {} } as any)) === 0, 'Free org has no estimated spend');
+assert(estimatedMonthlyCloudCost(resolveEntitlements({ entitlements: { skus: ['media', 'ai'] } } as any)) === 99 + 299, 'Estimated spend sums the owned SKU prices');
+
+const granted = resolveEntitlements({ entitlements: { skus: ['messaging'] } } as any);
+assert(granted.messagingCredits === 1000 && granted.period === 'active', 'Owning Cloud Messaging grants its credits and activates the org');
+const videoGranted = resolveEntitlements({ entitlements: { skus: ['video'] } } as any);
+assert(videoGranted.videoMinutes === 1200, 'Owning Video Cloud grants hosted minutes');
+
+const freeBoard = usageBoard(resolveEntitlements({} as any), { mediaBytes: 0, messagesSent: 0, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '' });
+assert(
+  freeBoard.filter(r => r.key !== 'media').every(r => r.tone === 'empty' && r.pct === 0),
+  'Zero-quota rows on a free org show the empty tone to prompt the SKU upsell'
+);
+assert(freeBoard.find(r => r.key === 'media')?.tone === 'ok', 'The free 1 GB media quota is on track at 0 used');
+const mediaRow = freeBoard.find(r => r.key === 'media');
+assert(mediaRow?.quotaLabel === '1 GB' && mediaRow?.usedLabel === '0 B', 'Media quota labels read naturally');
+
+const month = currentYearMonth();
+const eqBoard = usageBoard(
+  resolveEntitlements({ entitlements: { messagingCredits: 1000 } } as any),
+  { mediaBytes: 0, messagesSent: 0, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '', messagesThisMonth: { yearMonth: month, count: 900 } }
+);
+const msgRow = eqBoard.find(r => r.key === 'messages');
+assert(msgRow?.pct === 90 && msgRow?.tone === 'warn', '90% of quota reads warn');
+assert(msgRow?.usedLabel === '900' && msgRow?.quotaLabel === '1000 credits', 'Message meter labels count credits');
+
+const overBoard = usageBoard(
+  resolveEntitlements({ entitlements: { messagingCredits: 1000 } } as any),
+  { mediaBytes: 0, messagesSent: 0, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '', messagesThisMonth: { yearMonth: month, count: 1200 } }
+);
+assert(overBoard.find(r => r.key === 'messages')?.tone === 'over', 'Over-quota rows trigger the guardrail tone');
+
+const staleBoard = usageBoard(
+  resolveEntitlements({ entitlements: { messagingCredits: 1000 } } as any),
+  { mediaBytes: 0, messagesSent: 42, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '', messagesThisMonth: { yearMonth: '2026-09', count: 999 } }
+);
+assert(staleBoard.find(r => r.key === 'messages')?.usedLabel === '42', 'A stale monthly window falls back to the rolling counter');
+
+const mediaBoard = usageBoard(
+  resolveEntitlements({} as any),
+  { mediaBytes: 262144000, messagesSent: 0, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '' }
+);
+const mediaUsed = mediaBoard.find(r => r.key === 'media');
+assert(mediaUsed?.usedLabel === '250 MB' && mediaUsed?.pct === 24, 'Media bytes meter formats human labels + pct');
+
+const unlimitedBoard = usageBoard(
+  { ...resolveEntitlements({} as any), mediaBytesQuota: -1 },
+  { mediaBytes: 5000, messagesSent: 0, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '' }
+);
+assert(unlimitedBoard.find(r => r.key === 'media')?.quotaLabel === 'Unlimited', 'Unlimited quota reads as Unlimited, no bar');
+assert(estimatedMonthlyCloudCost(resolveEntitlements({ entitlements: { skus: ['pro'] } } as any)) === 1999, 'Pro bundle is priced as one SKU');
 
 
 console.log('\n----------------------------------------');

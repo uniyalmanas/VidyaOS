@@ -50,9 +50,16 @@ import {
   IdCard,
   X,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Cloud,
+  Smartphone,
+  Palette,
+  Video,
+  Bot,
+  Crown,
+  ShoppingCart
 } from 'lucide-react';
-import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry, ExamKind, RazorpayPaymentLink } from '../../types';
+import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry, ExamKind, RazorpayPaymentLink, CloudSkuId } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
 import {
   EXAM_KINDS,
@@ -75,7 +82,9 @@ import {
   MAX_INSTALLMENTS,
   DEFAULT_INSTALLMENT_INTERVAL_DAYS
 } from '../../lib/installments';
-import { requestPaymentLink, subscribeToPaymentLinks } from '../../lib/firestoreService';
+import { requestPaymentLink, requestCloudSkuPurchase, subscribeToPaymentLinks } from '../../lib/firestoreService';
+import { resolveEntitlements, hasSku, entitlementSummary } from '../../lib/entitlements';
+import { usageBoard, estimatedMonthlyCloudCost, skuGrantLabel, storeCatalog } from '../../lib/cloudStore';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
 import { ProgramTrackSelect, ProgramLevelSelect } from '../common/ProgramSelect';
@@ -177,8 +186,6 @@ export const AdminDashboard: React.FC = () => {
     addStudyMaterial,
     deleteStudyMaterial,
     updateOrganization,
-    subscriptionPlans,
-    changeOrgPlan,
     showToast,
     recordAudit,
     markInquiryConverted
@@ -995,6 +1002,39 @@ export const AdminDashboard: React.FC = () => {
 
   // G5 — active payment link for the invoice being collected.
   const activePaymentLink = paymentLinks.find(l => l.invoiceId === selectedInvoiceToCollect);
+
+  // Cloud store — resolved entitlements + the cost-guardrail board.
+  const ent = useMemo(() => resolveEntitlements(currentOrg), [currentOrg]);
+  const board = useMemo(() => usageBoard(ent, currentOrg?.usage), [ent, currentOrg?.usage]);
+  const monthlyCloudCost = useMemo(() => estimatedMonthlyCloudCost(ent), [ent]);
+  const skuPurchaseLinks = paymentLinks.filter(l => l.notes?.sku);
+  const skuIcon = (id: string) => {
+    const cls = 'w-4 h-4';
+    switch (id) {
+      case 'media': return <Cloud className={`${cls} text-[#AB47BC]`} />;
+      case 'messaging': return <Zap className={`${cls} text-[#1A73E8]`} />;
+      case 'brand': return <Palette className={`${cls} text-[#F9AB00]`} />;
+      case 'app': return <Smartphone className={`${cls} text-[#188038]`} />;
+      case 'video': return <Video className={`${cls} text-[#E8710A]`} />;
+      case 'ai': return <Bot className={`${cls} text-[#9334E6]`} />;
+      default: return <Crown className={`${cls} text-[#B06000]`} />;
+    }
+  };
+
+  const handleBuySku = async (skuId: CloudSkuId) => {
+    if (rzpBusy || !currentOrg?.id) return;
+    setRzpBusy(true);
+    try {
+      await requestCloudSkuPurchase(currentOrg.id, skuId, {
+        customerName: currentOrg.ownerName
+      });
+      showToast('SKU purchase queued — the payment link goes live once Cloud Billing is enabled.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not queue the purchase.', 'error');
+    } finally {
+      setRzpBusy(false);
+    }
+  };
 
   const handleRequestPaymentLink = async () => {
     if (!selectedInvoiceToCollect || rzpBusy) return;
@@ -3560,16 +3600,20 @@ export const AdminDashboard: React.FC = () => {
       {!isStaff && currentModule === 'subscription' && (
         <div className="space-y-6">
           <ConsoleCard
-            title="VidyaOS SaaS Subscription & Quotas"
-            subtitle="Multi-tenant isolated coaching tier, resource limits & billing"
+            title="VidyaOS Cloud Plan"
+            subtitle="Free core ERP — pay only for the cloud services you use"
             action={
               <div className="flex items-center gap-2">
                 <StatusChip
-                  label={currentOrg.planId === 'starter' ? 'STARTER BATCH' : currentOrg.planId === 'growth' ? 'GROWTH ACADEMY' : 'MULTI-BRANCH PRO'}
-                  variant="warning"
+                  label={ent.period === 'free' ? 'FREE TIER' : 'CLOUD ACTIVE'}
+                  variant={ent.period === 'free' ? 'neutral' : 'warning'}
                   size="xs"
                 />
-                <StatusChip label={currentOrg.subscriptionStatus.toUpperCase()} variant="success" size="xs" />
+                <StatusChip
+                  label={ent.skus.length === 0 ? 'NO SKUS' : `${ent.skus.length} SKU${ent.skus.length === 1 ? '' : 'S'}`}
+                  variant="success"
+                  size="xs"
+                />
               </div>
             }
           >
@@ -3577,133 +3621,162 @@ export const AdminDashboard: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#DADCE0]/60 dark:border-[#3C4043] pb-3">
                 <div>
                   <div className="font-semibold text-sm text-[#202124] dark:text-[#E8EAED]">
-                    {currentOrg.name} — Plan Details
+                    {currentOrg.name} — Cloud usage & cost guardrail
                   </div>
                   <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
-                    Cycle renews: {currentOrg.currentCycleEnd || '2026-10-31'} · Flat transparent pricing
+                    Metered monthly; the queue writer hard-stops at each cap.
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold text-[#E65100] dark:text-[#FFCA28]">
-                    {currentOrg.planId === 'starter' ? '₹599' : currentOrg.planId === 'growth' ? '₹1,299' : '₹2,199'}
-                    <span className="text-xs font-normal text-[#5F6368] dark:text-[#9AA0A6]">/month</span>
+                  <div className={`text-lg font-bold ${monthlyCloudCost > 0 ? 'text-[#E65100] dark:text-[#FFCA28]' : 'text-[#188038] dark:text-[#81C995]'}`}>
+                    {monthlyCloudCost > 0 ? `₹${monthlyCloudCost.toLocaleString('en-IN')}` : 'FREE'}
+                    <span className="text-xs font-normal text-[#5F6368] dark:text-[#9AA0A6]">/month est.</span>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div>
-                  <span className="text-[#5F6368] dark:text-[#9AA0A6]">Student Limit:</span>
-                  <div className="text-base font-bold text-[#202124] dark:text-[#E8EAED] mt-0.5">
-                    {students.length} / {currentOrg.maxStudents}
-                  </div>
-                  <div className="w-full bg-[#E8EAED] dark:bg-[#3C4043] h-1.5 rounded-full overflow-hidden mt-1.5">
+                {board.map(row => (
+                  <div key={row.key}>
+                    <span className="text-[#5F6368] dark:text-[#9AA0A6]">{row.label}:</span>
+                    <div className="text-base font-bold text-[#202124] dark:text-[#E8EAED] mt-0.5">
+                      {row.usedLabel}{' '}
+                      <span className="text-[11px] font-medium text-[#5F6368] dark:text-[#9AA0A6]">
+                        / {row.quotaLabel}
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#E8EAED] dark:bg-[#3C4043] h-1.5 rounded-full overflow-hidden mt-1.5">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          row.tone === 'over'
+                            ? 'bg-[#D93025]'
+                            : row.tone === 'warn'
+                              ? 'bg-[#F9AB00]'
+                              : row.tone === 'empty'
+                                ? 'bg-[#9AA0A6]/40'
+                                : 'bg-[#1A73E8]'
+                        }`}
+                        style={{ width: `${row.tone === 'empty' ? 4 : Math.max(row.pct, 0)}%` }}
+                      />
+                    </div>
                     <div
-                      className="bg-[#FFA000] h-full rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (students.length / currentOrg.maxStudents) * 100)}%` }}
-                    />
+                      className={`text-[10px] mt-1 font-medium ${
+                        row.tone === 'over'
+                          ? 'text-[#D93025]'
+                          : row.tone === 'warn'
+                            ? 'text-[#E8710A]'
+                            : 'text-[#5F6368] dark:text-[#9AA0A6]'
+                      }`}
+                    >
+                      {row.note}
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
 
-                <div>
-                  <span className="text-[#5F6368] dark:text-[#9AA0A6]">Branch Limit:</span>
-                  <div className="text-base font-bold text-[#202124] dark:text-[#E8EAED] mt-0.5">
-                    {currentOrg.branches?.length || 1} / {currentOrg.maxBranches}
-                  </div>
-                  <div className="w-full bg-[#E8EAED] dark:bg-[#3C4043] h-1.5 rounded-full overflow-hidden mt-1.5">
-                    <div
-                      className="bg-[#188038] h-full rounded-full transition-all"
-                      style={{ width: `${Math.min(100, ((currentOrg.branches?.length || 1) / currentOrg.maxBranches) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[#5F6368] dark:text-[#9AA0A6]">WhatsApp SMS Credits:</span>
-                  <div className="text-base font-bold text-[#202124] dark:text-[#E8EAED] mt-0.5">2,450 / 5,000</div>
-                  <div className="w-full bg-[#E8EAED] dark:bg-[#3C4043] h-1.5 rounded-full overflow-hidden mt-1.5">
-                    <div className="bg-[#1A73E8] h-full rounded-full" style={{ width: '49%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[#5F6368] dark:text-[#9AA0A6]">Cloud Storage:</span>
-                  <div className="text-base font-bold text-[#202124] dark:text-[#E8EAED] mt-0.5">14.2 GB / 50 GB</div>
-                  <div className="w-full bg-[#E8EAED] dark:bg-[#3C4043] h-1.5 rounded-full overflow-hidden mt-1.5">
-                    <div className="bg-[#AB47BC] h-full rounded-full" style={{ width: '28%' }} />
-                  </div>
-                </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {entitlementSummary(ent).map(line => (
+                  <span
+                    key={line}
+                    className="text-[10px] px-2 py-1 rounded-full bg-white dark:bg-[#1E1F20] border border-[#DADCE0] dark:border-[#3C4043] text-[#5F6368] dark:text-[#9AA0A6]"
+                  >
+                    {line}
+                  </span>
+                ))}
               </div>
             </div>
           </ConsoleCard>
 
-          {/* Available Tiers */}
+          {/* Cloud Store */}
           <div className="space-y-3">
-            <h3 className="font-google-sans font-bold text-sm text-[#202124] dark:text-[#E8EAED]">
-              Available Plans & Upgrades
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {subscriptionPlans.map(plan => {
-                const isCurrent = currentOrg.planId === plan.id;
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-google-sans font-bold text-sm text-[#202124] dark:text-[#E8EAED]">
+                  Cloud Store
+                </h3>
+                <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5">
+                  The core ERP is free forever. Add a cloud service only when you need it — billed
+                  via a Razorpay link, auto-granted once the payment clears.
+                </p>
+              </div>
+              <span className="text-[10px] font-semibold text-[#5F6368] dark:text-[#9AA0A6] whitespace-nowrap">
+                {ent.skus.length} active
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {storeCatalog().map(sku => {
+                const owned = hasSku(ent, sku.id);
+                const purchase = skuPurchaseLinks.find(l => l.notes?.sku === sku.id);
                 return (
                   <div
-                    key={plan.id}
+                    key={sku.id}
                     className={`rounded-2xl p-5 border flex flex-col justify-between space-y-4 transition ${
-                      isCurrent
-                        ? 'border-2 border-[#FFA000] bg-amber-50/20 dark:bg-amber-950/20 shadow-md'
+                      owned
+                        ? 'border-2 border-[#188038]/50 bg-[#E6F4EA]/20 dark:bg-[#188038]/10 shadow-md'
                         : 'border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20]'
                     }`}
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs uppercase tracking-wider text-[#5F6368] dark:text-[#9AA0A6]">
-                          {plan.name}
-                        </span>
-                        {isCurrent && (
-                          <StatusChip label="ACTIVE" variant="warning" size="xs" />
-                        )}
+                        <div className="w-9 h-9 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center">
+                          {skuIcon(sku.id)}
+                        </div>
+                        {owned && <StatusChip label="ACTIVE" variant="success" size="xs" />}
+                      </div>
+
+                      <div>
+                        <div className="font-bold text-xs uppercase tracking-wider text-[#5F6368] dark:text-[#9AA0A6]">
+                          {sku.name}
+                        </div>
+                        <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] mt-0.5 leading-relaxed">
+                          {sku.tagline}
+                        </p>
                       </div>
 
                       <div className="text-2xl font-bold font-google-sans text-[#202124] dark:text-white">
-                        ₹{(plan.priceMonthly ?? 0).toLocaleString('en-IN')}
+                        ₹{sku.priceMonthly.toLocaleString('en-IN')}
                         <span className="text-xs font-normal text-[#5F6368] dark:text-[#9AA0A6]">/month</span>
                       </div>
 
-                      <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed">
-                        {plan.description}
-                      </p>
-
-                      <div className="text-xs text-[#5F6368] dark:text-[#9AA0A6] bg-slate-50 dark:bg-[#282A2C] p-2.5 rounded-xl border border-[#DADCE0]/60 dark:border-[#3C4043]/60">
-                        Max Students: <strong className="text-[#202124] dark:text-white">{plan.maxStudents}</strong> · Branches: <strong className="text-[#202124] dark:text-white">{plan.maxBranches}</strong>
+                      <div className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] bg-slate-50 dark:bg-[#282A2C] p-2.5 rounded-xl border border-[#DADCE0]/60 dark:border-[#3C4043]/60">
+                        {skuGrantLabel(sku)}
                       </div>
-
-                      <ul className="space-y-1.5 text-xs text-[#5F6368] dark:text-[#9AA0A6] pt-1">
-                        {plan.features.slice(0, 5).map((f, i) => (
-                          <li key={i} className="flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-[#188038] shrink-0" />
-                            <span>{f}</span>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
 
                     <div>
-                      {isCurrent ? (
-                        <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-[#E65100] dark:text-[#FFCA28] font-bold text-xs">
-                          Current Active Tier
+                      {owned ? (
+                        <div className="w-full text-center py-2 px-3 rounded-xl bg-[#E6F4EA] dark:bg-[#188038]/20 text-[#188038] dark:text-[#81C995] font-bold text-xs">
+                          Included in your plan
                         </div>
-                      ) : (
-                        <ConsoleButton
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            changeOrgPlan(currentOrg.id, plan.id);
-                            showToast(`Upgraded coaching plan to ${plan.name}`, 'success');
-                          }}
-                          className="w-full justify-center"
+                      ) : purchase?.url ? (
+                        <a
+                          href={purchase.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full py-2 bg-[#1A73E8] hover:bg-[#1765CC] text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-blue-700/20 cursor-pointer"
                         >
-                          Switch to {plan.name.replace(' Plan', '')}
-                        </ConsoleButton>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Pay ₹{(purchase.amount || sku.priceMonthly).toLocaleString('en-IN')} via link</span>
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleBuySku(sku.id)}
+                          disabled={rzpBusy}
+                          className="w-full py-2 border border-[#1A73E8]/40 text-[#1A73E8] dark:text-[#8AB4F8] rounded-xl text-xs font-bold transition hover:bg-[#1A73E8]/10 disabled:opacity-50 flex items-center justify-center space-x-1.5 cursor-pointer"
+                        >
+                          {rzpBusy ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                          )}
+                          <span>Add {sku.name.replace(' Cloud', '').replace(' Credits', '')}</span>
+                        </button>
+                      )}
+                      {!owned && purchase && !purchase.url && (
+                        <p className="text-[10px] text-center text-[#5F6368] dark:text-[#9AA0A6] mt-1.5 leading-relaxed">
+                          Purchase queued — the link goes live once Cloud Billing is enabled.
+                        </p>
                       )}
                     </div>
                   </div>

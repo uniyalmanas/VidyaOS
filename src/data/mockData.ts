@@ -27,6 +27,7 @@ import {
 } from '../types';
 import { getIndiaDateString } from '../lib/date';
 import { generatePtmSlots } from '../lib/ptm';
+import { currentYearMonth } from '../lib/messagingUtils';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
@@ -113,6 +114,14 @@ export const MOCK_ORGANIZATIONS: Organization[] = [
     maxStudents: 300,
     maxBranches: 2,
     entitlements: { messagingCredits: 50 },
+    usage: {
+      mediaBytes: 262144000, // 250 MB of the 1 GB free quota
+      messagesSent: 12,
+      videoMinutes: 0,
+      aiCreditsUsed: 0,
+      updatedAt: '2026-10-08T11:00:00.000Z',
+      messagesThisMonth: { yearMonth: currentYearMonth(), count: 12 }
+    },
     branches: [
       {
         id: 'branch-rajpur',

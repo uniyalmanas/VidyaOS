@@ -193,10 +193,11 @@ service cloud.firestore {
     // PAYMENT LINKS (G5) — Razorpay link requests & reconciliation
     // ------------------------------------------------------------------------
     match /paymentLinks/{linkId} {
-      // Center members queue link requests for their own invoices
+      // Center members queue link requests for their own invoices, and cloud
+      // store SKU purchases (notes.sku) carry the same append-only queue.
       allow create: if isSignedIn() && hasUserDoc() &&
         isTenantMember(request.resource.data.orgId) &&
-        request.resource.data.invoiceId is string;
+        (request.resource.data.invoiceId is string || request.resource.data.notes.sku is string);
 
       // Members read their org's links; platform owner reads everything
       allow read: if isSignedIn() && hasUserDoc() &&

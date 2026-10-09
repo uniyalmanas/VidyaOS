@@ -154,8 +154,8 @@ its entitlement; quotas enforce and alert.
 
 ### Phase 1 — Scale + retention essentials *(the "must-have" gaps)*
 
-**Build status:** G1–G3 and G5 implementations ship (below). Live delivery paths stay
-Blaze-gated (sendMessage Function, VAPID key, gateway webhooks + Razorpay secrets), but all
+**Build status:** G1–G3, G5 and the pre-Blaze cloud store (G13b) ship (below). Live delivery paths
+stay Blaze-gated (sendMessage Function, VAPID key, gateway webhooks + Razorpay secrets), but all
 client code builds now, free orgs are hard-capped (0 message credits / no link creation), and the
 UPI/UTR flow is the always-on zero-fee fallback.
 
@@ -191,9 +191,20 @@ UPI/UTR flow is the always-on zero-fee fallback.
   in a Firestore transaction → journal) + `createPaymentLink` Function (raw fetch to the
   Razorpay API — zero new deps). `RZP_KEY_ID`/`RZP_KEY_SECRET`/`RZP_WEBHOOK_SECRET` env + config
   slots land with Blaze; UPI/UTR stays the zero-fee fallback.
+- [x] **G13b — Self-serve cloud store + cost guardrail (pre-Blaze).** `lib/cloudStore.ts` — pure
+  storefront maths: `storeCatalog` (6 singles + Pro bundle), `buildSkuPurchaseLinkRequest`
+  (Razorpay body notes carry `sku` + `orgId`, so the webhook grants entitlements server-side),
+  `skuGrantLabel` and the `usageBoard` cost guardrail (used vs quota per metered resource with
+  ok/warn/over/empty tones) + `estimatedMonthlyCloudCost` (sum of owned SKU prices). The admin
+  "17. SUBSCRIPTION" tab was rebuilt from the fake tier chooser (mock `planId` + hardcoded
+  "2,450/5,000" meters) into the redesigned **Cloud Plan** board + **Cloud Store** cards (icon,
+  price, grant line, active state, Razorpay pay-link or queued "Add" button — via the
+  `paymentLinks` queue, no new collections). `requestCloudSkuPurchase` + `billingWebhook` SKU
+  grant branch (known-SKU + ₹99 floor + idempotent) complete the loop; demo org seeds real usage
+  (12/50 credits, 250 MB/1 GB) so the guardrail shows live. Live payments land with Blaze.
 
 **Revenue unlock:** Cloud Messaging can be launched at the end of this phase (the first
-recurring SKU).
+recurring SKU); the storefront that sells it now ships.
 
 ---
 
@@ -201,8 +212,8 @@ recurring SKU).
 
 - **G8 — Cloud media.** Upload photos (student/teacher/staff), logos, study material, receipts;
   signed URLs, thumbnails, compression, quota enforcement. This is the backbone SKU.
-- **G13b — Self-serve cloud store.** Buy media GB / message credits / brand from inside the
-  admin console.
+- [x] **G13b — Self-serve cloud store.** The pre-Blaze storefront (cloud store cards + cost
+  guardrail dashboard in the admin Cloud Plan tab) ships in Phase 1; live billing lands with Blaze.
 - **G6 — Brand Cloud.** Custom subdomain + domain, logo + theme colours everywhere, custom
   email sender, branded PWA install.
 - **G4 — Online test engine.** Question bank, test builder, student attempt UI, auto-grade,

@@ -30,6 +30,7 @@ import {
   PaymentSubmission,
   PaymentRecord,
   RazorpayPaymentLink,
+  CloudSkuId,
   AttendanceRecord,
   Exam,
   ExamResult,
@@ -79,6 +80,7 @@ import {
 import { applyBooking, applyCancel, BookingActor } from './ptm';
 import { allocatePayment, invoiceStatusFromInstallments } from './installments';
 import { rzpAmountToPaise } from './rzp';
+import { getCloudSku } from './entitlements';
 import { subscribePaginated, PaginationMeta, PaginatedLoadHandle } from './pagination';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
@@ -1470,6 +1472,39 @@ export async function requestPaymentLink(
     customerPhone: opts.customerPhone,
     customerEmail: opts.customerEmail,
     notes: { source: 'vidyaos', orgId, invoiceId, ...opts.notes },
+    status: 'requested',
+    createdAt: new Date().toISOString()
+  };
+  try {
+    await setDoc(doc(db, 'paymentLinks', id), cleanFirestoreData(link));
+    return link;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `paymentLinks/${id}`);
+  }
+}
+
+/**
+ * Queue a cloud-store SKU purchase (no invoice). The `createPaymentLink`
+ * Function turns it into a Razorpay link; the webhook grants the entitlement
+ * on the org when the payment clears.
+ */
+export async function requestCloudSkuPurchase(
+  orgId: string,
+  skuId: CloudSkuId,
+  opts: { customerName?: string; customerPhone?: string; customerEmail?: string } = {}
+): Promise<RazorpayPaymentLink> {
+  const id = `link_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const sku = getCloudSku(skuId);
+  const amountInr = sku?.priceMonthly ?? 0;
+  const link: RazorpayPaymentLink = {
+    id,
+    orgId,
+    amountPaise: rzpAmountToPaise(amountInr),
+    amount: amountInr,
+    customerName: opts.customerName,
+    customerPhone: opts.customerPhone,
+    customerEmail: opts.customerEmail,
+    notes: { source: 'vidyaos', orgId, sku: skuId },
     status: 'requested',
     createdAt: new Date().toISOString()
   };
