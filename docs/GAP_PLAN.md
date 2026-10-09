@@ -217,6 +217,15 @@ UPI/UTR flow is the always-on zero-fee fallback.
   visual pass — Bricolage Grotesque display face (`font-funky`), gradient marquee tickers
   (`animate-marquee`), dot-grid + mesh backgrounds (`bg-dot-grid`), rotated sticker badges
   (`animate-wiggle-hover`/`animate-pop`) — all pure CSS in `index.css`, zero new deps.
+- [x] **In-app pricing sweep (same model, inside the console).** Legacy ₹599/₹1,299/₹2,199
+  surfaces removed app-wide: register modal's 3-tier chooser → **Free Forever core banner**
+  ("NO CARD NEEDED", no trial countdown); login card CTA → "Register Center — Free Forever";
+  Platform Dashboard MRR → **cloud-meter MRR** (sum of adopted `CLOUD_SKUS` prices; free-core
+  orgs = ₹0) with a "Cloud Billing — Free Core + Meters" card grid fed by `CLOUD_SKUS`;
+  plan dropdowns relabeled (Core free · Cloud Pro ₹1,999/mo); Architecture modal subscription +
+  competitor-pricing sections rewrite to the free/cloud story; new/demo orgs seed as
+  `subscriptionStatus: 'active'` (no more 14-day trial); `SUBSCRIPTION_PLANS` demoted to legacy
+  tier metadata with prices zeroed so no surface can render stale ₹s.
 
 **Revenue unlock:** Cloud Messaging can be launched at the end of this phase (the first
 recurring SKU); the storefront that sells it now ships.

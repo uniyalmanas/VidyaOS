@@ -29,19 +29,26 @@ import { getIndiaDateString } from '../lib/date';
 import { generatePtmSlots } from '../lib/ptm';
 import { currentYearMonth } from '../lib/messagingUtils';
 
+/**
+ * LEGACY org-tier metadata — NOT the pricing surface.
+ * The public model is "free software, paid cloud": every surface that displays
+ * prices reads `FREE_ENTITLEMENTS` + `CLOUD_SKUS` (lib/entitlements). These ids
+ * ('starter'|'growth'|'pro') still back `Organization.planId` as a soft tier
+ * label, so prices are zeroed to avoid ever rendering stale ₹s.
+ */
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'starter',
-    name: 'Starter Batch',
-    priceMonthly: 599,
-    priceYearly: 5990,
-    maxStudents: 100,
-    maxBranches: 1,
+    name: 'Core · Starter (Free)',
+    priceMonthly: 0,
+    priceYearly: 0,
+    maxStudents: 150,
+    maxBranches: 2,
     popular: false,
-    description: 'Perfect for single-subject teachers & small neighborhood coaching centers.',
+    description: 'Free-forever core ERP for single-subject teachers & small neighborhood coaching centers.',
     features: [
-      'Up to 100 Students',
-      '1 Center Branch',
+      'Up to 150 Students',
+      '2 Center Branches',
       'Mobile Attendance Register',
       'UPI & Cash Fee Tracker',
       'Parent Portal & WhatsApp Alerts',
@@ -51,15 +58,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'growth',
-    name: 'Growth Academy',
-    priceMonthly: 1299,
-    priceYearly: 12990,
-    maxStudents: 300,
+    name: 'Core · Growth (Free)',
+    priceMonthly: 0,
+    priceYearly: 0,
+    maxStudents: 150,
     maxBranches: 2,
     popular: true,
-    description: 'Designed for established coaching institutes with multiple batches & teachers.',
+    description: 'Free-forever core ERP for established coaching institutes with multiple batches & teachers.',
     features: [
-      'Up to 300 Students',
+      'Up to 150 Students',
       'Up to 2 Center Branches',
       'Unlimited Teachers & Staff',
       'Batch Scheduling & Clash Detector',
@@ -71,21 +78,20 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'pro',
-    name: 'Multi-Branch Pro',
-    priceMonthly: 2199,
-    priceYearly: 21990,
-    maxStudents: 1000,
-    maxBranches: 5,
+    name: 'Cloud Pro (Meters)',
+    priceMonthly: 1999,
+    priceYearly: 23988,
+    maxStudents: 150,
+    maxBranches: 2,
     popular: false,
-    description: 'For large coaching networks and test prep academies.',
+    description: 'Every cloud meter (storage, messaging, brand, app, video, AI) at a bundle discount.',
     features: [
-      'Up to 1,000 Students',
-      'Up to 5 Branches',
-      'Multi-Branch Consolidated P&L',
+      'Extra Media Storage',
+      'Automated WhatsApp/SMS/Email',
       'Custom Institute Brand & Logo Receipts',
-      'Full Parent App Direct Access',
-      'Automated Batch Shuffling',
-      'Dedicated Account Manager'
+      'Branded Android App',
+      'Hosted Video & Live Replays',
+      'AI Credits (doubt solve, quiz gen)'
     ]
   }
 ];

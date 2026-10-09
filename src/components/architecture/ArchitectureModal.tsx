@@ -20,6 +20,7 @@ import {
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { easings, tSpring, fadeUp } from '../../lib/motion';
 import { HowItWorksInfographic } from '../ui';
+import { CLOUD_SKUS } from '../../lib/entitlements';
 
 /** Modal shell: spring pop-in cascading header → sidebar + chapter → footer. */
 const archPanelVariants: Variants = {
@@ -482,31 +483,39 @@ CREATE TABLE payment_records (
               <div className="space-y-4">
                 <div className="border-b pb-3">
                   <h2 className="text-xl font-bold text-slate-900">9 & 17. Subscription & Pricing Strategy</h2>
-                  <p className="text-slate-500 text-xs mt-1">Tiered pricing calibrated to Indian coaching & education institute economics.</p>
+                  <p className="text-slate-500 text-xs mt-1">Free software, paid cloud: the ERP is free forever; institutes pay only for the cloud meters they switch on.</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                  <div className="border rounded-xl p-3 bg-slate-50 space-y-2">
-                    <div className="font-bold text-slate-900 text-sm">Starter Batch</div>
-                    <div className="text-xl font-extrabold text-indigo-700">₹599 <span className="text-xs font-normal text-slate-500">/month</span></div>
-                    <div className="text-[11px] text-slate-500">Up to 100 students • 1 Branch</div>
-                    <p className="text-slate-600">Replaces paper register. 1-tap mobile attendance, UPI fee logging, digital receipts & parent portal.</p>
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   <div className="border-2 border-indigo-500 rounded-xl p-3 bg-indigo-50/50 space-y-2 relative">
-                    <span className="absolute -top-2.5 right-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">POPULAR</span>
-                    <div className="font-bold text-slate-900 text-sm">Growth Academy</div>
-                    <div className="text-xl font-extrabold text-indigo-700">₹1,299 <span className="text-xs font-normal text-slate-500">/month</span></div>
-                    <div className="text-[11px] text-slate-500">Up to 300 students • 2 Branches</div>
-                    <p className="text-slate-600">Unlimited teachers, timetable clash detector, automated WhatsApp fee reminders, exam ranking analytics.</p>
+                    <span className="absolute -top-2.5 right-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">FREE FOREVER</span>
+                    <div className="font-bold text-slate-900 text-sm">VidyaOS Core ERP</div>
+                    <div className="text-xl font-extrabold text-indigo-700">₹0 <span className="text-xs font-normal text-slate-500">no card required</span></div>
+                    <div className="text-[11px] text-slate-500">150 students • 2 branches • unlimited staff • 1 GB media</div>
+                    <p className="text-slate-600">Full ERP: 20-sec attendance, UPI invoicing & receipts, parent portal, push alerts, offline-first sync. The core never asks for rent.</p>
                   </div>
 
-                  <div className="border rounded-xl p-3 bg-slate-50 space-y-2">
-                    <div className="font-bold text-slate-900 text-sm">Multi-Branch Pro</div>
-                    <div className="text-xl font-extrabold text-indigo-700">₹2,199 <span className="text-xs font-normal text-slate-500">/month</span></div>
-                    <div className="text-[11px] text-slate-500">Up to 1,000 students • 5 Branches</div>
-                    <p className="text-slate-600">For large coaching networks and test prep academies. Consolidated multi-branch P&L, custom institute branding, dedicated account manager.</p>
+                  <div className="border-2 border-amber-400 rounded-xl p-3 bg-amber-50/60 space-y-2 relative">
+                    <span className="absolute -top-2.5 right-3 bg-amber-500 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full">BEST DEAL</span>
+                    <div className="font-bold text-slate-900 text-sm">Cloud Pro — all meters</div>
+                    <div className="text-xl font-extrabold text-amber-700">₹1,999 <span className="text-xs font-normal text-slate-500">/month</span></div>
+                    <div className="text-[11px] text-slate-500">Every cloud meter at a bundle discount</div>
+                    <p className="text-slate-600">Extra media storage, automated WhatsApp/SMS/email, hosted video, AI credits, custom brand & branded Android app — one stack, one bill.</p>
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                  <div className="font-bold text-slate-900 text-sm">Cloud meters — buy only what you use</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CLOUD_SKUS.filter(s => s.id !== 'pro').map(sku => (
+                      <span key={sku.id} className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-600">
+                        {sku.name} · <strong className="text-slate-900">₹{sku.priceMonthly}/mo</strong>
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-slate-500">
+                    Messaging, video & AI start at ₹0 until a meter is bought; the core keeps working if you skip one. Prorated monthly billing — switch on/off anytime.
+                  </p>
                 </div>
               </div>
             )}
@@ -644,7 +653,7 @@ CREATE TABLE payment_records (
                         <td className="p-2.5 font-bold text-slate-900">Pricing</td>
                         <td className="p-2.5">₹25k - ₹50k upfront white-label app setup</td>
                         <td className="p-2.5">₹50k - ₹2L annual enterprise contracts</td>
-                        <td className="p-2.5 font-bold text-emerald-700">₹599 - ₹1,299/mo self-serve SaaS</td>
+                        <td className="p-2.5 font-bold text-emerald-700">Core ERP free forever · cloud meters from ₹99/mo</td>
                       </tr>
                       <tr>
                         <td className="p-2.5 font-bold text-slate-900">Parent Experience</td>

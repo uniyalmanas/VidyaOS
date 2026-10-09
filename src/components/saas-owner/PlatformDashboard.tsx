@@ -14,8 +14,10 @@ import {
   RefreshCw,
   Search
 } from 'lucide-react';
-import { Organization } from '../../types';
+import { CloudSkuId, Organization } from '../../types';
 import { UserRoleDistributionCard } from './UserRoleDistributionCard';
+import { CLOUD_SKUS } from '../../lib/entitlements';
+import { skuGrantLabel } from '../../lib/cloudStore';
 import {
   PageHeader,
   MetricCard,
@@ -51,7 +53,6 @@ export const PlatformDashboard: React.FC = () => {
     organizations,
     toggleOrgStatus,
     changeOrgPlan,
-    subscriptionPlans,
     createNewOrganization,
     students,
     setCurrentOrgId,
@@ -72,11 +73,12 @@ export const PlatformDashboard: React.FC = () => {
   const activeOrgs = organizations.filter(o => o.subscriptionStatus === 'active' || o.subscriptionStatus === 'trial');
   const totalPlatformStudents = students.length;
 
-  // Calculate simulated MRR
-  const mrr = organizations.reduce((acc, org) => {
+  // Cloud-meter MRR: sum of the store price of every SKU each org has adopted.
+  // Free-core orgs (no SKUs) contribute ₹0 — the ERP itself is never metered.
+  const cloudMrr = organizations.reduce((acc, org) => {
     if (org.subscriptionStatus === 'suspended') return acc;
-    const plan = subscriptionPlans.find(p => p.id === org.planId);
-    return acc + (plan?.priceMonthly || 599);
+    const skus = (org.entitlements?.skus ?? []) as CloudSkuId[];
+    return acc + skus.reduce((sum, id) => sum + (CLOUD_SKUS.find(s => s.id === id)?.priceMonthly ?? 0), 0);
   }, 0);
 
   const filteredOrgs = organizations.filter(o =>
@@ -127,7 +129,7 @@ export const PlatformDashboard: React.FC = () => {
           { label: 'Tenant Management' }
         ]}
         title="Platform Control Center"
-        subtitle="Monitor multi-tenant coaching & education centers, subscription MRR, student quotas, and tenant isolation health"
+        subtitle="Monitor multi-tenant coaching & education centers, cloud-meter MRR, student quotas, and tenant isolation health"
         badge={
           <StatusChip label="GOOGLE CLOUD ADMIN CONSOLE" variant="info" size="xs" />
         }
@@ -147,9 +149,9 @@ export const PlatformDashboard: React.FC = () => {
       {/* KPI Stats */}
       <Reveal className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <MetricCard
-          label="Monthly Recurring Revenue"
-          value={`₹${(mrr ?? 0).toLocaleString('en-IN')}`}
-          trend={{ value: '+18.4% this month', isPositive: true }}
+          label="Cloud Meter MRR"
+          value={`₹${(cloudMrr ?? 0).toLocaleString('en-IN')}`}
+          trend={{ value: 'Free core — no meter revenue yet', isPositive: false }}
           accentColor="#188038"
           icon={<DollarSign className="w-4 h-4" />}
         />
@@ -157,7 +159,7 @@ export const PlatformDashboard: React.FC = () => {
         <MetricCard
           label="Total Coaching Centers"
           value={totalOrgs}
-          subtext={`${activeOrgs.length} Active / Trialing`}
+          subtext={`${activeOrgs.length} Active`}
           accentColor="#1A73E8"
           icon={<Building2 className="w-4 h-4" />}
         />
@@ -210,16 +212,16 @@ export const PlatformDashboard: React.FC = () => {
           },
           {
             key: 'planId',
-            header: 'Current Plan',
+            header: 'Plan Tier',
             render: (org) => (
               <select
                 value={org.planId}
                 onChange={e => changeOrgPlan(org.id, e.target.value as any)}
                 className="bg-[#F1F3F4] dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[#202124] dark:text-[#E8EAED] font-semibold text-xs rounded-lg px-2.5 py-1 focus:outline-none"
               >
-                <option value="starter">Starter Batch (₹599/mo)</option>
-                <option value="growth">Growth Academy (₹1,299/mo)</option>
-                <option value="pro">Multi-Branch Pro (₹2,199/mo)</option>
+                <option value="starter">Core (Free) · Starter footprint</option>
+                <option value="growth">Growth Core (Free)</option>
+                <option value="pro">Cloud Pro (₹1,999/mo)</option>
               </select>
             )
           },
@@ -301,46 +303,74 @@ export const PlatformDashboard: React.FC = () => {
         }
       />
 
-      {/* Subscription Plans Card Grid */}
+      {/* Cloud Billing — Free Core + Meter Cards */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-base font-bold font-google-sans text-[#202124] dark:text-[#E8EAED]">
-            SaaS Subscription Tiers
+            Cloud Billing — Free Core + Meters
           </h2>
           <span className="text-[10px] uppercase tracking-[0.14em] text-[#86868B] font-semibold">
-            Pricing
+            Free software · paid cloud
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {subscriptionPlans.map(plan => (
+          <ConsoleCard
+            title="VidyaOS Core ERP"
+            action={<StatusChip label="FREE FOREVER" variant="success" size="xs" />}
+            className="ring-1 ring-[var(--fb-primary-border)] shadow-[0_14px_30px_rgba(79,70,229,0.12)]"
+          >
+            <div className="space-y-3">
+              <div className="text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED] leading-none">
+                ₹0 <span className="text-xs font-normal text-[#5F6368] dark:text-[#9AA0A6]">no card</span>
+              </div>
+              <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed min-h-[44px]">
+                The full ERP: attendance, UPI invoicing, parent portal, push alerts, offline-first sync. Free for every center, forever.
+              </p>
+              <div className="text-xs text-[#5F6368] dark:text-[#9AA0A6] rounded-xl bg-[#F8F9FA] dark:bg-[#1A1B1C] px-2.5 py-2 border border-black/[0.04] dark:border-white/[0.06]">
+                Students: <strong className="text-[#202124] dark:text-white">150</strong> · Branches: <strong className="text-[#202124] dark:text-white">2</strong> · Staff: <strong className="text-[#202124] dark:text-white">Unlimited</strong> · Media: <strong className="text-[#202124] dark:text-white">1 GB</strong>
+              </div>
+              <ul className="text-xs space-y-1.5 text-[#5F6368] dark:text-[#9AA0A6] border-t border-[#DADCE0] dark:border-[#3C4043] pt-3">
+                {['20-sec mobile attendance', 'UPI invoicing + receipts', 'Parent & student portals', 'Multi-branch topology', 'Push notifications'].map(f => (
+                  <li key={f} className="flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-[#188038] dark:text-[#81C995] flex-shrink-0" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </ConsoleCard>
+
+          {CLOUD_SKUS.map(sku => (
             <ConsoleCard
-              key={plan.id}
-              title={plan.name}
+              key={sku.id}
+              title={sku.name}
               action={
-                plan.popular ? (
-                  <StatusChip label="POPULAR" variant="warning" size="xs" />
+                sku.id === 'pro' ? (
+                  <StatusChip label="BEST DEAL" variant="warning" size="xs" />
                 ) : null
               }
-              className={plan.popular ? 'ring-1 ring-[#FFA000]/30 shadow-[0_14px_30px_rgba(255,160,0,0.12)]' : ''}
+              className={sku.id === 'pro' ? 'ring-1 ring-[#FFA000]/30 shadow-[0_14px_30px_rgba(255,160,0,0.12)]' : ''}
             >
               <div className="space-y-3">
                 <div className="text-2xl font-bold font-google-sans text-[#202124] dark:text-[#E8EAED] leading-none">
-                  ₹{(plan.priceMonthly ?? 0).toLocaleString('en-IN')}{' '}
+                  ₹{sku.priceMonthly.toLocaleString('en-IN')}{' '}
                   <span className="text-xs font-normal text-[#5F6368] dark:text-[#9AA0A6]">/month</span>
                 </div>
                 <p className="text-xs text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed min-h-[44px]">
-                  {plan.description}
+                  {sku.tagline}
                 </p>
                 <div className="text-xs text-[#5F6368] dark:text-[#9AA0A6] rounded-xl bg-[#F8F9FA] dark:bg-[#1A1B1C] px-2.5 py-2 border border-black/[0.04] dark:border-white/[0.06]">
-                  Max Students: <strong className="text-[#202124] dark:text-white">{plan.maxStudents}</strong> · Branches: <strong className="text-[#202124] dark:text-white">{plan.maxBranches}</strong>
+                  Grants: <strong className="text-[#202124] dark:text-white">{skuGrantLabel(sku)}</strong>
                 </div>
                 <ul className="text-xs space-y-1.5 text-[#5F6368] dark:text-[#9AA0A6] border-t border-[#DADCE0] dark:border-[#3C4043] pt-3">
-                  {plan.features.map((f, i) => (
-                    <li key={i} className="flex items-center gap-1.5">
-                      <CheckCircle className="w-3.5 h-3.5 text-[#188038] dark:text-[#81C995] flex-shrink-0" />
-                      <span>{f}</span>
-                    </li>
-                  ))}
+                  <li className="flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-[#188038] dark:text-[#81C995] flex-shrink-0" />
+                    <span>Pay-as-you-go, prorated monthly</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5 text-[#188038] dark:text-[#81C995] flex-shrink-0" />
+                    <span>Switch on / off anytime</span>
+                  </li>
                 </ul>
               </div>
             </ConsoleCard>
@@ -429,15 +459,15 @@ export const PlatformDashboard: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">SaaS Plan</label>
+                  <label className="block text-[#5F6368] dark:text-[#9AA0A6] font-medium mb-1">Plan Tier</label>
                   <select
                     value={newOrgPlan}
                     onChange={e => setNewOrgPlan(e.target.value as any)}
                     className="w-full border border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#282A2C] text-[#202124] dark:text-[#E8EAED] rounded-lg p-2.5 font-medium"
                   >
-                    <option value="starter">Starter Batch (₹599/mo)</option>
-                    <option value="growth">Growth Academy (₹1,299/mo)</option>
-                    <option value="pro">Multi-Branch Pro (₹2,199/mo)</option>
+                    <option value="starter">Core (Free) · Starter footprint</option>
+                    <option value="growth">Growth Core (Free)</option>
+                    <option value="pro">Cloud Pro (₹1,999/mo)</option>
                   </select>
                 </div>
                 </motion.div>

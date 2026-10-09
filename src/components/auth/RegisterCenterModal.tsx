@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnimatePresence, motion, type Variants } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from '../../context/RouterContext';
@@ -30,18 +30,6 @@ interface RegisterCenterModalProps {
   onClose: () => void;
   initialPlanId?: 'starter' | 'growth' | 'pro';
 }
-
-/** Stagger parent for the 3 plan cards entering the modal. */
-const planStagger: Variants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.06, delayChildren: 0.08 } },
-};
-
-/** Individual plan card entrance (also provides hover/tap feedback). */
-const planIn: Variants = {
-  hidden: { opacity: 0, y: 10, scale: 0.97 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: tSpring },
-};
 
 /** Password eye toggle: rotate + scale micro-swap between Eye / EyeOff. */
 const eyeIconVariants = {
@@ -246,7 +234,7 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
           >
         {/* Header */}
         <div className="px-6 py-5 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between bg-white dark:bg-[#1C1C1E]">
-          <VidyaLogo size="md" badgeText="14-DAY TRIAL" subtitle="Register your coaching center in 60 seconds" />
+          <VidyaLogo size="md" badgeText="FREE FOREVER" subtitle="Register your coaching center in 60 seconds" />
           <button
             onClick={onClose}
             className="p-1 rounded-xl text-[#86868B] hover:text-[#1D1D1F] dark:hover:text-[#F5F5F7] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition cursor-pointer"
@@ -285,84 +273,34 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
             exit={{ opacity: 0, y: -8 }}
             transition={{ ...tDefault, duration: 0.28 }}
           >
-            {/* 3-Tier Plan Selection */}
+            {/* Free Forever Core — no plan chooser, no trial countdown */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">Choose Your VidyaOS Plan</span>
+                <span className="text-xs font-semibold text-[#1D1D1F] dark:text-[#F5F5F7] font-apple-text">VidyaOS Core ERP — <span className="text-[#188038] dark:text-[#30D158]">₹0 forever</span></span>
                 <motion.span
                   initial={{ opacity: 0, scale: 0.7 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ ...tSpring, delay: 0.2 }}
-                  className="text-[10px] font-bold text-[#34C759] dark:text-[#30D158] bg-[#E6F4EA] dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-[#CEEAD6] dark:border-emerald-800/40"
+                  className="text-[10px] font-bold text-[#188038] dark:text-[#30D158] bg-[#E6F4EA] dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-[#CEEAD6] dark:border-emerald-800/40"
                 >
-                  14-Day Free Trial
+                  NO CARD NEEDED
                 </motion.span>
               </div>
-              <motion.div
-                className="grid grid-cols-3 gap-2"
-                variants={planStagger}
-                initial="hidden"
-                animate="visible"
-              >
-                {[
-                  {
-                    id: 'starter',
-                    name: 'Starter Batch',
-                    price: '₹599/mo',
-                    students: '100 Students',
-                    branches: '1 Branch'
-                  },
-                  {
-                    id: 'growth',
-                    name: 'Growth Academy',
-                    price: '₹1,299/mo',
-                    students: '300 Students',
-                    branches: '2 Branches',
-                    popular: true
-                  },
-                  {
-                    id: 'pro',
-                    name: 'Multi-Branch Pro',
-                    price: '₹2,199/mo',
-                    students: '1,000 Students',
-                    branches: '5 Branches'
-                  }
-                ].map(p => {
-                  const isSelected = selectedPlanId === p.id;
-                  return (
-                    <motion.button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setSelectedPlanId(p.id as any)}
-                      variants={planIn}
-                      whileHover={isSelected ? { y: -1 } : { y: -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      className={`p-2.5 rounded-2xl border text-left cursor-pointer relative flex flex-col justify-between transition-[color,background-color,border-color,opacity,box-shadow] duration-200 ${
-                        isSelected
-                          ? 'border-2 border-[#FFA000] bg-amber-500/10 dark:bg-amber-500/15 shadow-xs'
-                          : 'border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] opacity-80 hover:opacity-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-                      }`}
-                    >
-                      {p.popular && (
-                        <span className="absolute -top-2 right-1.5 bg-[#FFA000] text-slate-950 text-[8px] font-extrabold px-1 rounded-sm shadow-xs">
-                          POPULAR
-                        </span>
-                      )}
-                      <div>
-                        <div className="text-[11px] font-bold text-[#202124] dark:text-white truncate">
-                          {p.name}
-                        </div>
-                        <div className="text-xs font-bold text-[#E65100] dark:text-[#FFCA28] mt-0.5">
-                          {p.price}
-                        </div>
-                      </div>
-                      <div className="text-[9px] text-[#5F6368] dark:text-[#9AA0A6] mt-1 leading-tight">
-                        {p.students} • {p.branches}
-                      </div>
-                    </motion.button>
-                  );
-                })}
-              </motion.div>
+              <div className="rounded-2xl border-2 border-[var(--fb-primary-border)] bg-gradient-to-br from-[#EEF2FF] to-[#F5F3FF] dark:from-indigo-950/50 dark:to-purple-950/40 p-3.5 space-y-2">
+                <p className="text-[11px] text-[#5F6368] dark:text-[#9AA0A6] leading-relaxed">
+                  The full operating system — attendance, UPI invoicing, parent & student portals, multi-branch, push alerts. Free for every coaching center, forever.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['150 students', '2 branches', 'Unlimited staff', '1 GB media', 'UPI invoicing', 'Parent portal'].map(tag => (
+                    <span key={tag} className="px-1.5 py-0.5 rounded-md bg-white/80 dark:bg-white/10 text-[9px] font-bold text-indigo-700 dark:text-indigo-300 border border-[#C7D2FE] dark:border-indigo-800/50">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6] leading-snug">
+                  Cloud meters (WhatsApp/SMS, branded app, hosted video, AI, extra storage) stay at <strong>₹0</strong> until you switch them on — later, from the app.
+                </p>
+              </div>
             </div>
 
             {/* Auth Method Switcher Tabs */}
@@ -666,7 +604,7 @@ export const RegisterCenterModal: React.FC<RegisterCenterModalProps> = ({
 
             <div className="flex items-center justify-center space-x-2 text-[11px] text-[#5F6368] dark:text-[#9AA0A6] pt-1">
               <ShieldCheck className="w-3.5 h-3.5 text-[#188038]" />
-              <span>14-day free trial · 100% Tenant data isolation · Zero setup fee</span>
+              <span>Free forever core · 100% Tenant data isolation · No card · Zero setup fee</span>
             </div>
           </motion.div>
         )}

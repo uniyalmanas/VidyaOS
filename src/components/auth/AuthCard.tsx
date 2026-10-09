@@ -846,7 +846,7 @@ export const AuthCard: React.FC<AuthCardProps> = ({
             onClick={onOpenRegister}
             className="font-bold text-[#E65100] dark:text-[#FFD54F] hover:underline cursor-pointer"
           >
-            Register Center Free (14-Day Trial) →
+            Register Center — Free Forever →
           </button>
         </motion.div>
       )}
