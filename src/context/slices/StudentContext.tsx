@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Student, Batch, User, Organization } from '../../types';
 import { MOCK_STUDENTS, MOCK_BATCHES } from '../../data/mockData';
 import { useAuth } from '../AuthContext';
 import {
-  subscribeToStudents,
+  subscribeStudentsPaginated,
   subscribeToBatches,
   persistStudentToFirestore,
   deleteStudentFromFirestore,
@@ -37,6 +37,8 @@ function describePersistError(error: unknown): string {
 export interface StudentContextType {
   students: Student[];
   batches: Batch[];
+  studentsHasMore: boolean;
+  loadMoreStudents: () => Promise<number>;
   addStudent: (student: Omit<Student, 'id' | 'orgId' | 'enrollmentNo'> & Partial<Pick<Student, 'userId'>>) => Student;
   updateStudent: (studentId: string, updates: Partial<Student>) => void;
   deleteStudent: (studentId: string) => void;
@@ -189,11 +191,17 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
     localStorage.setItem('vidyaos_batches', JSON.stringify(batches));
   }, [batches]);
 
+  // G1 — paginated students stream. The first page stays live; `loadMoreStudents`
+  // fetches the next cursor page so institutes over the page size stop silently
+  // losing records.
+  const [studentsHasMore, setStudentsHasMore] = useState(false);
+  const studentsHandleRef = useRef<ReturnType<typeof subscribeStudentsPaginated> | null>(null);
+
   // Real-time Firestore Subscriptions for Students & Batches
   useEffect(() => {
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
 
-    const unsubStudents = subscribeToStudents(data => {
+    const studentsHandle = subscribeStudentsPaginated((data, meta) => {
       if (!Array.isArray(data)) {
         if (import.meta.env.DEV && students.length === 0) {
           setStudents(fallbackStudents);
@@ -208,7 +216,9 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
       }
 
       setStudents(ensureStudentUniqueUserIds(filterDeletedItems(data, DELETED_STUDENT_IDS_KEY)));
+      setStudentsHasMore(meta.hasMore);
     }, targetOrg);
+    studentsHandleRef.current = studentsHandle;
 
     const unsubBatches = subscribeToBatches(data => {
       if (!Array.isArray(data)) {
@@ -234,10 +244,22 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
     }, targetOrg);
 
     return () => {
-      unsubStudents();
+      if (studentsHandleRef.current) {
+        studentsHandleRef.current.unsubscribe();
+        studentsHandleRef.current = null;
+      }
       unsubBatches();
     };
   }, [currentOrg.id, isPlatformOwner, fallbackStudents, fallbackBatches, students.length, batches.length]);
+
+  /**
+   * G1 — fetch the next page of students on demand. Returns how many records
+   * were actually added (for the UI state).
+   */
+  const loadMoreStudents = async (): Promise<number> => {
+    if (!studentsHandleRef.current) return 0;
+    return studentsHandleRef.current.loadMore();
+  };
 
   // Sync parent child selection to the first linked child, and clear it when the
   // account has none — otherwise a previous account's child would survive a
@@ -469,6 +491,8 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
       value={{
         students: tenantStudents,
         batches: tenantBatches,
+        studentsHasMore,
+        loadMoreStudents,
         addStudent,
         updateStudent,
         deleteStudent,

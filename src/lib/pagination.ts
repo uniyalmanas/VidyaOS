@@ -48,17 +48,37 @@ export function subscribePaginated<T>(options: {
   orgField?: string;
   orgId?: string;
   pageSize?: number;
+  /**
+   * Sort field; defaults to the document id (`__name__`) — the only sort that
+   * is stable across page boundaries without depending on a field that may be
+   * missing or equal on many documents. Collections with a natural clock (e.g.
+   * audit logs) may pass their field + `orderDirection: 'desc'`.
+   */
+  orderField?: string;
+  orderDirection?: 'asc' | 'desc';
   mapDoc: (snapshot: QueryDocumentSnapshot) => T;
   getId: (item: T) => string;
   onData: (items: T[], meta: PaginationMeta) => void;
   onError?: (error: unknown) => void;
 }): PaginatedLoadHandle<T> {
-  const { collectionPath, orgField, orgId, pageSize = 100, mapDoc, getId, onData, onError } = options;
+  const {
+    collectionPath,
+    orgField,
+    orgId,
+    pageSize = 100,
+    orderField,
+    orderDirection = 'asc',
+    mapDoc,
+    getId,
+    onData,
+    onError
+  } = options;
 
+  const order = orderBy(orderField ?? documentId(), orderDirection);
   const base = orgField && orgId
     ? query(collection(db, collectionPath), where(orgField, '==', orgId))
     : collection(db, collectionPath);
-  const liveQuery = query(base, orderBy(documentId()), limit(pageSize));
+  const liveQuery = query(base, order, limit(pageSize));
 
   const loaded = new Map<string, T>();
   let hasMore = true;
@@ -81,7 +101,7 @@ export function subscribePaginated<T>(options: {
       try {
         const pageQuery = query(
           base,
-          orderBy(documentId()),
+          order,
           startAfter(lastVisible),
           limit(pageSize)
         );

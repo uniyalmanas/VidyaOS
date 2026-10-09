@@ -160,9 +160,14 @@ client code builds now, free orgs are hard-capped (0 message credits / no link c
 UPI/UTR flow is the always-on zero-fee fallback.
 
 - [x] **G1 — Pagination.** `lib/pagination.ts` cursor factory keeps the first page live
-  (`onSnapshot`) and loads the rest with `startAfter` pages, deduped by document id. Wired for
-  `users` (`subscribeUsersPaginated` + Auth Directory "Load more users" button); pure merge math
-  in `paginationUtils.ts` is unit-tested. Remaining collections adopt the same factory.
+  (`onSnapshot`) and loads the rest with `startAfter` pages, deduped by document id; an optional
+  `orderField`/`orderDirection` (audit logs page newest-first off the same cursor). Pure merge
+  math in `paginationUtils.ts` is unit-tested. **Every heavy collection now adopts the factory:**
+  `users` (Auth Directory "Load more users"), `students` (subscriber + DataTable footer), `invoices`
+  (subscriber + fee ledger footer), `attendance` (register strip) and `auditLogs` (trail strip) —
+  each via a `subscribe*Paginated` handle (`loadMore()` / `hasMore()`) surfaced from its context
+  slice through `useApp`, with a shared `PaginationLoadStrip` (bar + inline variants). The old
+  fixed-`limit` listeners are kept as the non-paginated fallback API.
 - [x] **G2 — FCM push (web).** `lib/pushNotifications.ts` — guarded FCM plumbing that attaches
   messaging to the existing `sw.js` at runtime (merged worker, no scope fight), request/delete
   token, foreground listener; `lib/pushPrefs.ts` — pure prefs model (alerts / fee due / results /

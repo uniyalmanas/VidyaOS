@@ -98,6 +98,7 @@ import {
   ConsoleButton,
   StatusChip,
   DataTable,
+  PaginationLoadStrip,
   Column
 } from '../ui';
 import { InstituteMessenger } from '../chat/InstituteMessenger';
@@ -188,7 +189,13 @@ export const AdminDashboard: React.FC = () => {
     updateOrganization,
     showToast,
     recordAudit,
-    markInquiryConverted
+    markInquiryConverted,
+    studentsHasMore,
+    loadMoreStudents,
+    invoicesHasMore,
+    loadMoreInvoices,
+    attendanceHasMore,
+    loadMoreAttendance
   } = useApp();
 
   const { navigate } = useRouter();
@@ -2050,6 +2057,17 @@ export const AdminDashboard: React.FC = () => {
             }
           ]}
           data={filteredStudents}
+          footerExtra={
+            studentsHasMore ? (
+              <PaginationLoadStrip
+                variant="inline"
+                loadedCount={students.length}
+                hasMore
+                noun="students"
+                onLoadMore={() => void loadMoreStudents()}
+              />
+            ) : undefined
+          }
           keyExtractor={(s) => s.id}
           searchPlaceholder="Filter students by name, roll no, phone..."
           onSearchChange={setStudentSearch}
@@ -2319,6 +2337,15 @@ export const AdminDashboard: React.FC = () => {
               })}
           </div>
         )}
+        {attendanceRecords.length > 0 && (
+          <PaginationLoadStrip
+            variant="bar"
+            loadedCount={attendanceRecords.length}
+            hasMore={attendanceHasMore}
+            noun="attendance records"
+            onLoadMore={() => void loadMoreAttendance()}
+          />
+        )}
         </ConsoleCard>
       )}
 
@@ -2549,6 +2576,17 @@ export const AdminDashboard: React.FC = () => {
             }
           ]}
           data={invoices}
+          footerExtra={
+            invoicesHasMore ? (
+              <PaginationLoadStrip
+                variant="inline"
+                loadedCount={invoices.length}
+                hasMore
+                noun="invoices"
+                onLoadMore={() => void loadMoreInvoices()}
+              />
+            ) : undefined
+          }
           keyExtractor={(inv) => inv.id}
           searchPlaceholder="Search invoices by student, number..."
           toolbarActions={

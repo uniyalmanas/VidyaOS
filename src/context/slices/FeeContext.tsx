@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { FeeInvoice, PaymentRecord, PaymentSubmission, Organization, User } from '../../types';
 import { MOCK_INVOICES } from '../../data/mockData';
 import {
   createPaymentSubmission,
   rejectPaymentSubmission,
-  subscribeToInvoices,
+  subscribeInvoicesPaginated,
   subscribeToPaymentSubmissions,
   persistInvoiceToFirestore,
   recordPaymentAtomically,
@@ -13,6 +13,8 @@ import {
 
 export interface FeeContextType {
   invoices: FeeInvoice[];
+  invoicesHasMore: boolean;
+  loadMoreInvoices: () => Promise<number>;
   pendingPaymentSubmissions: PaymentSubmission[];
   recordPayment: (invoiceId: string, paymentData: { amount: number; paymentMethod: PaymentRecord['paymentMethod']; transactionRef?: string; upiApp?: PaymentRecord['upiApp'] }) => Promise<PaymentRecord>;
   submitPendingPayment: (invoiceId: string, paymentData: { amount: number; paymentMethod: 'UPI'; transactionRef: string; upiApp?: PaymentRecord['upiApp'] }) => Promise<PaymentSubmission>;
@@ -63,11 +65,16 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
     localStorage.setItem('vidyaos_invoices', JSON.stringify(invoices));
   }, [invoices]);
 
+  // G1 — paginated invoices stream. First page live; `loadMoreInvoices` fetches
+  // the next cursor page so fee ledgers over the page size stop losing records.
+  const [invoicesHasMore, setInvoicesHasMore] = useState(false);
+  const invoicesHandleRef = useRef<ReturnType<typeof subscribeInvoicesPaginated> | null>(null);
+
   // Real-time Firestore Subscriptions for Invoices
   useEffect(() => {
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
 
-    const unsubInvoices = subscribeToInvoices(data => {
+    const handle = subscribeInvoicesPaginated((data, meta) => {
       if (data) {
         setInvoices(data.map(inv => ({
           ...inv,
@@ -76,13 +83,27 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
           amount: typeof inv.amount === 'number' ? inv.amount : 0,
           discount: typeof inv.discount === 'number' ? inv.discount : 0
         })));
+        setInvoicesHasMore(meta.hasMore);
       }
     }, targetOrg);
+    invoicesHandleRef.current = handle;
 
     return () => {
-      unsubInvoices();
+      if (invoicesHandleRef.current) {
+        invoicesHandleRef.current.unsubscribe();
+        invoicesHandleRef.current = null;
+      }
     };
   }, [currentOrg.id, isPlatformOwner]);
+
+  /**
+   * G1 — fetch the next page of invoices on demand. Returns how many records
+   * were actually added (for the UI state).
+   */
+  const loadMoreInvoices = async (): Promise<number> => {
+    if (!invoicesHandleRef.current) return 0;
+    return invoicesHandleRef.current.loadMore();
+  };
 
   useEffect(() => {
     const canReviewPayments = ['CENTER_ADMIN', 'STAFF', 'PLATFORM_OWNER'].includes(currentUser.role);
@@ -188,6 +209,8 @@ export const FeeProvider: React.FC<FeeProviderProps> = ({
     <FeeContext.Provider
       value={{
         invoices: tenantInvoices,
+        invoicesHasMore,
+        loadMoreInvoices,
         pendingPaymentSubmissions,
         recordPayment,
         submitPendingPayment,

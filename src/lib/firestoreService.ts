@@ -370,6 +370,56 @@ export function subscribeToStudents(onData: (students: Student[]) => void, orgId
   }
 }
 
+export type StudentsSubscriptionHandle = PaginatedLoadHandle<Student>;
+
+/**
+ * G1 — paginated realtime students. Same guarantees as the legacy listener
+ * (deleted-item filtering, mock/DEV fallback) but the first page stays live
+ * and `loadMore()` fetches the next cursor page, so an institute with more
+ * than `pageSize` students stops silently losing records.
+ */
+export function subscribeStudentsPaginated(
+  onData: (students: Student[], meta: PaginationMeta) => void,
+  orgId?: string,
+  pageSize = 250
+): StudentsSubscriptionHandle {
+  const fallbackHandle: StudentsSubscriptionHandle = {
+    unsubscribe: () => {},
+    loadMore: () => Promise.resolve(0),
+    hasMore: () => false
+  };
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = filterDeletedItems(developmentFallback(MOCK_STUDENTS, orgId), 'vidyaos_deleted_student_ids');
+      onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+      return fallbackHandle;
+    }
+    const handle = subscribePaginated<Student>({
+      collectionPath: 'students',
+      orgField: 'orgId',
+      orgId,
+      pageSize,
+      mapDoc: d => d.data() as Student,
+      getId: s => s.id,
+      onData: (items, meta) => {
+        onData(items.length > 0
+          ? filterDeletedItems(items, 'vidyaos_deleted_student_ids')
+          : filterDeletedItems(developmentFallback(MOCK_STUDENTS, orgId), 'vidyaos_deleted_student_ids'), meta);
+      },
+      onError: error => {
+        logListenerFallback('Real-time students', error);
+        onData(filterDeletedItems(developmentFallback(MOCK_STUDENTS, orgId), 'vidyaos_deleted_student_ids'), { hasMore: false, totalLoaded: 0 });
+      }
+    });
+    return handle;
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start students paginated listener:', e);
+    const fallback = developmentFallback(MOCK_STUDENTS, orgId);
+    onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+    return fallbackHandle;
+  }
+}
+
 export function subscribeToBatches(onData: (batches: Batch[]) => void, orgId?: string) {
   try {
     if (shouldUseMockFallbackOnly()) {
@@ -476,6 +526,53 @@ export function subscribeToInvoices(onData: (invoices: FeeInvoice[]) => void, or
   }
 }
 
+export type InvoicesSubscriptionHandle = PaginatedLoadHandle<FeeInvoice>;
+
+/**
+ * G1 — paginated realtime invoices. First page live, `loadMore()` fetches the
+ * next cursor page so institutes with more than `pageSize` invoices stop
+ * silently losing records off the fee ledger.
+ */
+export function subscribeInvoicesPaginated(
+  onData: (invoices: FeeInvoice[], meta: PaginationMeta) => void,
+  orgId?: string,
+  pageSize = 250
+): InvoicesSubscriptionHandle {
+  const fallbackHandle: InvoicesSubscriptionHandle = {
+    unsubscribe: () => {},
+    loadMore: () => Promise.resolve(0),
+    hasMore: () => false
+  };
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_INVOICES, orgId);
+      onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+      return fallbackHandle;
+    }
+    const handle = subscribePaginated<FeeInvoice>({
+      collectionPath: 'invoices',
+      orgField: 'orgId',
+      orgId,
+      pageSize,
+      mapDoc: d => d.data() as FeeInvoice,
+      getId: inv => inv.id,
+      onData: (items, meta) => {
+        onData(items.length > 0 ? items : developmentFallback(MOCK_INVOICES, orgId), meta);
+      },
+      onError: error => {
+        logListenerFallback('Real-time invoices', error);
+        onData(developmentFallback(MOCK_INVOICES, orgId), { hasMore: false, totalLoaded: 0 });
+      }
+    });
+    return handle;
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start invoices paginated listener:', e);
+    const fallback = developmentFallback(MOCK_INVOICES, orgId);
+    onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+    return fallbackHandle;
+  }
+}
+
 export function subscribeToPaymentSubmissions(
   onData: (submissions: PaymentSubmission[]) => void,
   orgId: string
@@ -537,6 +634,53 @@ export function subscribeToAttendance(onData: (records: AttendanceRecord[]) => v
     if (import.meta.env.DEV) console.error('Could not start attendance listener:', e);
     onData(fallback);
     return () => {};
+  }
+}
+
+export type AttendanceSubscriptionHandle = PaginatedLoadHandle<AttendanceRecord>;
+
+/**
+ * G1 — paginated realtime attendance. First page live, `loadMore()` fetches
+ * the next cursor page so centres with more than `pageSize` attendance records
+ * stop silently dropping older marks (a daily register grows fast).
+ */
+export function subscribeAttendancePaginated(
+  onData: (records: AttendanceRecord[], meta: PaginationMeta) => void,
+  orgId?: string,
+  pageSize = 500
+): AttendanceSubscriptionHandle {
+  const fallbackHandle: AttendanceSubscriptionHandle = {
+    unsubscribe: () => {},
+    loadMore: () => Promise.resolve(0),
+    hasMore: () => false
+  };
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_ATTENDANCE, orgId);
+      onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+      return fallbackHandle;
+    }
+    const handle = subscribePaginated<AttendanceRecord>({
+      collectionPath: 'attendance',
+      orgField: 'orgId',
+      orgId,
+      pageSize,
+      mapDoc: d => d.data() as AttendanceRecord,
+      getId: rec => rec.id,
+      onData: (items, meta) => {
+        onData(items.length > 0 ? items : developmentFallback(MOCK_ATTENDANCE, orgId), meta);
+      },
+      onError: error => {
+        logListenerFallback('Real-time attendance', error);
+        onData(developmentFallback(MOCK_ATTENDANCE, orgId), { hasMore: false, totalLoaded: 0 });
+      }
+    });
+    return handle;
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start attendance paginated listener:', e);
+    const fallback = developmentFallback(MOCK_ATTENDANCE, orgId);
+    onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+    return fallbackHandle;
   }
 }
 
@@ -895,6 +1039,57 @@ export function subscribeToAuditLogs(onData: (entries: AuditLogEntry[]) => void,
     if (import.meta.env.DEV) console.error('Could not start audit logs listener:', e);
     onData(fallback);
     return () => {};
+  }
+}
+
+export type AuditLogsSubscriptionHandle = PaginatedLoadHandle<AuditLogEntry>;
+
+/**
+ * G1 — paginated realtime audit logs. Audit history is the one collection in
+ * the product that grows without bound (every mutation writes a frame), so a
+ * fixed `limit` is the worst place to drop records. Newest-first off the wire
+ * (same composite index as the legacy listener); `loadMore()` fetches the next
+ * older page. Consumers sort for display, so array order is a detail.
+ */
+export function subscribeAuditLogsPaginated(
+  onData: (entries: AuditLogEntry[], meta: PaginationMeta) => void,
+  orgId?: string,
+  pageSize = 250
+): AuditLogsSubscriptionHandle {
+  const fallbackHandle: AuditLogsSubscriptionHandle = {
+    unsubscribe: () => {},
+    loadMore: () => Promise.resolve(0),
+    hasMore: () => false
+  };
+  try {
+    if (shouldUseMockFallbackOnly()) {
+      const fallback = developmentFallback(MOCK_AUDIT_LOGS, orgId);
+      onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+      return fallbackHandle;
+    }
+    const handle = subscribePaginated<AuditLogEntry>({
+      collectionPath: 'auditLogs',
+      orgField: 'orgId',
+      orgId,
+      pageSize,
+      orderField: 'createdAtMs',
+      orderDirection: 'desc',
+      mapDoc: d => d.data() as AuditLogEntry,
+      getId: entry => entry.id,
+      onData: (items, meta) => {
+        onData(items.length > 0 ? items : developmentFallback(MOCK_AUDIT_LOGS, orgId), meta);
+      },
+      onError: error => {
+        logListenerFallback('Real-time audit logs', error);
+        onData(developmentFallback(MOCK_AUDIT_LOGS, orgId), { hasMore: false, totalLoaded: 0 });
+      }
+    });
+    return handle;
+  } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start audit logs paginated listener:', e);
+    const fallback = developmentFallback(MOCK_AUDIT_LOGS, orgId);
+    onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+    return fallbackHandle;
   }
 }
 

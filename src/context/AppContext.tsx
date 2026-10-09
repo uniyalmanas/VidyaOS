@@ -126,6 +126,14 @@ export interface AppContextType {
   usersHasMore: boolean;
   loadMoreUsers: () => Promise<number>;
   updateUserRole: (userId: string, newRole: UserRole) => Promise<void>;
+  studentsHasMore: boolean;
+  loadMoreStudents: () => Promise<number>;
+  invoicesHasMore: boolean;
+  loadMoreInvoices: () => Promise<number>;
+  attendanceHasMore: boolean;
+  loadMoreAttendance: () => Promise<number>;
+  auditLogsHasMore: boolean;
+  loadMoreAuditLogs: () => Promise<number>;
   
   // Parent multi-child
   selectedChildId: string;
@@ -552,6 +560,8 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     // Student & Batch domain
     students: studentSlice.students,
     batches: studentSlice.batches,
+    studentsHasMore: studentSlice.studentsHasMore,
+    loadMoreStudents: studentSlice.loadMoreStudents,
     addStudent: studentSlice.addStudent,
     updateStudent: studentSlice.updateStudent,
     deleteStudent: studentSlice.deleteStudent,
@@ -566,6 +576,8 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
 
     // Fee domain
     invoices: feeSlice.invoices,
+    invoicesHasMore: feeSlice.invoicesHasMore,
+    loadMoreInvoices: feeSlice.loadMoreInvoices,
     pendingPaymentSubmissions: feeSlice.pendingPaymentSubmissions,
     recordPayment: feeSlice.recordPayment,
     submitPendingPayment: feeSlice.submitPendingPayment,
@@ -575,6 +587,8 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
 
     // Attendance domain
     attendanceRecords: attendanceSlice.attendanceRecords,
+    attendanceHasMore: attendanceSlice.attendanceHasMore,
+    loadMoreAttendance: attendanceSlice.loadMoreAttendance,
     markAttendance: attendanceSlice.markAttendance,
     markBatchAllPresent: attendanceSlice.markBatchAllPresent,
 
@@ -607,6 +621,8 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
 
     // Audit trail (F1) — append-only change history
     auditLogs: auditSlice.auditLogs,
+    auditLogsHasMore: auditSlice.auditLogsHasMore,
+    loadMoreAuditLogs: auditSlice.loadMoreAuditLogs,
     recordAudit: auditSlice.recordAudit,
 
     // Leads & admissions (F2) — inquiry pipeline CRM

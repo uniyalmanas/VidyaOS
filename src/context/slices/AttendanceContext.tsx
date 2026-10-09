@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { AttendanceRecord, AttendanceStatus, Batch, Branch, Organization, User } from '../../types';
 import { MOCK_ATTENDANCE } from '../../data/mockData';
-import { subscribeToAttendance, persistAttendanceToFirestore } from '../../lib/firestoreService';
+import { subscribeAttendancePaginated, persistAttendanceToFirestore } from '../../lib/firestoreService';
 
 export interface AttendanceContextType {
   attendanceRecords: AttendanceRecord[];
+  attendanceHasMore: boolean;
+  loadMoreAttendance: () => Promise<number>;
   markAttendance: (record: { batchId: string; studentId: string; date: string; status: AttendanceStatus; remarks?: string }) => void;
   markBatchAllPresent: (batchId: string, date: string) => void;
 }
@@ -40,18 +42,39 @@ export const AttendanceProvider: React.FC<AttendanceProviderProps> = ({
     localStorage.setItem('vidyaos_attendance', JSON.stringify(attendanceRecords));
   }, [attendanceRecords]);
 
+  // G1 — paginated attendance stream. First page live; `loadMoreAttendance`
+  // fetches the next cursor page so older marks stop silently dropping off.
+  const [attendanceHasMore, setAttendanceHasMore] = useState(false);
+  const attendanceHandleRef = useRef<ReturnType<typeof subscribeAttendancePaginated> | null>(null);
+
   // Real-time Firestore Subscriptions for Attendance
   useEffect(() => {
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
 
-    const unsubAttendance = subscribeToAttendance(data => {
-      if (data) setAttendanceRecords(data);
+    const handle = subscribeAttendancePaginated((data, meta) => {
+      if (data) {
+        setAttendanceRecords(data);
+        setAttendanceHasMore(meta.hasMore);
+      }
     }, targetOrg);
+    attendanceHandleRef.current = handle;
 
     return () => {
-      unsubAttendance();
+      if (attendanceHandleRef.current) {
+        attendanceHandleRef.current.unsubscribe();
+        attendanceHandleRef.current = null;
+      }
     };
   }, [currentOrg.id, isPlatformOwner]);
+
+  /**
+   * G1 — fetch the next page of attendance on demand. Returns how many records
+   * were actually added (for the UI state).
+   */
+  const loadMoreAttendance = async (): Promise<number> => {
+    if (!attendanceHandleRef.current) return 0;
+    return attendanceHandleRef.current.loadMore();
+  };
 
   // Multi-Tenant Isolation: Filtered data views
   const tenantAttendance = useMemo(() => {
@@ -119,6 +142,8 @@ export const AttendanceProvider: React.FC<AttendanceProviderProps> = ({
     <AttendanceContext.Provider
       value={{
         attendanceRecords: tenantAttendance,
+        attendanceHasMore,
+        loadMoreAttendance,
         markAttendance,
         markBatchAllPresent
       }}

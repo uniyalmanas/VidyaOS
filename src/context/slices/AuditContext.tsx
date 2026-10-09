@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { AuditLogEntry, Organization, User } from '../../types';
-import { subscribeToAuditLogs, persistAuditLogToFirestore } from '../../lib/firestoreService';
+import { subscribeAuditLogsPaginated, persistAuditLogToFirestore } from '../../lib/firestoreService';
 import {
   RecordAuditInput,
   createAuditEntry,
@@ -14,6 +14,8 @@ import {
 
 export interface AuditContextType {
   auditLogs: AuditLogEntry[];
+  auditLogsHasMore: boolean;
+  loadMoreAuditLogs: () => Promise<number>;
   recordAudit: (input: RecordAuditInput) => void;
 }
 
@@ -38,17 +40,39 @@ export const AuditProvider: React.FC<AuditProviderProps> = ({
     return import.meta.env.DEV ? readAuditMirror() : [];
   });
 
+  // G1 — paginated audit stream (newest-first, first page live). The audit
+  // history grows without bound, so a fixed limit silently drops the oldest
+  // frames; `loadMoreAuditLogs` fetches the next older page on demand.
+  const [auditLogsHasMore, setAuditLogsHasMore] = useState(false);
+  const auditHandleRef = useRef<ReturnType<typeof subscribeAuditLogsPaginated> | null>(null);
+
   // Real-time Firestore subscription — the single source of truth.
   useEffect(() => {
     const targetOrg = isPlatformOwner ? undefined : currentOrg.id;
-    const unsub = subscribeToAuditLogs(data => {
-      if (data) setAuditLogs(data);
+    const handle = subscribeAuditLogsPaginated((data, meta) => {
+      if (data) {
+        setAuditLogs(data);
+        setAuditLogsHasMore(meta.hasMore);
+      }
     }, targetOrg);
+    auditHandleRef.current = handle;
 
     return () => {
-      unsub();
+      if (auditHandleRef.current) {
+        auditHandleRef.current.unsubscribe();
+        auditHandleRef.current = null;
+      }
     };
   }, [currentOrg.id, isPlatformOwner]);
+
+  /**
+   * G1 — fetch the next (older) page of audit frames on demand. Returns how
+   * many records were actually added (for the UI state).
+   */
+  const loadMoreAuditLogs = async (): Promise<number> => {
+    if (!auditHandleRef.current) return 0;
+    return auditHandleRef.current.loadMore();
+  };
 
   // Session-local additions (optimistic; also the only channel in the DEV demo
   // personas where no Firebase session exists at all).
@@ -95,6 +119,8 @@ export const AuditProvider: React.FC<AuditProviderProps> = ({
     <AuditContext.Provider
       value={{
         auditLogs: tenantAudit,
+        auditLogsHasMore,
+        loadMoreAuditLogs,
         recordAudit
       }}
     >

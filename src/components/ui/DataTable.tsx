@@ -32,6 +32,9 @@ export interface DataTableProps<T> {
   };
   onRowClick?: (row: T) => void;
   className?: string;
+  /** Optional node rendered in the footer bar between the count and the pager
+   *  (e.g. a "Load more records" affordance for paginated live collections). */
+  footerExtra?: React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -45,7 +48,8 @@ export function DataTable<T>({
   pageSize = 10,
   emptyState,
   onRowClick,
-  className = ''
+  className = '',
+  footerExtra
 }: DataTableProps<T>) {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -216,6 +220,8 @@ export function DataTable<T>({
             <span>0 records</span>
           )}
         </div>
+
+        {footerExtra}
 
         <div className="flex items-center space-x-1.5">
           <button

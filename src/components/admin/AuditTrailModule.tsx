@@ -8,7 +8,7 @@ import {
   ScanLine
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ConsoleCard, ConsoleButton, StatusChip, StatusChipVariant, MetricCard } from '../ui';
+import { ConsoleCard, ConsoleButton, StatusChip, StatusChipVariant, MetricCard, PaginationLoadStrip } from '../ui';
 import { AuditLogEntry, auditToCsv, sortAuditNewestFirst } from '../../lib/audit';
 import { motion } from 'motion/react';
 
@@ -50,6 +50,8 @@ export const AuditTrailModule: React.FC = () => {
   const {
     currentOrg,
     auditLogs,
+    auditLogsHasMore,
+    loadMoreAuditLogs,
     students,
     teachers,
     batches,
@@ -312,6 +314,15 @@ export const AuditTrailModule: React.FC = () => {
               );
             })}
           </ul>
+        )}
+        {auditLogs.length > 0 && (
+          <PaginationLoadStrip
+            variant="bar"
+            loadedCount={auditLogs.length}
+            hasMore={auditLogsHasMore}
+            noun="audit entries"
+            onLoadMore={() => void loadMoreAuditLogs()}
+          />
         )}
       </ConsoleCard>
     </div>
