@@ -97,6 +97,7 @@ import { TimetableModule } from '../timetable/TimetableModule';
 import { SyllabusOverview } from '../syllabus/SyllabusOverview';
 import { PtmAdminPanel } from '../ptm/PtmAdminPanel';
 import { RolloverModule } from './RolloverModule';
+import { PeopleDirectoryModule } from './PeopleDirectoryModule';
 import { getIndiaDateString } from '../../lib/date';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -119,6 +120,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
   staffops: { label: 'Staff Operations & Salary', breadcrumb: 'Staff Ops', subtitle: 'Faculty daily attendance grid, month-end salary slips, and pay-now settlement' },
   finance: { label: 'Profit & Loss · Expenses', breadcrumb: 'Profit & Loss', subtitle: 'Money in vs money out per month — record rent, bills, salaries and see if the centre is profitable' },
   parents: { label: 'Parents & Guardians Directory', breadcrumb: 'Parents', subtitle: 'Direct communication channels, child linkages, and fee receipt sharing' },
+  directory: { label: 'All People Directory', breadcrumb: 'All People', subtitle: 'Single searchable register of every student, faculty member and parent — with full profiles and one-click CSV export' },
   announcements: { label: 'Announcements & Broadcast System', breadcrumb: 'Announcements', subtitle: 'Publish urgent notices, holiday schedules, and WhatsApp broadcast templates' },
   discussions: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
   messages: { label: 'VidyaChat · Institute Slack Channels', breadcrumb: 'VidyaChat', subtitle: 'Real-time communication across batches, faculty lounge, parent desk & student doubt channels' },
@@ -132,6 +134,7 @@ const MODULE_META: Record<string, { label: string; breadcrumb: string; subtitle:
 export const AdminDashboard: React.FC = () => {
   const {
     currentOrg,
+    allUsers,
     students,
     teachers,
     batches,
@@ -183,7 +186,7 @@ export const AdminDashboard: React.FC = () => {
   // Staff see faculty salaries? No — pay stays owner/admin-only at the UI level
   // (the rules still permit staff writes per spec; this is product philosophy
   // matching the 'teachers' directory restriction).
-  const STAFF_RESTRICTED_MODULES = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus', 'rollover'];
+  const STAFF_RESTRICTED_MODULES = ['teachers', 'directory', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus', 'rollover'];
 
   const currentModule = (!activeTab || activeTab === 'dashboard' || !MODULE_META[activeTab]) ? 'overview' : activeTab;
   const setCurrentModule = (tab: string) => {
@@ -3002,6 +3005,11 @@ export const AdminDashboard: React.FC = () => {
           keyExtractor={(s) => s.id}
           searchPlaceholder="Search parents by name or phone..."
         />
+      )}
+
+      {/* 13b. UNIFIED PEOPLE DIRECTORY (admin only) — every student, faculty & parent in one register */}
+      {!isStaff && currentModule === 'directory' && (
+        <PeopleDirectoryModule onEditPerson={setEditingPerson} />
       )}
 
       {/* 14. VIDYACHAT / SLACK MESSAGES */}

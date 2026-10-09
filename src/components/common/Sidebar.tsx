@@ -26,7 +26,8 @@ import {
   CalendarDays,
   Wallet,
   PieChart,
-  CalendarClock
+  CalendarClock,
+  Contact
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -65,8 +66,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   onToggleCollapsed
 }) => {
-  const { students, batches, invoices, announcements, teachers, inquiries, leaveRequests } = useApp();
+  const { students, batches, invoices, announcements, teachers, inquiries, leaveRequests, allUsers } = useApp();
   const { currentUser } = useAuth();
+
+  const parentCount = allUsers.filter(u => u.role === 'PARENT').length;
+  const peopleCount = students.length + teachers.length + (parentCount || students.filter(s => s.guardian?.fatherName).length);
 
   // Real-time custom resizable sidebar width state (persisted in localStorage)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -188,6 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'PEOPLE',
       items: [
+        { id: 'directory', label: 'All People', icon: Contact, badge: peopleCount },
         { id: 'inquiries', label: 'Inquiries', icon: PhoneIncoming, badge: freshLeadsCount > 0 ? freshLeadsCount : undefined, badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 font-bold' },
         { id: 'leaves', label: 'Leaves', icon: CalendarDays, badge: pendingLeaveCount > 0 ? `${pendingLeaveCount} due` : undefined, badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 font-bold' },
         { id: 'teachers', label: 'Faculty', icon: UserCheck, badge: teachers.length },
@@ -224,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Role-based navigation filtering: Front Desk Staff cannot access faculty salaries/mgmt, center P&L analytics, reports, audit, settings, or SaaS billing
   // ('staffops' joins 'teachers' — salary slips stay owner/admin-only in the UI; the Firestore rules still allow staff writes per spec.)
-  const STAFF_RESTRICTED_TABS = ['teachers', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus', 'rollover'];
+  const STAFF_RESTRICTED_TABS = ['teachers', 'directory', 'staffops', 'finance', 'analytics', 'reports', 'audit', 'settings', 'subscription', 'syllabus', 'rollover'];
   const isStaff = currentUser?.role === 'STAFF';
 
   const visibleNavGroups = navGroups.map(group => ({
