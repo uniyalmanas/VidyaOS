@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { uploadFileToStorage, db, cleanFirestoreData } from '../../lib/firebase';
@@ -334,8 +335,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto font-apple-text">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 overflow-y-auto font-apple-text">
       <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-xl rounded-3xl shadow-2xl border border-black/[0.08] dark:border-white/[0.1] overflow-hidden flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
@@ -824,6 +825,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
