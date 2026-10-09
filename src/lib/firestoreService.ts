@@ -74,6 +74,7 @@ import {
 } from '../data/mockData';
 import { applyBooking, applyCancel, BookingActor } from './ptm';
 import { allocatePayment, invoiceStatusFromInstallments } from './installments';
+import { subscribePaginated, PaginationMeta, PaginatedLoadHandle } from './pagination';
 
 function developmentFallback<T extends object>(items: T[], orgId?: string): T[] {
   if (!import.meta.env.DEV) return [];
@@ -246,38 +247,59 @@ export function subscribeToOrganizations(
   }
 }
 
+/**
+ * Backward-compatible wrapper used by pre-G1 callers: streams the live first
+ * page. Prefer `subscribeUsersPaginated` for anything that needs "Load more".
+ */
 export function subscribeToUsers(onData: (users: User[]) => void, orgId?: string) {
+  return subscribeUsersPaginated(users => onData(users), orgId).unsubscribe;
+}
+
+export interface UsersSubscriptionHandle extends PaginatedLoadHandle<User> {}
+
+/**
+ * G1 — paginated realtime users. The first page stays live (adds/edits/deletes
+ * stream through); `loadMore()` fetches the next cursor page so institutes with
+ * more than `pageSize` login accounts stop silently losing records.
+ */
+export function subscribeUsersPaginated(
+  onData: (users: User[], meta: PaginationMeta) => void,
+  orgId?: string,
+  pageSize = 100
+): UsersSubscriptionHandle {
+  const fallbackHandle: UsersSubscriptionHandle = {
+    unsubscribe: () => {},
+    loadMore: () => Promise.resolve(0),
+    hasMore: () => false
+  };
   try {
     if (shouldUseMockFallbackOnly()) {
       const fallback = developmentFallback(MOCK_USERS, orgId);
-      onData(fallback);
-      return () => {};
+      onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+      return fallbackHandle;
     }
-    const targetRef = orgId
-      ? query(collection(db, 'users'), where('orgId', '==', orgId), limit(100))
-      : query(collection(db, 'users'), limit(100));
-    return onSnapshot(
-      targetRef,
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const list = snapshot.docs.map(d => d.data() as User);
-          onData(list);
-        } else {
-          const fallback = developmentFallback(MOCK_USERS, orgId);
-          onData(fallback);
-        }
+    const handle = subscribePaginated<User>({
+      collectionPath: 'users',
+      orgField: 'orgId',
+      orgId,
+      pageSize,
+      mapDoc: d => d.data() as User,
+      getId: u => u.id,
+      onData: (items, meta) => {
+        // DEV/offline fallback keeps the demo populated; production never mocks.
+        onData(items.length > 0 ? items : developmentFallback(MOCK_USERS, orgId), meta);
       },
-      (error) => {
+      onError: error => {
         logListenerFallback('Real-time users', error);
-        const fallback = developmentFallback(MOCK_USERS, orgId);
-        onData(fallback);
+        onData(developmentFallback(MOCK_USERS, orgId), { hasMore: false, totalLoaded: 0 });
       }
-    );
+    });
+    return handle;
   } catch (e) {
+    if (import.meta.env.DEV) console.error('Could not start users paginated listener:', e);
     const fallback = developmentFallback(MOCK_USERS, orgId);
-    if (import.meta.env.DEV) console.error('Could not start users listener:', e);
-    onData(fallback);
-    return () => {};
+    onData(fallback, { hasMore: false, totalLoaded: fallback.length });
+    return fallbackHandle;
   }
 }
 

@@ -30,6 +30,8 @@ import {
   where,
   limit,
   orderBy,
+  startAfter,
+  documentId,
   writeBatch,
   runTransaction
 } from 'firebase/firestore';
@@ -300,6 +302,8 @@ export {
   where,
   limit,
   orderBy,
+  startAfter,
+  documentId,
   writeBatch,
   runTransaction,
   ref,
@@ -309,3 +313,4 @@ export {
   deleteObject
 };
 export type { FirebaseUser };
+export type { Query, QueryDocumentSnapshot, Unsubscribe } from 'firebase/firestore';

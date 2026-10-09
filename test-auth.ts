@@ -137,6 +137,10 @@ import {
   entitlementSummary
 } from './src/lib/entitlements';
 import {
+  appendPage,
+  applyLiveFirstPage
+} from './src/lib/paginationUtils';
+import {
   generatePtmSlots,
   validatePtmEvent,
   parseClockMinutes,
@@ -2117,6 +2121,37 @@ assert(
   'Empty usage starts at zero'
 );
 assert(entitlementSummary(FREE_ENTITLEMENTS).some(line => line.includes('students')), 'Entitlement summary lists student allowance');
+
+// -------------------------------------------------------------
+// G1 — cursor pagination helpers (fixes silent limit(N) data loss)
+// -------------------------------------------------------------
+console.log('\n===== Cursor pagination helpers =====');
+
+// appendPage: dedupe + added count + hasMore heuristic
+const page1Map = new Map<string, string>();
+const p1 = appendPage(page1Map, ['a', 'b', 'c'], s => s, 3);
+assert(p1.added === 3 && p1.hasMore === true, 'A full first page reports more pages may exist');
+const p2 = appendPage(page1Map, ['b', 'c', 'd'], s => s, 3);
+assert(p2.added === 1 && page1Map.size === 4 && page1Map.get('d') === 'd', 'Duplicate ids across pages are merged, never duplicated');
+const p3 = appendPage(page1Map, ['e', 'f'], s => s, 3);
+assert(p3.hasMore === false && p3.added === 2, 'A short page ends pagination');
+
+// applyLiveFirstPage: mirrors the live page when nothing beyond page 1 is loaded
+const freshMap = new Map<string, string>();
+const stillMore = applyLiveFirstPage(freshMap, ['p', 'q'], s => s, 3);
+assert(freshMap.size === 2 && stillMore === false, 'Live page short of pageSize ends pagination');
+
+// applyLiveFirstPage: keeps the already-loaded tail and refreshes page-1 ids
+const tailMap = new Map<string, string>([['a', 'a'], ['b', 'b'], ['c', 'c'], ['d', 'd']]);
+applyLiveFirstPage(tailMap, ['a', 'x'], s => s, 3);
+assert(tailMap.get('x') === 'x' && tailMap.has('d') && tailMap.has('c'), 'Live page-1 refresh keeps the already-loaded tail');
+assert(!tailMap.has('z'), 'Non-existent ids are ignored');
+assert(tailMap.size === 5, 'Merged set is complete and deduplicated');
+
+// applyLiveFirstPage: an empty live page clears an un-tailed buffer
+const emptiedMap = new Map<string, string>([['a', 'a'], ['b', 'b']]);
+applyLiveFirstPage(emptiedMap, [], s => s, 3);
+assert(emptiedMap.size === 0, 'An empty live page clears the first-page buffer');
 
 
 console.log('\n----------------------------------------');

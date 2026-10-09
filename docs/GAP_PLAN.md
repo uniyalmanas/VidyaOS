@@ -154,9 +154,13 @@ its entitlement; quotas enforce and alert.
 
 ### Phase 1 — Scale + retention essentials *(the "must-have" gaps)*
 
-- **G1 — Pagination.** Replace every `limit(N)` subscription with cursor-paginated loaders
-  (start with `users`, then audit attendance/audit logs). Add "Load more" / infinite scroll.
-  *Smallest change, biggest reliability win — do it first.*
+**Build status:** G1 is implemented end-to-end (below). G2/G3/G5 are the next build items; G2 user facing
+tokens + G3 provider wiring are Blaze-gated for the send path but deployable in code now.
+
+- [x] **G1 — Pagination.** `lib/pagination.ts` cursor factory keeps the first page live
+  (`onSnapshot`) and loads the rest with `startAfter` pages, deduped by document id. Wired for
+  `users` (`subscribeUsersPaginated` + Auth Directory "Load more users" button); pure merge math
+  in `paginationUtils.ts` is unit-tested. Remaining collections adopt the same factory.
 - **G2 — FCM push.** Web push first (service worker already registered), then Android. Token
   registry per user, notification preferences, per-tenant rate limits.
 - **G3 — Automated messaging.** WhatsApp Business Cloud API (Meta) + SMS (e.g. MSG91) + email;

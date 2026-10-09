@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import {
   Organization,
@@ -45,7 +45,7 @@ import {
 } from '../data/mockData';
 import {
   subscribeToOrganizations,
-  subscribeToUsers,
+  subscribeUsersPaginated,
   persistOrganizationToFirestore,
   persistUserRoleToFirestore,
   seedInitialFirestoreDataIfEmpty
@@ -123,6 +123,8 @@ export interface AppContextType {
   setCurrentUser: (user: User) => void;
   switchRole: (role: UserRole, specificUserId?: string) => void;
   allUsers: User[];
+  usersHasMore: boolean;
+  loadMoreUsers: () => Promise<number>;
   updateUserRole: (userId: string, newRole: UserRole) => Promise<void>;
   
   // Parent multi-child
@@ -351,6 +353,8 @@ interface CompositeProps {
   setCurrentUser: (u: User) => void;
   switchRole: (role: UserRole, specificUserId?: string) => void;
   allUsers: User[];
+  usersHasMore: boolean;
+  loadMoreUsers: () => Promise<number>;
   updateUserRole: (userId: string, newRole: UserRole) => Promise<void>;
   selectedBranchId: string;
   setSelectedBranchId: (id: string) => void;
@@ -515,6 +519,8 @@ const UnifiedAppProvider: React.FC<CompositeProps & { studentSlice: ReturnType<t
     setCurrentUser: coreProps.setCurrentUser,
     switchRole: coreProps.switchRole,
     allUsers: coreProps.allUsers,
+    usersHasMore: coreProps.usersHasMore,
+    loadMoreUsers: coreProps.loadMoreUsers,
     updateUserRole: coreProps.updateUserRole,
     selectedBranchId: coreProps.selectedBranchId,
     setSelectedBranchId: coreProps.setSelectedBranchId,
@@ -696,6 +702,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const { currentUser: authUser, loginAsDemoUser } = useAuth();
   const [allUsers, setAllUsers] = useState<User[]>(import.meta.env.DEV ? MOCK_USERS : []);
+  const [usersHasMore, setUsersHasMore] = useState(false);
+  // Keeps the live paginated handle reachable from the "Load more" button.
+  const usersHandleRef = useRef<ReturnType<typeof subscribeUsersPaginated> | null>(null);
   
   const currentUser: User = useMemo(() => {
     return authUser || (import.meta.env.DEV ? MOCK_USERS[1] : EMPTY_USER);
@@ -737,18 +746,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const targetOrg = isPlatform ? undefined : currentOrgId;
     const canListUsers = isPlatform || currentUser.role === 'CENTER_ADMIN';
-    const unsubUsers = canListUsers
-      ? subscribeToUsers(data => setAllUsers(data), targetOrg)
-      : (() => {
-          setAllUsers(currentUser.id ? [currentUser] : []);
-          return () => {};
-        })();
+    if (canListUsers) {
+      const usersHandle = subscribeUsersPaginated((data, meta) => {
+        setAllUsers(data);
+        setUsersHasMore(meta.hasMore);
+      }, targetOrg);
+      usersHandleRef.current = usersHandle;
+    } else {
+      setAllUsers(currentUser.id ? [currentUser] : []);
+      setUsersHasMore(false);
+      usersHandleRef.current = null;
+    }
 
     return () => {
       unsubOrgs();
-      unsubUsers();
+      if (usersHandleRef.current) {
+        usersHandleRef.current.unsubscribe();
+        usersHandleRef.current = null;
+      }
     };
   }, [currentOrgId, currentUser.role]);
+
+  /**
+   * G1 — fetch the next page of login accounts on demand. Returns how many
+   * records were actually added (for the UI state).
+   */
+  const loadMoreUsers = async (): Promise<number> => {
+    if (!usersHandleRef.current) return 0;
+    return usersHandleRef.current.loadMore();
+  };
 
   // Modals & triggers
   const [activeWhatsappModal, setActiveWhatsappModal] = useState<{ title: string; phone: string; message: string } | null>(null);
@@ -932,6 +958,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentUser={setCurrentUser}
       switchRole={switchRole}
       allUsers={allUsers}
+      usersHasMore={usersHasMore}
+      loadMoreUsers={loadMoreUsers}
       updateUserRole={updateUserRole}
       selectedBranchId={selectedBranchId}
       setSelectedBranchId={setSelectedBranchId}

@@ -103,7 +103,7 @@ const ROLE_METADATA: Record<UserRole, RoleMeta> = {
 const ALL_ROLES: UserRole[] = ['PLATFORM_OWNER', 'CENTER_ADMIN', 'STAFF', 'TEACHER', 'STUDENT', 'PARENT'];
 
 export const UserRoleDistributionCard: React.FC = () => {
-  const { allUsers, students, teachers, organizations, switchRole, updateUserRole } = useApp();
+  const { allUsers, students, teachers, organizations, switchRole, updateUserRole, usersHasMore, loadMoreUsers } = useApp();
   const [chartType, setChartType] = useState<'donut' | 'bar'>('donut');
   const [scope, setScope] = useState<'auth_accounts' | 'comprehensive'>('auth_accounts');
   const [hoveredRole, setHoveredRole] = useState<string | null>(null);
@@ -559,6 +559,25 @@ export const UserRoleDistributionCard: React.FC = () => {
                 })}
               </tbody>
             </table>
+
+            {allUsers.length > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 border-t border-[#DADCE0] dark:border-[#3C4043]">
+                <span className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
+                  {usersHasMore
+                    ? `Loaded ${allUsers.length} accounts — more available`
+                    : `${allUsers.length} accounts loaded`}
+                </span>
+                {usersHasMore && (
+                  <button
+                    onClick={() => { void loadMoreUsers(); }}
+                    className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-[#DADCE0] dark:border-[#3C4043] hover:bg-[#F1F3F4] dark:hover:bg-[#282A2C] text-[#1A73E8] dark:text-[#8AB4F8] cursor-pointer transition"
+                    title="Fetch the next page of login accounts"
+                  >
+                    Load more users
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
