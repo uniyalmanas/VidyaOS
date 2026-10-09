@@ -169,6 +169,27 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------------
+    // OUTBOUND MESSAGES (G3) — append-only delivery queue
+    // ------------------------------------------------------------------------
+    match /outboundMessages/{msgId} {
+      // Center members queue messages for their own org only
+      allow create: if isSignedIn() && hasUserDoc() &&
+        isTenantMember(request.resource.data.orgId);
+
+      // Members read their org's queue; platform owner reads everything
+      allow read: if isSignedIn() && hasUserDoc() &&
+        (isPlatformOwner() || isTenantMember(resource.data.orgId));
+
+      // Status transitions (e.g. server marking sent/failed)
+      allow update: if isSignedIn() && hasUserDoc() &&
+        isTenantMember(resource.data.orgId) &&
+        request.resource.data.orgId == resource.data.orgId;
+
+      // Append-only audit trail; retention cleanup runs server-side
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------------
     // STUDENTS COLLECTION
     // ------------------------------------------------------------------------
     match /students/{studentId} {

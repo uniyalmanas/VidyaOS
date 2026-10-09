@@ -111,6 +111,7 @@ export const MOCK_ORGANIZATIONS: Organization[] = [
     createdAt: '2025-04-10',
     maxStudents: 300,
     maxBranches: 2,
+    entitlements: { messagingCredits: 50 },
     branches: [
       {
         id: 'branch-rajpur',

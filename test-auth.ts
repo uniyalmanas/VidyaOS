@@ -146,6 +146,21 @@ import {
   togglePushPref
 } from './src/lib/pushPrefs';
 import {
+  MESSAGE_TEMPLATES,
+  getMessageTemplate,
+  composeMessage,
+  stripWhatsappMarkup,
+  CHANNEL_META
+} from './src/lib/messageTemplates';
+import {
+  currentYearMonth,
+  messageUsageThisMonth,
+  bumpMessageUsage,
+  remainingMessageCredits,
+  canSendMessage,
+  estimateCreditCost
+} from './src/lib/messagingUtils';
+import {
   generatePtmSlots,
   validatePtmEvent,
   parseClockMinutes,
@@ -2183,6 +2198,77 @@ const oddPrefs = mergePushPrefs({ results: false, somethingElse: true } as any);
 assert(oddPrefs.results === false && oddPrefs.announcements === true, 'Unknown extra keys are ignored by merge');
 const nullPrefs = mergePushPrefs(null);
 assert(nullPrefs.feeDue === true && nullPrefs.announcements === true, 'Null prefs fall back to defaults');
+
+// -------------------------------------------------------------
+// G3 — message templates & credit metering (pure helpers)
+// -------------------------------------------------------------
+console.log('\n===== Message templates & credits =====');
+
+assert(MESSAGE_TEMPLATES.length === 6, 'Template registry exposes the six G3 templates');
+const absent = getMessageTemplate('absent');
+assert(
+  !!absent && absent.channels.includes('whatsapp') && !absent.channels.includes('email'),
+  'Absent template is WhatsApp/SMS only'
+);
+
+const ctx = { orgName: 'Apex Coaching Academy', upiId: 'apex@icici' };
+const waAbsent = composeMessage('absent', { studentName: 'Rohan', className: 'Class 10' }, ctx, 'whatsapp');
+assert(
+  waAbsent.body.includes('Rohan') && waAbsent.body.includes('Apex Coaching Academy') && waAbsent.body.includes('*ABSENT*'),
+  'WhatsApp absent message carries variables + markup'
+);
+const smsAbsent = composeMessage('absent', { studentName: 'Rohan' }, ctx, 'sms');
+assert(!smsAbsent.body.includes('*'), 'SMS body is stripped of WhatsApp markup');
+const feeEmail = composeMessage('feeDue', { parentName: 'Mr. Sharma', amount: '1200', dueDate: '10 Oct' }, ctx, 'email');
+assert(
+  !!feeEmail.subject && feeEmail.subject.includes('Fee') && feeEmail.body.includes('₹1200'),
+  'Email fee reminder gets a subject and variable interpolation'
+);
+const receipt = composeMessage('receipt', { studentName: 'Rohan', amount: '1200' }, ctx, 'whatsapp');
+assert(receipt.body.includes('Payment received') && receipt.body.includes('₹1200'), 'Receipt confirms payment + amount');
+const announcement = composeMessage('announcement', { message: 'Classes resume Monday' }, ctx, 'whatsapp');
+assert(announcement.body.includes('Classes resume Monday'), 'Announcement embeds the free-text variable');
+assert(stripWhatsappMarkup('Hello *World* and _ok_') === 'Hello World and ok', 'stripWhatsappMarkup removes bold/italic markers');
+assert(
+  CHANNEL_META.whatsapp.provider === 'meta-whatsapp' && CHANNEL_META.sms.provider === 'msg91' && CHANNEL_META.email.creditCost === 1,
+  'Channel metadata maps to provider + flat credit cost'
+);
+
+const ym = '2026-10';
+const ymPrev = '2026-09';
+assert(currentYearMonth(new Date(2026, 9, 5)) === '2026-10', 'currentYearMonth pads to YYYY-MM');
+assert(estimateCreditCost('whatsapp') === 1 && estimateCreditCost('email') === 1, 'Every channel costs exactly 1 credit');
+assert(messageUsageThisMonth(undefined, ym) === 0, 'Missing usage counts zero');
+const usage0 = bumpMessageUsage(undefined, ym);
+assert(
+  usage0.messagesSent === 1 && usage0.messagesThisMonth?.count === 1 && usage0.messagesThisMonth?.yearMonth === ym,
+  'First queued message seeds the month window'
+);
+const usage1 = bumpMessageUsage(usage0, ym);
+assert(usage1.messagesSent === 2 && usage1.messagesThisMonth?.count === 2, 'Same-month queueing increments both counters');
+const usage2 = bumpMessageUsage(usage1, ymPrev);
+assert(
+  usage2.messagesSent === 3 && usage2.messagesThisMonth?.count === 1 && usage2.messagesThisMonth?.yearMonth === ymPrev,
+  'Month rollover resets the window but keeps the all-time total'
+);
+assert(
+  bumpMessageUsage(usage1, ym).mediaBytes === 0 && bumpMessageUsage(usage1, ym).aiCreditsUsed === 0,
+  'bump preserves untouched usage fields'
+);
+
+const ent50 = { ...FREE_ENTITLEMENTS, messagingCredits: 50 };
+const entUnlimited = { ...FREE_ENTITLEMENTS, messagingCredits: UNLIMITED };
+assert(remainingMessageCredits(ent50, usage0, ym) === 49, 'Remaining = monthly budget minus window usage');
+assert(remainingMessageCredits(ent50, usage2, ymPrev) === 49, 'Previous-month window does not leak into the current month');
+assert(remainingMessageCredits(entUnlimited, usage2, ym) === Infinity, 'Unlimited credits report Infinity');
+assert(canSendMessage(ent50, usage0, ym).allowed === true, 'Credits left allow sending');
+const zeroCre = canSendMessage({ ...FREE_ENTITLEMENTS, messagingCredits: 0 }, usage0, ym);
+assert(zeroCre.allowed === false && zeroCre.remaining === 0, 'Zero-credit org is blocked with 0 remaining');
+const drained = { ...usage1, messagesThisMonth: { yearMonth: ym, count: 50 } };
+assert(
+  remainingMessageCredits(ent50, drained, ym) === 0 && canSendMessage(ent50, drained, ym).allowed === false,
+  'Exhausted window blocks sending exactly'
+);
 
 
 console.log('\n----------------------------------------');

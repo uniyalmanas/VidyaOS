@@ -555,6 +555,45 @@ export interface OrgUsage {
   videoMinutes: number;
   aiCreditsUsed: number;
   updatedAt: string;
+  /**
+   * Client-side fair-use window (YYYY-MM) used by the queue writer until the
+   * `sendMessage` Function (Blaze) takes over authoritative metering.
+   */
+  messagesThisMonth?: { yearMonth: string; count: number };
+}
+
+// --- G3: outbound automated messaging (WhatsApp / SMS / email) ---
+
+export type MessageChannel = 'whatsapp' | 'sms' | 'email';
+
+export type MessageTemplateId =
+  | 'absent'
+  | 'feeDue'
+  | 'receipt'
+  | 'results'
+  | 'ptm'
+  | 'announcement';
+
+export type OutboundMessageStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'cancelled';
+
+/** One outbound notification in `outboundMessages`; the `sendMessage` Function delivers it. */
+export interface OutboundMessage {
+  id: string;
+  orgId: string;
+  channel: MessageChannel;
+  templateId: MessageTemplateId | 'custom';
+  toName?: string;
+  toPhone?: string;
+  toEmail?: string;
+  subject?: string;
+  body: string;
+  status: OutboundMessageStatus;
+  creditCost: number;
+  provider: 'meta-whatsapp' | 'msg91' | 'email';
+  createdAt: string;
+  sentAt?: string;
+  attemptCount?: number;
+  error?: string;
 }
 
 export interface NotificationItem {

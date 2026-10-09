@@ -154,8 +154,9 @@ its entitlement; quotas enforce and alert.
 
 ### Phase 1 — Scale + retention essentials *(the "must-have" gaps)*
 
-**Build status:** G1 and G2 are implemented (below). G3/G5 are the next build items; the G3 send
-path and live G2 delivery are Blaze-gated, but all client code builds and ships now.
+**Build status:** G1, G2 and G3 are implemented (below). G5 is the next build item; the live send
+path for G3 (via the `sendMessage` Function) and live G2 delivery are Blaze-gated, but all client
+code ships now and free orgs are hard-capped at 0 message credits (the in-app upsell).
 
 - [x] **G1 — Pagination.** `lib/pagination.ts` cursor factory keeps the first page live
   (`onSnapshot`) and loads the rest with `startAfter` pages, deduped by document id. Wired for
@@ -168,10 +169,16 @@ path and live G2 delivery are Blaze-gated, but all client code builds and ships 
   device token onto `users/{uid}.fcmTokens` (existing self-update rule covers the write); push
   control rendered in the profile editor. Actual delivery needs the `sendPush` Function (Blaze)
   + VAPID key in the project; everything degrades gracefully until then.
-- **G3 — Automated messaging.** WhatsApp Business Cloud API (Meta) + SMS (e.g. MSG91) + email;
-  template registry (absent, fee due, receipt, result, PTM), opt-in/opt-out, delivery log,
-  credits metering. Reuse and extend the existing `whatsappTemplate` field and the
-  `whatsappAlertSent` flag.
+- [x] **G3 — Automated messaging (first paid SKU).** `lib/messageTemplates.ts` — pure template
+  registry (absent, fee due, receipt, results, PTM, announcement) with per-channel compose
+  (WhatsApp markup stripped for SMS/email, email subjects); `lib/messagingUtils.ts` — pure monthly
+  credit metering (`messagesThisMonth` YYYY-MM window on `OrgUsage`, all-time `messagesSent`
+  preserved, `Infinity` for unlimited); `lib/messagingService.ts` — `enqueueOutboundMessage`
+  writes the `outboundMessages` queue + bumps usage (fair-use cap enforced client-side until the
+  `sendMessage` Function owns metering on Blaze). The WhatsApp share modal (used by attendance,
+  fee, report flows) gained channel pills, template picker, recipient email field, credit meter
+  and the "Send via cloud (1 credit)" action. `outboundMessages` has its own append-only
+  Firestore rules block; the demo org ships with 50 demo credits.
 - **G5 — Gateway + auto-reconcile.** Razorpay/Cashfree payment links + webhook that records the
   payment and marks the installment paid automatically; keep the current UPI/UTR flow as the
   zero-fee fallback.

@@ -9,10 +9,18 @@ import {
   Smartphone,
   Globe,
   Sparkles,
-  Edit3
+  Edit3,
+  Coins,
+  Send,
+  Loader2
 } from 'lucide-react';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
+import { resolveEntitlements } from '../../lib/entitlements';
+import { enqueueOutboundMessage } from '../../lib/messagingService';
+import { canSendMessage } from '../../lib/messagingUtils';
+import { CHANNEL_META, MESSAGE_TEMPLATES, composeMessage } from '../../lib/messageTemplates';
+import { MessageChannel, MessageTemplateId } from '../../types';
 
 /** Modal shell: spring pop-in cascading header → presets → message box → actions. */
 const waPanelVariants: Variants = {
@@ -32,15 +40,23 @@ const waPanelVariants: Variants = {
 };
 
 export const WhatsAppShareModal: React.FC = () => {
-  const { activeWhatsappModal, setActiveWhatsappModal, currentOrg } = useApp();
+  const { activeWhatsappModal, setActiveWhatsappModal, currentOrg, showToast } = useApp();
   const [messageText, setMessageText] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [channel, setChannel] = useState<MessageChannel>('whatsapp');
+  const [templateId, setTemplateId] = useState<MessageTemplateId | 'custom'>('custom');
+  const [emailTo, setEmailTo] = useState<string>('');
+  const [sending, setSending] = useState<boolean>(false);
 
   useEffect(() => {
     if (activeWhatsappModal) {
       setMessageText(activeWhatsappModal.message);
       setIsEditing(false);
+      setChannel('whatsapp');
+      setTemplateId('custom');
+      setEmailTo('');
+      setSending(false);
     }
   }, [activeWhatsappModal]);
 
@@ -57,6 +73,55 @@ export const WhatsAppShareModal: React.FC = () => {
   const handleOpenWaMe = () => {
     const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(messageText)}`;
     window.open(url, '_blank');
+  };
+
+  // G3 — automated cloud delivery (uses monthly message credits)
+  const ent = resolveEntitlements(currentOrg);
+  const creditCheck = canSendMessage(ent, currentOrg?.usage);
+
+  const handlePickTemplate = (id: MessageTemplateId | 'custom') => {
+    setTemplateId(id);
+    if (id !== 'custom') {
+      setMessageText(composeMessage(id, {}, { orgName: currentOrg.name, upiId: currentOrg.upiId }, channel).body);
+    }
+  };
+
+  const handleChannelChange = (c: MessageChannel) => {
+    setChannel(c);
+    if (templateId !== 'custom') {
+      setMessageText(composeMessage(templateId, {}, { orgName: currentOrg.name, upiId: currentOrg.upiId }, c).body);
+    }
+  };
+
+  const handleSendAutomated = async () => {
+    if (!activeWhatsappModal || sending || !creditCheck.allowed) return;
+    if (channel === 'email' && !emailTo.trim()) {
+      showToast('Enter a recipient email address', 'error');
+      return;
+    }
+    setSending(true);
+    try {
+      const result = await enqueueOutboundMessage(currentOrg.id, {
+        channel,
+        templateId,
+        toPhone: channel === 'whatsapp' || channel === 'sms' ? activeWhatsappModal.phone : undefined,
+        toEmail: channel === 'email' ? emailTo.trim() : undefined,
+        body: messageText
+      }, { entitlements: ent, usage: currentOrg?.usage });
+      if (!result.ok) {
+        showToast(
+          result.error === 'quota'
+            ? 'Monthly message credits exhausted — add the Cloud Messaging SKU'
+            : 'Could not queue the message right now',
+          'error'
+        );
+        return;
+      }
+      showToast(`Queued — ${CHANNEL_META[channel].label} will deliver it automatically`, 'success');
+      setActiveWhatsappModal(null);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleOpenWhatsAppWeb = () => {
@@ -237,6 +302,84 @@ export const WhatsAppShareModal: React.FC = () => {
                   <Smartphone className="w-4 h-4" />
                   <span>Open wa.me</span>
                 </motion.button>
+              </motion.div>
+
+              {/* G3 — Automated cloud delivery (uses monthly message credits) */}
+              <motion.div variants={fadeUp} className="pt-3 border-t border-[#DADCE0]/60 dark:border-[#3C4043] space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[#202124] dark:text-[#E8EAED] flex items-center gap-1.5">
+                    <Coins className="w-3.5 h-3.5 text-[#B06000] dark:text-[#FDD663]" />
+                    Automated delivery
+                  </span>
+                  <span className="text-[10px] font-semibold text-[#5F6368] dark:text-[#9AA0A6]">
+                    {Number.isFinite(creditCheck.remaining)
+                      ? `${creditCheck.remaining} of ${ent.messagingCredits} credits left this month`
+                      : 'Unlimited credits left'}
+                  </span>
+                </div>
+
+                {/* Channel pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {(Object.keys(CHANNEL_META) as MessageChannel[]).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => handleChannelChange(c)}
+                      disabled={sending}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer disabled:opacity-50 ${
+                        channel === c
+                          ? 'bg-[#188038]/10 border-[#188038]/50 text-[#188038] dark:text-emerald-300'
+                          : 'bg-slate-100 dark:bg-[#282A2C] border-transparent text-[#5F6368] dark:text-[#9AA0A6]'
+                      }`}
+                    >
+                      {CHANNEL_META[c].label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Template picker */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={templateId}
+                    onChange={(e) => handlePickTemplate(e.target.value as MessageTemplateId | 'custom')}
+                    disabled={sending}
+                    className="flex-1 px-2.5 py-1.5 bg-white dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[11px] font-semibold text-[#202124] dark:text-[#E8EAED] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/40 cursor-pointer disabled:opacity-50"
+                  >
+                    <option value="custom">Custom message</option>
+                    {MESSAGE_TEMPLATES.map((t) => (
+                      <option key={t.id} value={t.id} disabled={!t.channels.includes(channel)}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {channel === 'email' && (
+                  <input
+                    type="email"
+                    value={emailTo}
+                    onChange={(e) => setEmailTo(e.target.value)}
+                    placeholder="Recipient email address"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-[#282A2C] border border-[#DADCE0] dark:border-[#3C4043] text-[11px] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A73E8]/40"
+                  />
+                )}
+
+                {!creditCheck.allowed && (
+                  <div className="text-[10px] font-medium text-[#B06000] dark:text-[#FDD663] bg-amber-50 dark:bg-[#3B2E0B] rounded-lg px-3 py-2 leading-relaxed">
+                    Monthly message credits exhausted. Add the <b>Cloud Messaging</b> SKU to keep sending automated
+                    alerts.
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void handleSendAutomated()}
+                  disabled={sending || !creditCheck.allowed}
+                  className="w-full py-2.5 bg-[#188038] hover:bg-[#137333] text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-700/20 disabled:opacity-50 cursor-pointer"
+                >
+                  {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>{sending ? 'Queuing…' : 'Send via cloud (1 credit)'}</span>
+                </button>
               </motion.div>
             </motion.div>
           </motion.div>
