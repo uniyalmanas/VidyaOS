@@ -199,6 +199,11 @@
   .font-mono-code {
     font-family: 'JetBrains Mono', monospace;
   }
+  /* Funky display face for marketing/landing punch (Bricolage Grotesque) */
+  .font-funky {
+    font-family: 'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Inter", system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
 
   .pb-safe {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
@@ -739,6 +744,60 @@
     background-image: linear-gradient(90deg, transparent 0%, rgba(129, 140, 248, 0.14) 50%, transparent 100%);
     background-size: 200% 100%;
     animation: fb-skeleton 1.4s ease-in-out infinite;
+  }
+
+  /* Marquee ticker — seamless 2×-copy loop (track must hold 2 identical copies) */
+  @keyframes fb-marquee {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(-50%, 0, 0); }
+  }
+  .animate-marquee {
+    animation: fb-marquee 36s linear infinite;
+    will-change: transform;
+  }
+  .marquee-mask {
+    mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  }
+  .marquee-hover-pause:hover .animate-marquee {
+    animation-play-state: paused;
+  }
+
+  /* Playful sticker badge — tilts, and does a little wiggle on hover */
+  @keyframes fb-wiggle {
+    0%, 100% { transform: rotate(var(--tilt, -4deg)); }
+    25% { transform: rotate(calc(var(--tilt, -4deg) + 4deg)); }
+    75% { transform: rotate(calc(var(--tilt, -4deg) - 4deg)); }
+  }
+  .animate-wiggle-hover:hover {
+    animation: fb-wiggle 0.45s ease-in-out;
+  }
+
+  /* Slow decorative spin for funky sparkle/star glyphs */
+  @keyframes fb-spin-slow {
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin-slow {
+    animation: fb-spin-slow 16s linear infinite;
+  }
+
+  /* Bouncy pop-in for stickers/stamps (used with Reveal-style entrance) */
+  @keyframes fb-pop {
+    0% { opacity: 0; transform: scale(0.6) rotate(var(--tilt, 0deg)); }
+    70% { transform: scale(1.06) rotate(var(--tilt, 0deg)); }
+    100% { opacity: 1; transform: scale(1) rotate(var(--tilt, 0deg)); }
+  }
+  .animate-pop {
+    animation: fb-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Dotted paper grid — funky background texture for hero/CTA sections */
+  .bg-dot-grid {
+    background-image: radial-gradient(circle, rgba(79, 70, 229, 0.18) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .dark .bg-dot-grid {
+    background-image: radial-gradient(circle, rgba(165, 180, 252, 0.16) 1px, transparent 1px);
   }
 
   /* Tabular count-up / number flip helper */

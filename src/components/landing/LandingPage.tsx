@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2, Users, BookOpen, GraduationCap, ShieldCheck, ArrowRight, Sparkles,
   Smartphone, QrCode, Shield, Clock, ChevronDown, TrendingUp, Check,
-  ExternalLink, Sun, Moon, DownloadCloud, Menu, X, Network
+  ExternalLink, Sun, Moon, DownloadCloud, Menu, X, Network, Wallet, Gem,
+  Image, Video, MessageCircle, Palette, Zap
 } from 'lucide-react';
-import { AnimatePresence, motion, useMotionValue, useSpring, type Variants } from 'motion/react';
-import { UserRole } from '../../types';
+import { AnimatePresence, motion, useMotionValue, useSpring } from 'motion/react';
+import { CloudSkuId, UserRole } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { CLOUD_SKUS } from '../../lib/entitlements';
 import {
   ConsoleButton,
   StatusChip,
@@ -20,7 +22,7 @@ import {
 import { usePwaInstall } from '../../hooks/usePwaInstall';
 import { PwaInstallModal } from '../common/PwaInstallModal';
 import {
-  fadeUp, fadeUpLg, staggerContainer, dropdownIn, tDefault, tFast, tSpring, easings
+  fadeUp, fadeUpLg, staggerContainer, dropdownIn, tFast, tSpring, easings
 } from '../../lib/motion';
 
 interface LandingPageProps {
@@ -42,7 +44,7 @@ const navLinks = [
   { href: '#how-it-works', label: 'How It Works' },
   { href: '#console-demo', label: 'Console Demo' },
   { href: '#fee-calculator', label: 'Fee Calculator' },
-  { href: '#pricing-tiers', label: 'Pricing Tiers' },
+  { href: '#pricing-tiers', label: 'Pricing' },
   { href: '#faqs', label: 'FAQs' },
 ];
 
@@ -75,16 +77,100 @@ const features = [
     points: ['Instant Local-First Performance', 'Background Firestore Sync'] },
 ];
 
-const plans = [
-  { id: 'starter' as const, name: 'Starter Batch', price: '₹599', blurb: 'For single-branch neighborhood coaching & education centers.', cta: 'Choose Starter Batch', featured: false,
-    items: ['Up to 100 Enrolled Students', '1 Center Branch', '1-Tap UPI Invoicing & Receipts', 'Mobile Attendance Register', 'Parent Portal Access'] },
-  { id: 'growth' as const, name: 'Growth Academy', price: '₹1,299', blurb: 'For growing institutes and competitive test prep centers.', cta: 'Start Free 14-Day Trial', featured: true,
-    items: ['Up to 300 Enrolled Students', 'Up to 2 Branches Supported', 'Automated WhatsApp Absentee Alerts', 'Diagnostic Tests & Percentile Rankings', 'Automated Exam & Test Scheduler', 'Teacher Salary & Time Slot Scheduler'] },
-  { id: 'pro' as const, name: 'Multi-Branch Pro', price: '₹2,199', blurb: 'For large coaching networks and test prep academies.', cta: 'Choose Multi-Branch Pro', featured: false,
-    items: ['Up to 1,000 Enrolled Students', 'Up to 5 Branches Supported', 'Custom Domain & Center Branding', 'Dedicated WhatsApp API integration', '24/7 Priority Support & Onboarding'] },
+const freeCore = {
+  name: 'Core ERP',
+  price: '₹0',
+  period: 'forever',
+  blurb: 'The full operating system — invoicing, attendance, parent portal, staff & branches. Free for every coaching center, forever. No card required.',
+  cta: 'Register Free Center',
+  items: [
+    { icon: Users, text: '150 students · 2 branches' },
+    { icon: QrCode, text: 'UPI invoicing + receipts' },
+    { icon: BookOpen, text: '20-second attendance' },
+    { icon: Smartphone, text: 'Parent & student portals' },
+    { icon: Network, text: 'Multi-branch topology' },
+    { icon: Image, text: '1 GB media storage' },
+    { icon: Shield, text: 'Offline-first sync' },
+    { icon: Zap, text: 'Push notifications' }
+  ] as const
+};
+
+/** Per-SKU visual identity for the Cloud Store shelf. */
+const skuTints: Record<CloudSkuId, { emoji: string; tint: string }> = {
+  media: { emoji: '🖼️', tint: 'bg-sky-500/10 text-sky-600 dark:text-sky-300' },
+  messaging: { emoji: '💬', tint: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
+  brand: { emoji: '🎨', tint: 'bg-pink-500/10 text-pink-600 dark:text-pink-300' },
+  app: { emoji: '📱', tint: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' },
+  video: { emoji: '🎬', tint: 'bg-purple-500/10 text-purple-600 dark:text-purple-300' },
+  ai: { emoji: '✨', tint: 'bg-amber-500/10 text-amber-600 dark:text-amber-300' },
+  pro: { emoji: '💎', tint: 'bg-[#EA580C]/10 text-[#EA580C] dark:text-[#FDBA74]' }
+};
+
+const skuIcons: Record<CloudSkuId, React.ElementType> = {
+  media: Image,
+  messaging: MessageCircle,
+  brand: Palette,
+  app: Smartphone,
+  video: Video,
+  ai: Sparkles,
+  pro: Gem
+};
+
+/** Rough cloud-stack forecast by center size (used by the ROI calculator). */
+const cloudTierBySize: { max: number; label: string; detail: string; price: string; tone: 'free' | 'mid' | 'pro' }[] = [
+  { max: 150, label: 'Free Forever Core', detail: 'Full ERP · ₹0/mo · no card', price: '₹0', tone: 'free' },
+  { max: 300, label: 'Growth Meters', detail: 'Cloud Messaging + Cloud Media', price: '₹598/mo', tone: 'mid' },
+  { max: Infinity, label: 'Cloud Pro', detail: 'Everything in the cloud store', price: '₹1,999/mo', tone: 'pro' }
 ];
 
+const marqueePhrases = [
+  'Free Forever', '₹0 Gateway Cuts', '20-Second Attendance', 'WhatsApp Alerts',
+  'SSC · Banking · Railways · UPSC', 'Multi-Branch', 'Offline-First Sync', 'No Card Required'
+];
+
+/** Funky scrolling ticker — two identical copies for a seamless -50% loop. */
+const MarqueeStrip: React.FC<{ className?: string; tone?: 'brand' | 'dark' }> = ({ className = '', tone = 'brand' }) => (
+  <div aria-hidden="true" className={`marquee-hover-pause relative overflow-hidden select-none ${className}`}>
+    <div className="marquee-mask flex overflow-hidden">
+      <div className="animate-marquee flex w-max items-center">
+        {[0, 1].map(copy => (
+          <div key={copy} className="flex items-center">
+            {marqueePhrases.map(t => (
+              <span
+                key={`${copy}-${t}`}
+                className="mx-5 inline-flex items-center gap-2.5 whitespace-nowrap font-funky font-bold tracking-tight text-sm sm:text-base"
+              >
+                {t}
+                <span className={tone === 'brand' ? 'text-white/60' : 'text-[var(--fb-primary)]/50'}>✦</span>
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+/** Rotated sticker badge with a playful hover wiggle + optional emoji. */
+const Sticker: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+  emoji?: string;
+  tilt?: number;
+  pop?: boolean;
+}> = ({ children, className = '', emoji, tilt = -4, pop = true }) => (
+  <span
+    style={{ '--tilt': `${tilt}deg` } as React.CSSProperties}
+    className={`animate-wiggle-hover inline-flex items-center gap-1.5 rounded-2xl border-2 border-dashed px-3 py-1.5 text-xs font-funky font-bold select-none shadow-[0_6px_20px_rgba(0,0,0,0.14)] ${pop ? 'animate-pop' : ''} ${className}`}
+  >
+    {emoji && <span className="text-sm leading-none">{emoji}</span>}
+    {children}
+  </span>
+);
+
 const faqs = [
+  { q: 'Is VidyaOS really free? What is the catch?',
+    a: "No catch — the core ERP is free forever for every center: 150 students, 2 branches, unlimited staff, and 1 GB of media storage. Attendance, UPI invoicing, the parent portal and push notifications never cost a rupee. You only pay if you switch on a cloud meter that actually costs us money to run — extra storage, automated WhatsApp/SMS, a branded app, hosted video, or AI credits. No card is required to start." },
   { q: 'How does UPI Fee Collection work? Do we need a complex payment gateway?',
     a: "No payment gateway or commercial merchant account required. VidyaOS generates instant dynamic UPI QR codes and deep-links for PhonePe, Google Pay, and Paytm directly mapped to your coaching institute's UPI VPA. When parents pay, automated receipts with GST/PAN and student enrollment details are generated instantly." },
   { q: 'Can teachers mark attendance from their personal mobile phones?',
@@ -94,7 +180,7 @@ const faqs = [
   { q: 'Can VidyaOS work if the internet connection is unstable at our center?',
     a: 'Yes. VidyaOS is built with an offline-first architecture powered by client caching and hybrid Firestore synchronization. Attendance and student records load from offline storage, and sync seamlessly once connectivity restores.' },
   { q: 'Can we manage multiple branches under a single center owner login?',
-    a: 'Yes, within your plan limits (1 branch on Starter, 2 on Growth, 5 on Multi-Branch Pro). Owners can filter students and fee collections by branch and manage shared faculty schedules.' },
+    a: 'Yes. The free core already supports 2 branches with branch-level revenue filters and shared faculty schedules; larger networks can stack Cloud Pro for a bigger footprint. All from one owner login.' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -371,8 +457,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [monthlyFee, setMonthlyFee] = useState(2500);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  const recommendedPlan =
-    studentCount <= 100 ? plans[0] : studentCount <= 300 ? plans[1] : plans[2];
+  const forecastTier = cloudTierBySize.find(t => studentCount <= t.max) ?? cloudTierBySize[cloudTierBySize.length - 1];
 
   const totalMonthlyCollection = studentCount * monthlyFee;
   // Leakage grows with centre size: interpolates the stated 8–12% range
@@ -381,8 +466,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const estimatedRecoveredLeakage = Math.round(totalMonthlyCollection * leakageRate);
   const staffHoursSaved = Math.round(studentCount * 0.25);
 
-  const choosePlan = (id: 'starter' | 'growth' | 'pro') =>
-    onOpenRegister ? onOpenRegister(id) : onSelectRole('CENTER_ADMIN');
+  const registerCenter = () =>
+    onOpenRegister ? onOpenRegister() : onSelectRole('CENTER_ADMIN');
 
   const stat = 'text-2xl sm:text-3xl font-bold font-apple-display tracking-tight';
   const statLabel = `text-xs font-normal ${muted} mt-0.5 font-apple-text`;
@@ -545,11 +630,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* Hero */}
       <section className="relative w-full overflow-hidden pt-12 pb-16 sm:pt-20 sm:pb-24 lg:pt-28 lg:pb-32 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,120,128,0.08),rgba(245,245,247,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(174,174,178,0.1),rgba(17,17,19,0))]">
-        {/* Ambient indigo/saffron glow orbs — slow, soft, decorative only */}
+        {/* Ambient indigo/saffron glow orbs + dotted paper grid — slow, decorative only */}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -left-24 -right-24 h-[30rem] rounded-full bg-[radial-gradient(circle,rgba(79,70,229,0.22),transparent_65%)] blur-3xl animate-gradient-pan" />
           <div className="absolute top-32 -right-16 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.18),transparent_65%)] blur-2xl animate-float" />
           <div className="absolute top-72 -left-16 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.16),transparent_65%)] blur-2xl animate-float" style={{ animationDelay: '1.4s' }} />
+          <div className="absolute inset-0 bg-dot-grid opacity-40 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_40%,black,transparent)] dark:opacity-30" />
+        </div>
+
+        {/* Floating funky stickers — decorative on wide screens only */}
+        <div aria-hidden="true" className="hidden lg:block pointer-events-none absolute inset-0">
+          <Sticker emoji="⚡" tilt={-9} className="absolute left-[3%] top-[15%] bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7] border-[#A5B4FC] dark:border-[#6366F1]/60">20-sec attendance</Sticker>
+          <Sticker emoji="🧾" tilt={7} className="absolute right-[2%] top-[22%] bg-[#FBF3E4] dark:bg-[#3A2A16] text-[#9A5B00] dark:text-[#FBBF24] border-amber-400/70">₹0 gateway cuts</Sticker>
+          <Sticker emoji="🎯" tilt={-6} className="absolute left-[5%] bottom-[16%] bg-[#EAF4FF] dark:bg-[#122B4D] text-[#005ECF] dark:text-[#5AC8FA] border-blue-500/40">SSC · UPSC · Banking</Sticker>
+          <Sticker emoji="💸" tilt={8} className="absolute right-[4%] bottom-[8%] bg-[#E6F4EA] dark:bg-[#12331E] text-[#188038] dark:text-[#30D158] border-emerald-500/40">150 students free</Sticker>
         </div>
 
         <motion.div
@@ -563,24 +657,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0071E3] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[#0071E3]"></span>
             </span>
-            <span className="font-apple-text tracking-wide leading-tight text-center break-words sm:whitespace-nowrap">
-              <span className="sm:hidden">VIDYAOS 2.5 • APPLE-GRADE SIMPLICITY</span>
-              <span className="hidden sm:inline">VIDYAOS 2.5 • HIGH-PERFORMANCE OPERATING SYSTEM FOR TUITION CENTERS</span>
+            <span className="font-funky tracking-wide leading-tight text-center break-words sm:whitespace-nowrap">
+              <span className="sm:hidden">VIDYAOS 2.5 • THE FREE-FOREVER COACHING OS</span>
+              <span className="hidden sm:inline">VIDYAOS 2.5 • THE FREE-FOREVER COACHING OS</span>
             </span>
           </motion.div>
 
-          <motion.h1 variants={fadeUpLg} className="text-4xl sm:text-6xl lg:text-7xl font-semibold font-apple-display tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] max-w-4xl mx-auto leading-[1.06]">
-            The Modern Operating System for{' '}
-            <span className="text-gradient-brand">
-              Coaching & Education Centers
-            </span>
+          <motion.h1 variants={fadeUpLg} className="font-funky text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] max-w-4xl mx-auto leading-[1.04]">
+            Run your coaching.{' '}
+            <span className="text-gradient-brand">Not your chaos.</span>
           </motion.h1>
 
-          <motion.p variants={fadeUp} className={`text-base sm:text-xl ${muted} max-w-2xl mx-auto leading-relaxed font-normal font-apple-text`}>
-            Eliminate chaotic WhatsApp groups, lost paper attendance registers, and overdue cash fees. VidyaOS unites{' '}
-            <strong className="text-[#1D1D1F] dark:text-white font-medium">zero-surcharge UPI payments</strong>,{' '}
-            <strong className="text-[#1D1D1F] dark:text-white font-medium">20-second batch attendance</strong>, and{' '}
-            <strong className="text-[#1D1D1F] dark:text-white font-medium">automated WhatsApp parent alerts</strong> in one fluid, beautiful console.
+          <motion.p variants={fadeUp} className={`text-base sm:text-lg ${muted} max-w-2xl mx-auto leading-relaxed font-normal`}>
+            Attendance, fees, parents & staff — tamed in one beautiful console. Built for tuition centers, schools and{' '}
+            <strong className="text-[#1D1D1F] dark:text-white font-medium">SSC · Banking · Railways · UPSC</strong> coaching.
+            Free forever. No card. No drama.
           </motion.p>
 
           <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs font-medium text-[#86868B] max-w-2xl mx-auto">
@@ -600,7 +691,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 className="group w-full sm:w-auto inline-flex items-center justify-center gap-2.5 h-10 sm:h-11 px-6 rounded-full text-sm sm:text-base font-semibold text-white cursor-pointer select-none gradient-brand shadow-[0_8px_24px_rgba(79,70,229,0.40)] hover:shadow-[0_14px_36px_rgba(79,70,229,0.55)] transition-shadow duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fb-primary)] focus-visible:ring-offset-2"
               >
                 <Sparkles className="w-4 h-4 transition-transform duration-200 group-hover:rotate-12" />
-                <span>Register Your Center (Free Trial)</span>
+                <span>Start Free — No Card</span>
                 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
               </motion.button>
             )}
@@ -635,6 +726,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </motion.div>
       </section>
 
+      {/* Funky marquee ticker — free-core attitude on repeat */}
+      <div className="relative z-10 bg-white dark:bg-[#1C1C1E]">
+        <div className="rotate-[-1.1deg] scale-[1.02] bg-gradient-to-r from-[#4F46E5] via-[#7C3AED] to-[#EA580C] text-white py-2.5 shadow-[0_10px_30px_rgba(79,70,229,0.35)]">
+          <MarqueeStrip tone="brand" className="py-0 text-white" />
+        </div>
+      </div>
+
       {/* Hero brand illustration — the VidyaOS learning constellation */}
       <section className="relative -mt-6 sm:-mt-12 pb-6 sm:pb-10 max-w-4xl mx-auto px-4 lg:px-8">
         <Reveal variant="scale">
@@ -648,9 +746,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section id="features" className="scroll-mt-24 py-12 sm:py-20 max-w-7xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
         <Reveal className="text-center max-w-2xl mx-auto space-y-2">
           <h2 className={sectionTitle}>Engineered for Indian Realities</h2>
-          <p className={heading}>Everything You Need to Run Your Institute</p>
+          <p className={`${heading} font-funky`}>Everything You Need to Run Your Institute</p>
           <p className={`text-[13px] sm:text-sm ${muted}`}>
-            Tailored specifically for Indian coaching operations: cash/UPI reconciliations, multi-branch batches, and instant parent communication.
+            Built for how Indian coaching actually runs — cash/UPI reconciliations, multi-branch batches, instant parent communication.
           </p>
         </Reveal>
 
@@ -691,7 +789,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="max-w-6xl mx-auto px-4 lg:px-8 space-y-8 sm:space-y-10">
           <Reveal className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>From admission to receipt</h2>
-            <p className={heading}>How a Day on VidyaOS Flows</p>
+            <p className={`${heading} font-funky`}>How a Day on VidyaOS Flows</p>
             <p className={`text-[13px] sm:text-sm ${muted}`}>
               Five connected steps replace paper registers, spreadsheets and chasing fee calls — inside one tenant-isolated workspace.
             </p>
@@ -707,7 +805,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div id="interactive-demo" className="scroll-mt-24 max-w-6xl mx-auto px-4 lg:px-8 space-y-6 sm:space-y-8">
           <Reveal className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>Role-Based Console Experience</h2>
-            <p className={heading}>One Unified OS, Five Dedicated Workspaces</p>
+            <p className={`${heading} font-funky`}>One Unified OS, Five Dedicated Workspaces</p>
             <p className={`text-[13px] sm:text-sm ${muted}`}>
               Each stakeholder gets a purpose-built workspace with isolated permissions, clean tabular data, and zero noise.
             </p>
@@ -890,7 +988,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div id="roi-calculator" className="scroll-mt-24 max-w-5xl mx-auto px-4 lg:px-8 space-y-8 sm:space-y-10">
           <Reveal className="text-center max-w-2xl mx-auto space-y-2">
             <h2 className={sectionTitle}>Course Fee Recovery Estimator</h2>
-            <p className={heading}>Calculate Your Recovered Fee Leakage</p>
+            <p className={`${heading} font-funky`}>Calculate Your Recovered Fee Leakage</p>
             <p className={`text-[13px] sm:text-sm ${muted}`}>
               Indian coaching & education centers typically lose 8–12% of total collections to delayed payments, uncollected dues, and lost receipts.
             </p>
@@ -954,123 +1052,186 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </span>
               </div>
 
-              <div className="p-3 bg-[#EAF4FF] dark:bg-blue-950/40 rounded-xl border border-[var(--fb-primary-border)] text-left flex items-center justify-between gap-2 transition-shadow duration-200 hover:shadow-md">
+              <div className={`p-3 rounded-xl border text-left flex items-center justify-between gap-2 transition-shadow duration-200 hover:shadow-md ${
+                forecastTier.tone === 'free'
+                  ? 'bg-[#EAF4FF] dark:bg-blue-950/40 border-[var(--fb-primary-border)]'
+                  : forecastTier.tone === 'mid'
+                    ? 'bg-[#E6F4EA] dark:bg-emerald-950/40 border-[#CEEAD6] dark:border-emerald-800/40'
+                    : 'bg-[#FBF3E4] dark:bg-[#3A2A16] border-amber-400/60'
+              }`}>
                 <div>
-                  <span className="text-[10px] font-bold text-[var(--fb-primary)] uppercase tracking-wider block">Recommended Plan</span>
-                  <span className="text-xs font-bold">{recommendedPlan.name} ({recommendedPlan.price}/mo)</span>
+                  <span className="text-[10px] font-bold text-[var(--fb-primary)] uppercase tracking-wider block">Your Free-Tier Forecast</span>
+                  <span className="text-xs font-bold">{forecastTier.label} · {forecastTier.detail}</span>
                 </div>
-                <button type="button" onClick={() => choosePlan(recommendedPlan.id)}
-                  className="text-xs font-bold text-[var(--fb-primary)] hover:underline underline-offset-2 cursor-pointer shrink-0 py-2 transition-colors">
-                  Select Plan →
-                </button>
+                <span className={`text-xs font-bold shrink-0 ${forecastTier.tone === 'free' ? 'text-[var(--fb-primary)]' : forecastTier.tone === 'mid' ? 'text-[#188038] dark:text-[#30D158]' : 'text-[#9A5B00] dark:text-[#FBBF24]'}`}>{forecastTier.price}</span>
               </div>
 
               <div className="text-xs text-[var(--fb-primary)] font-semibold">⚡ ~<AnimatedNumber value={staffHoursSaved} format={fmtInt} /> Staff Hours Saved Every Month</div>
 
-              <ConsoleButton variant="primary" size="md" onClick={() => choosePlan(recommendedPlan.id)} className="w-full justify-center">
-                Start with {recommendedPlan.name}
+              <ConsoleButton variant="primary" size="md" onClick={registerCenter} className="w-full justify-center">
+                Start Free — No Card
               </ConsoleButton>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Pricing — Free software, paid cloud */}
       <section id="pricing-tiers" className="scroll-mt-24 py-12 sm:py-20 max-w-6xl mx-auto px-4 lg:px-8 space-y-10 sm:space-y-12">
         <Reveal className="max-w-2xl mx-auto">
           <div id="pricing" className="scroll-mt-24 text-center space-y-2">
-            <h2 className={sectionTitle}>Simple, Transparent Pricing</h2>
-            <p className={heading}>Plans Built for Every Coaching Scale</p>
+            <h2 className={sectionTitle}>Free software · Paid cloud · Zero gatekeeping</h2>
+            <p className={`${heading} font-funky`}>Your core ERP is free. Forever.</p>
             <p className={`text-[13px] sm:text-sm ${muted}`}>
-              No hidden gateway surcharges. Flat transparent pricing (₹599 / ₹1,299 / ₹2,199/mo). 14-day free trial on all plans.
+              No card. No trial countdown. No per-seat rent. Pay only when you switch on a cloud meter that actually runs on our servers.
             </p>
           </div>
         </Reveal>
 
-        <RevealGroup className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-md lg:max-w-none mx-auto">
-          {plans.map(p => {
-            const isRecommended = recommendedPlan.id === p.id;
-            const cardVariants: Variants = {
-              hidden: { opacity: 0, y: 18, scale: p.featured ? 0.96 : 0.99 },
-              visible: { opacity: 1, y: 0, scale: p.featured ? 1.03 : 1, transition: tDefault },
-            };
+        <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          {/* Free Forever core card */}
+          <motion.div
+            variants={fadeUp}
+            whileHover={{ y: -3 }}
+            transition={tFast}
+            className="relative overflow-hidden rounded-3xl gradient-brand text-white p-6 sm:p-8 shadow-[0_24px_60px_-20px_rgba(79,70,229,0.55)]"
+          >
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+              <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
+              <div className="absolute bottom-0 left-1/3 h-40 w-40 rounded-full bg-[#EA580C]/30 blur-3xl animate-float" />
+            </div>
+            <Sticker emoji="🆓" tilt={-6} className="absolute -top-3 right-5 z-10 bg-white text-[#4F46E5] border-[#C7D2FE]">
+              FREE FOREVER
+            </Sticker>
+            <div className="relative z-10 space-y-4">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] font-funky font-bold uppercase tracking-wider">
+                <Wallet className="w-3 h-3" /> Core ERP · No card required
+              </span>
+              <div>
+                <div className="text-5xl sm:text-6xl font-funky font-extrabold tracking-tight">
+                  ₹0 <span className="text-lg font-semibold text-white/70">/ forever</span>
+                </div>
+                <p className="text-white/85 text-xs sm:text-sm leading-relaxed mt-2 max-w-sm">{freeCore.blurb}</p>
+              </div>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                {freeCore.items.map(item => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <li key={item.text} className="flex items-center gap-2 text-[11px] sm:text-xs font-medium text-white/90 bg-white/10 rounded-lg px-2.5 py-2 border border-white/10">
+                      <ItemIcon className="w-3.5 h-3.5 text-[#C7D2FE] shrink-0" />
+                      {item.text}
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                onClick={registerCenter}
+                className="inline-flex items-center justify-center gap-2 h-11 px-6 rounded-full text-sm font-bold bg-white text-[#4F46E5] cursor-pointer hover-lift hover:shadow-[0_12px_30px_rgba(0,0,0,0.25)] active:scale-[0.97]"
+              >
+                <Sparkles className="w-4 h-4" />
+                {freeCore.cta}
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Why-free explainer column */}
+          <div className="space-y-4">
+            <div className={`${card} rounded-2xl p-5 hover-lift`}>
+              <h3 className="font-funky font-extrabold text-sm flex items-center gap-2">
+                <span className="text-base" aria-hidden="true">💡</span> Why is the core free?
+              </h3>
+              <p className={`text-[12px] ${muted} leading-relaxed mt-1.5`}>
+                Attendance, invoices, portals and push run on standard cloud infra — cheap for us, so free for you. The software is the product we give away; the cloud is the meter.
+              </p>
+            </div>
+            <div className={`${card} rounded-2xl p-5 hover-lift`}>
+              <h3 className="font-funky font-extrabold text-sm flex items-center gap-2">
+                <span className="text-base" aria-hidden="true">🧾</span> What costs money?
+              </h3>
+              <p className={`text-[12px] ${muted} leading-relaxed mt-1.5`}>
+                Only the <strong className="text-[#1D1D1F] dark:text-white font-semibold">meters that genuinely cost us money</strong>: extra media storage, automated WhatsApp/SMS/email, hosted video, AI credits, a custom brand and a branded app. Your bill stays ₹0 until you choose one.
+              </p>
+            </div>
+            <div className="rounded-2xl p-5 bg-gradient-to-br from-[#E6F4EA] to-[#D6EDE0] dark:from-emerald-950/50 dark:to-emerald-900/30 border border-[#CEEAD6] dark:border-emerald-800/40 hover-lift">
+              <h3 className="font-funky font-extrabold text-sm text-[#188038] dark:text-[#30D158] flex items-center gap-2">
+                <span aria-hidden="true">🎁</span> The free forever bundle
+              </h3>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {['150 students', '2 branches', 'Unlimited staff', '1 GB media', 'Push notifications', 'UPI invoicing'].map(tag => (
+                  <span key={tag} className="px-2 py-1 rounded-full bg-white/70 dark:bg-white/10 text-[10px] font-bold text-[#188038] dark:text-[#30D158] border border-[#CEEAD6] dark:border-emerald-800/40">{tag}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Reveal>
+
+        {/* Cloud Store — the meters */}
+        <Reveal className="text-center space-y-2 pt-2">
+          <p className={sectionTitle}>The Cloud Store</p>
+          <h3 className="text-2xl sm:text-3xl font-funky font-extrabold tracking-tight">
+            Meters you switch on <span className="text-gradient-brand">only when you need them</span>
+          </h3>
+          <p className={`text-[13px] sm:text-sm ${muted} max-w-xl mx-auto`}>
+            Prices straight from our live store — pay for exactly the cloud you use. Buy one meter, or all seven via Cloud Pro at a bundle discount.
+          </p>
+        </Reveal>
+
+        <RevealGroup className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
+          {CLOUD_SKUS.map(sku => {
+            const Icon = skuIcons[sku.id];
+            const t = skuTints[sku.id];
+            const isPro = sku.id === 'pro';
             return (
               <motion.div
-                key={p.id}
-                variants={cardVariants}
-                role="button"
-                tabIndex={0}
-                aria-label={`Choose the ${p.name} plan`}
-                onClick={() => choosePlan(p.id)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    choosePlan(p.id);
-                  }
-                }}
-                whileHover={{ y: -4, transition: tFast }}
-                whileTap={{ y: -1, scale: 0.99, transition: { duration: 0.1 } }}
-                className={`relative text-left cursor-pointer bg-white dark:bg-[#1C1C1E] p-5 sm:p-7 rounded-2xl flex flex-col justify-between space-y-6 transition-[border-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fb-primary-border)] shadow-[0_4px_24px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] ${
-                  isRecommended
-                    ? 'border-2 border-[var(--fb-primary)] ring-4 ring-[var(--fb-primary-subtle)]'
-                    : p.featured
-                      ? 'border-2 border-[var(--fb-accent-border)] hover:border-[var(--fb-primary-border)] dark:hover:border-[var(--fb-primary-border)]'
-                      : `${border} hover:border-[var(--fb-primary-border)] dark:hover:border-[var(--fb-primary-border)] hover:shadow-lg dark:hover:shadow-[0_16px_40px_rgba(0,0,0,0.5)]`
-                }`}
+                key={sku.id}
+                variants={fadeUp}
+                whileHover={{ y: -3, transition: tFast }}
+                className={`group relative overflow-hidden rounded-2xl p-4 sm:p-5 flex flex-col gap-3 cursor-default ${card} hover:border-[var(--fb-primary-border)] transition-[border-color] duration-200`}
               >
-                {p.featured && (
-                  <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5 gradient-brand rounded-t-2xl" />
+                {isPro && (
+                  <>
+                    <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 gradient-brand" />
+                    <span className="absolute -top-2.5 right-3 rotate-3 rounded-full bg-[#EA580C] text-white text-[9px] font-funky font-extrabold uppercase tracking-wider px-2 py-0.5 shadow-md">
+                      Best deal
+                    </span>
+                  </>
                 )}
-                {p.featured && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <StatusChip label="MOST POPULAR" variant="warning" size="xs" />
+                <div className="flex items-start justify-between gap-2">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base ${t.tint} group-hover:-rotate-6 group-hover:scale-110 transition-transform duration-200`}>
+                    <span aria-hidden="true">{t.emoji}</span>
                   </div>
-                )}
-                <div className="space-y-4">
-                  <div>
-                    {isRecommended && (
-                      <motion.span
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={tFast}
-                        className="inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[var(--fb-accent-subtle)] text-[var(--fb-accent-text)] border border-[var(--fb-accent-border)]"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        Best for {studentCount} students
-                      </motion.span>
-                    )}
-                    <span className={`block text-xs font-bold uppercase tracking-wider ${p.featured ? 'text-[var(--fb-primary)]' : 'text-[#86868B]'}`}>{p.name}</span>
-                    <div className="text-3xl font-bold font-google-sans mt-1">
-                      {p.price}<span className="text-xs font-normal text-[#86868B]">/mo</span>
-                    </div>
-                    <p className="text-[13px] sm:text-xs text-[#86868B] mt-1">{p.blurb}</p>
-                  </div>
-                  <ul className={`space-y-2 text-[13px] sm:text-xs border-t border-black/[0.08] dark:border-white/[0.08] pt-4 ${p.featured ? 'font-medium' : muted}`}>
-                    {p.items.map(i => (
-                      <li key={i} className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-[#188038] dark:text-[#30D158] shrink-0" /> {i}</li>
-                    ))}
-                  </ul>
+                  <Icon className="w-4 h-4 text-[#86868B] group-hover:text-[var(--fb-primary)] transition-colors duration-150" />
                 </div>
-                <ConsoleButton
-                  variant={p.featured ? 'primary' : 'secondary'}
-                  size="md"
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  className="w-full justify-center pointer-events-none"
-                >
-                  {p.cta}
-                </ConsoleButton>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-funky font-extrabold">{sku.name}</h4>
+                  <p className={`text-[11px] leading-snug ${muted}`}>{sku.tagline}</p>
+                </div>
+                <div className="mt-auto flex items-baseline justify-between gap-2 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
+                  <span className="text-lg font-bold font-google-sans">₹{sku.priceMonthly}</span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${muted}`}>per month</span>
+                </div>
               </motion.div>
             );
           })}
         </RevealGroup>
+
+        {/* Fair-use trust strip */}
+        <Reveal>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-medium text-[#86868B]">
+            {['Switch meters on/off anytime', 'Prorated monthly billing', 'No card needed to start', 'Core keeps working if you skip a meter'].map(t => (
+              <span key={t} className="px-3 py-1 rounded-full bg-white dark:bg-[#1C1C1E] border border-black/[0.06] dark:border-white/[0.08] shadow-2xs transition-colors duration-150 hover:text-[var(--fb-primary)] hover:border-[var(--fb-primary-border)] cursor-default">{t}</span>
+            ))}
+          </div>
+        </Reveal>
       </section>
 
       {/* FAQ */}
       <section id="faqs" className="scroll-mt-24 py-12 sm:py-16 max-w-4xl mx-auto px-4 lg:px-8 space-y-8">
         <Reveal className="text-center space-y-2">
           <h2 className={sectionTitle}>Frequently Asked Questions</h2>
-          <p className="text-xl sm:text-2xl font-bold font-google-sans">Answers for Coaching Center Owners</p>
+          <p className="text-2xl sm:text-3xl font-funky font-extrabold tracking-tight">Answers for Coaching Center Owners</p>
         </Reveal>
 
         <RevealGroup className="space-y-2.5">
@@ -1116,21 +1277,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* Final CTA */}
-      <section className="relative overflow-hidden py-14 sm:py-20 text-white">
+      <section className="relative overflow-hidden py-14 sm:py-24 text-white">
         <div aria-hidden="true" className="absolute inset-0 gradient-brand" />
         <div aria-hidden="true" className="absolute inset-0 bg-[#0B0A1F]/70" />
         <div aria-hidden="true" className="absolute -top-20 -left-24 -right-24 h-72 rounded-full bg-[radial-gradient(circle,rgba(251,146,60,0.32),transparent_65%)] blur-3xl animate-float" />
+        <div aria-hidden="true" className="absolute inset-0 bg-dot-grid opacity-20" />
+        <div aria-hidden="true" className="absolute top-8 -right-8 sm:right-12 rotate-12 rounded-full border-[3px] border-[#FDBA74]/70 text-[#FDBA74] font-funky font-extrabold uppercase tracking-[0.18em] text-xs px-4 py-2 opacity-70">
+          Free · Forever
+        </div>
 
         <Reveal variant="up-lg" className="relative z-10 max-w-4xl mx-auto px-4 text-center space-y-6">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-semibold text-[#FDBA74]">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Set up in under 60 seconds</span>
           </div>
-          <h2 className="text-2xl sm:text-4xl font-bold font-google-sans tracking-tight">
-            Ready to modernize your coaching center?
+          <h2 className="font-funky text-3xl sm:text-5xl font-extrabold tracking-tight leading-[1.05]">
+            Your institute, minus the{' '}
+            <span className="text-[#FDBA74]">paper madness.</span> 🎉
           </h2>
           <p className="text-[13px] sm:text-sm text-white/70 max-w-xl mx-auto leading-relaxed">
-            Join hundreds of Indian coaching and education centers saving 40+ hours every month on fee follow-ups, paper attendance registers, and parent communications.
+            Join hundreds of Indian coaching & education centers running attendance, fees and parents on one free console.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 w-full max-w-sm sm:max-w-none mx-auto">
             <ConsoleButton variant="primary" size="lg" iconRight={<ArrowRight className="w-4 h-4" />}
@@ -1145,6 +1311,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </Reveal>
       </section>
+
+      {/* Bottom marquee — send-off on the funky wall */}
+      <div className="bg-white dark:bg-[#1C1C1E]">
+        <div className="rotate-[0.8deg] scale-[1.02] bg-gradient-to-r from-[#EA580C] via-[#4F46E5] to-[#7C3AED] text-white py-2.5">
+          <MarqueeStrip tone="brand" className="py-0 text-white" />
+        </div>
+      </div>
 
       {/* Footer */}
       <footer className={`bg-white dark:bg-[#1C1C1E] border-t border-black/[0.08] dark:border-white/[0.08] py-8 px-4 lg:px-8 text-xs ${muted}`}>

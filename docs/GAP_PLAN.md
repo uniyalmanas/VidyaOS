@@ -207,6 +207,16 @@ UPI/UTR flow is the always-on zero-fee fallback.
   `paymentLinks` queue, no new collections). `requestCloudSkuPurchase` + `billingWebhook` SKU
   grant branch (known-SKU + ₹99 floor + idempotent) complete the loop; demo org seeds real usage
   (12/50 credits, 250 MB/1 GB) so the guardrail shows live. Live payments land with Blaze.
+- [x] **Landing & pricing identity (public site).** The home page now *sells* the free-forever
+  core + cloud meters: hero rewritten ("Run your coaching. Not your chaos."), the old
+  ₹599/₹1,299/₹2,199 tier cards replaced with a **Free Forever core card** (150 students ·
+  2 branches · unlimited staff · 1 GB media — straight from `FREE_ENTITLEMENTS`, no card) + a
+  **Cloud Store shelf** rendered live from `CLOUD_SKUS` (media ₹99, messaging ₹499, brand ₹499,
+  app ₹999, video ₹999, AI ₹299, Pro bundle ₹1,999), a free-tier forecast in the ROI calculator
+  (≤150 → free, ≤300 → Growth Meters, else Cloud Pro), and a "is it really free?" FAQ. Funky
+  visual pass — Bricolage Grotesque display face (`font-funky`), gradient marquee tickers
+  (`animate-marquee`), dot-grid + mesh backgrounds (`bg-dot-grid`), rotated sticker badges
+  (`animate-wiggle-hover`/`animate-pop`) — all pure CSS in `index.css`, zero new deps.
 
 **Revenue unlock:** Cloud Messaging can be launched at the end of this phase (the first
 recurring SKU); the storefront that sells it now ships.
