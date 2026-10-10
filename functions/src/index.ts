@@ -17,7 +17,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onRequest } from 'firebase-functions/v2/https';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import {
   parseRzpWebhookEvent,
   reconcileGatewayPayment,
@@ -47,6 +47,26 @@ const FREE_ENTITLEMENTS = {
 };
 
 /**
+ * Mirrors `CLOUD_SKUS[].priceMonthly` in src/lib/entitlements.ts — keep in sync.
+ * The server is the price authority: `createPaymentLink` prices SKU purchases
+ * from this table (never from a client-supplied amount) and the billing webhook
+ * refuses to grant a SKU that was paid below its list price.
+ */
+const SKU_PRICE_PAISE: Record<string, number> = {
+  media: 99 * 100,
+  messaging: 699 * 100,
+  growth: 299 * 100,
+  brand: 499 * 100,
+  app: 999 * 100,
+  video: 999 * 100,
+  ai: 299 * 100,
+  pro: 1999 * 100
+};
+
+/** One SKU billing period — monthly. */
+const SKU_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
  * 1. New organisation → stamp free entitlements + zeroed usage.
  * Self-serve signups get the free tier automatically; paid SKUs are added only
  * by the billing webhook below.
@@ -71,22 +91,26 @@ export const onOrgCreated = onDocumentCreated('organizations/{orgId}', async eve
 });
 
 /**
- * 2. Outbound message queue → send WhatsApp/SMS/email, then decrement credits.
- * Provider + secrets are configured at deploy time (Blaze). Left as an
- * intentional stub until a provider is chosen.
+ * 2. Outbound message queue → send WhatsApp/SMS/email, then mark delivered.
+ * Provider + secrets are configured at deploy time (Blaze).
+ *
+ * Metering note: the client's `enqueueOutboundMessage` writes the complete
+ * usage meter (all-time `messagesSent` + the monthly `messagesThisMonth`
+ * window, advanced by the channel-weighted credit cost) in one atomic document
+ * write at enqueue time. This function must NOT bump usage again — doing so
+ * double-counts once the queue is live. It is delivery-only: mark the message
+ * sent and surface any provider failure on the doc. When a real delivery
+ * provider is wired, the failure path here should decrement/reconcile the
+ * optimistic window, not add on top of it.
  */
 export const sendMessage = onDocumentCreated('outboundMessages/{messageId}', async event => {
   const snap = event.data;
   if (!snap) return;
-  const { orgId } = snap.data();
-  // TODO(blaze): call WhatsApp Cloud API / SMS provider, then:
-  await snap.ref.set({ status: 'queued', queuedAt: new Date().toISOString() }, { merge: true });
-  if (orgId) {
-    await db.doc(`organizations/${orgId}`).set(
-      { usage: { messagesSent: FieldValue.increment(1) } },
-      { merge: true }
-    );
-  }
+  // TODO(blaze): call WhatsApp Cloud API / SMS / email provider, then:
+  await snap.ref.set(
+    { status: 'sent', sentAt: new Date().toISOString() },
+    { merge: true }
+  );
 });
 
 /**
@@ -186,46 +210,51 @@ export const billingWebhook = onRequest(async (req, res) => {
   // window instead of double-granting; the same paymentId never applies twice.
   if (verified && event && !invoiceId && event.notes.sku) {
     const sku = event.notes.sku;
-    const knownSkus = ['media', 'messaging', 'growth', 'brand', 'app', 'video', 'ai', 'pro'];
-    try {
-      await db.runTransaction(async txn => {
-        const orgRef = db.doc(`organizations/${event.notes.orgId}`);
-        const snapshot = await txn.get(orgRef);
-        if (!snapshot.exists || !knownSkus.includes(sku)) return;
-        if (event.amountPaise < 9900) return; // ₹99 floor — underpaid grants nothing
-        const data = snapshot.data();
-        const current: string[] = Array.isArray(data.entitlements?.skus) ? data.entitlements.skus : [];
-        const skuMeta = (data.entitlements?.skuMeta || {}) as Record<string, { since: string; renewsAt: string; lastPaymentId?: string }>;
-        const prev = skuMeta[sku];
-        // Idempotency: a retried delivery of the same payment must not extend twice.
-        if (prev && prev.lastPaymentId === event.paymentId) return;
+    const listPricePaise = SKU_PRICE_PAISE[sku];
+    // The server prices the grant: a SKU paid below its list price (or the ₹99
+    // floor for the cheapest SKU) grants nothing — a tampered client cannot buy
+    // a ₹699 SKU for ₹99. Unknown SKU ids are ignored.
+    if (typeof listPricePaise === 'number' && event.amountPaise >= listPricePaise) {
+      try {
+        await db.runTransaction(async txn => {
+          const orgRef = db.doc(`organizations/${event.notes.orgId}`);
+          const snapshot = await txn.get(orgRef);
+          if (!snapshot.exists) return;
+          const data = snapshot.data();
+          if (!data) return;
+          const current: string[] = Array.isArray(data.entitlements?.skus) ? data.entitlements.skus : [];
+          const skuMeta = (data.entitlements?.skuMeta || {}) as Record<string, { since: string; renewsAt: string; lastPaymentId?: string }>;
+          const prev = skuMeta[sku];
+          // Idempotency: a retried delivery of the same payment must not extend twice.
+          if (prev && prev.lastPaymentId === event.paymentId) return;
 
-        const since = prev?.since || receivedAt;
-        // Renewal extends from the later of (now, previous expiry) so the billing
-        // cycle stays continuous; first grant counts from today.
-        const baseMs = prev?.renewsAt ? Math.max(new Date(receivedAt).getTime(), new Date(prev.renewsAt).getTime()) : new Date(receivedAt).getTime();
-        const renewsAt = new Date(baseMs + 30 * 24 * 60 * 60 * 1000).toISOString();
+          const since = prev?.since || receivedAt;
+          // Renewal extends from the later of (now, previous expiry) so the billing
+          // cycle stays continuous; first grant counts from today.
+          const baseMs = prev?.renewsAt ? Math.max(new Date(receivedAt).getTime(), new Date(prev.renewsAt).getTime()) : new Date(receivedAt).getTime();
+          const renewsAt = new Date(baseMs + SKU_PERIOD_MS).toISOString();
 
-        txn.update(orgRef, {
-          entitlements: {
-            ...(data.entitlements || {}),
-            skus: current.includes(sku) ? current : [...current, sku],
-            skuMeta: {
-              ...skuMeta,
-              [sku]: { since, renewsAt, lastPaymentId: event.paymentId }
-            },
-            period: 'active'
+          txn.update(orgRef, {
+            entitlements: {
+              ...(data.entitlements || {}),
+              skus: current.includes(sku) ? current : [...current, sku],
+              skuMeta: {
+                ...skuMeta,
+                [sku]: { since, renewsAt, lastPaymentId: event.paymentId }
+              },
+              period: 'active'
+            }
+          });
+          if (typeof event.notes.linkId === 'string') {
+            txn.update(db.doc(`paymentLinks/${event.notes.linkId}`), {
+              status: 'paid',
+              updatedAt: receivedAt
+            });
           }
         });
-        if (typeof event.notes.linkId === 'string') {
-          txn.update(db.doc(`paymentLinks/${event.notes.linkId}`), {
-            status: 'paid',
-            updatedAt: receivedAt
-          });
-        }
-      });
-    } catch (error) {
-      console.error('G5 sku grant failure:', error);
+      } catch (error) {
+        console.error('G5 sku grant failure:', error);
+      }
     }
   }
 
@@ -238,6 +267,11 @@ export const billingWebhook = onRequest(async (req, res) => {
  * Razorpay when `RZP_KEY_ID`/`RZP_KEY_SECRET` are configured, and writes the
  * short URL back so the collect-fee modal can open it. Until then the request
  * stays `requested` and the UPI/UTR fallback carries the flow.
+ *
+ * The server is the price authority: SKU purchases are priced from
+ * `SKU_PRICE_PAISE` — the client's `amountPaise` is ignored for notes.sku
+ * links, so a tampered client cannot mint a cheap Razorpay link and then have
+ * the webhook grant the full SKU for ₹99.
  */
 export const createPaymentLink = onDocumentCreated('paymentLinks/{linkId}', async event => {
   const snapshot = event.data;
@@ -252,15 +286,32 @@ export const createPaymentLink = onDocumentCreated('paymentLinks/{linkId}', asyn
     return;
   }
 
+  const isSku = typeof link.notes?.sku === 'string';
+  const skuPricePaise = isSku ? SKU_PRICE_PAISE[link.notes.sku] : undefined;
+  if (isSku && typeof skuPricePaise !== 'number') {
+    // Unknown SKU id — the client may be stale; refuse to mint a link.
+    await snapshot.ref.set(
+      { status: 'failed', error: 'Unknown SKU', updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+    return;
+  }
+  const amountPaise = isSku ? (skuPricePaise as number) : (Number(link.amountPaise) || 0);
+
   const project = process.env.GCLOUD_PROJECT ?? 'vidyut-2bcb6';
-  const callbackUrl = `https://${project}.web.app/?rzp_invoice=${encodeURIComponent(String(link.invoiceId))}`;
+  const callbackUrl = isSku
+    ? `https://${project}.web.app/?rzp_sku=${encodeURIComponent(String(link.notes?.sku))}`
+    : `https://${project}.web.app/?rzp_invoice=${encodeURIComponent(String(link.invoiceId))}`;
+  const description = isSku
+    ? `VidyaOS Cloud — ${String(link.notes?.sku)} (1 month)`
+    : link.notes?.invoiceNo
+      ? `VidyaOS fee — ${String(link.notes.invoiceNo)}`
+      : 'VidyaOS fee payment';
   const body = {
-    amount: link.amountPaise,
+    amount: amountPaise,
     currency: 'INR',
     accept_partial: false,
-    description: link.notes?.invoiceNo
-      ? `VidyaOS fee — ${String(link.notes.invoiceNo)}`
-      : 'VidyaOS fee payment',
+    description,
     customer: {
       name: link.customerName || 'VidyaOS Parent',
       ...(link.customerPhone ? { contact: String(link.customerPhone) } : {}),
