@@ -127,6 +127,9 @@ import {
   getCloudSku,
   resolveEntitlements,
   hasSku,
+  isSkuActive,
+  skuRenewsAt,
+  skuNextRenewal,
   isUnlimited,
   remainingQuota,
   isQuotaExceeded,
@@ -2247,18 +2250,30 @@ assert(announcement.body.includes('Classes resume Monday'), 'Announcement embeds
 assert(stripWhatsappMarkup('Hello *World* and _ok_') === 'Hello World and ok', 'stripWhatsappMarkup removes bold/italic markers');
 assert(
   CHANNEL_META.whatsapp.provider === 'meta-whatsapp' && CHANNEL_META.sms.provider === 'msg91' && CHANNEL_META.email.creditCost === 1,
-  'Channel metadata maps to provider + flat credit cost'
+  'Channel metadata maps to provider + base credit cost'
 );
 
 const ym = '2026-10';
 const ymPrev = '2026-09';
 assert(currentYearMonth(new Date(2026, 9, 5)) === '2026-10', 'currentYearMonth pads to YYYY-MM');
-assert(estimateCreditCost('whatsapp') === 1 && estimateCreditCost('email') === 1, 'Every channel costs exactly 1 credit');
+// Channel-weighted credits: WhatsApp is the COGS-heavy channel, so it costs more
+// credits than SMS/email; marketing (broadcast) templates cost more still.
+assert(estimateCreditCost('email') === 1 && estimateCreditCost('sms') === 1, 'Email and SMS cost 1 credit each');
+assert(estimateCreditCost('whatsapp') === 2, 'WhatsApp utility messages cost 2 credits');
+assert(estimateCreditCost('whatsapp', 'announcement') === 4, 'WhatsApp marketing (announcement) costs 4 credits');
+assert(estimateCreditCost('whatsapp', 'feeDue') === 2, 'Utility WhatsApp templates keep the base cost');
+assert(estimateCreditCost('whatsapp', 'custom') === 2, 'Custom messages are treated as utility/standard');
 assert(messageUsageThisMonth(undefined, ym) === 0, 'Missing usage counts zero');
 const usage0 = bumpMessageUsage(undefined, ym);
 assert(
   usage0.messagesSent === 1 && usage0.messagesThisMonth?.count === 1 && usage0.messagesThisMonth?.yearMonth === ym,
   'First queued message seeds the month window'
+);
+// A weighted message consumes its channel cost from the monthly window.
+const weightedUsage = bumpMessageUsage(usage0, ym, new Date(2026, 9, 6), 4);
+assert(
+  weightedUsage.messagesSent === 2 && weightedUsage.messagesThisMonth?.count === 5,
+  'A 4-credit WhatsApp marketing message advances the window by 4 credits'
 );
 const usage1 = bumpMessageUsage(usage0, ym);
 assert(usage1.messagesSent === 2 && usage1.messagesThisMonth?.count === 2, 'Same-month queueing increments both counters');
@@ -2278,6 +2293,9 @@ assert(remainingMessageCredits(ent50, usage0, ym) === 49, 'Remaining = monthly b
 assert(remainingMessageCredits(ent50, usage2, ymPrev) === 49, 'Previous-month window does not leak into the current month');
 assert(remainingMessageCredits(entUnlimited, usage2, ym) === Infinity, 'Unlimited credits report Infinity');
 assert(canSendMessage(ent50, usage0, ym).allowed === true, 'Credits left allow sending');
+// Cost-aware gating: a 2-credit WhatsApp message must fit in the remaining budget.
+assert(canSendMessage(ent50, { ...usage0, messagesThisMonth: { yearMonth: ym, count: 49 } }, ym, 2).allowed === false, 'A credit cost larger than the remainder is blocked');
+assert(canSendMessage(ent50, { ...usage0, messagesThisMonth: { yearMonth: ym, count: 48 } }, ym, 2).allowed === true, 'A credit cost within the remainder is allowed');
 const zeroCre = canSendMessage({ ...FREE_ENTITLEMENTS, messagingCredits: 0 }, usage0, ym);
 assert(zeroCre.allowed === false && zeroCre.remaining === 0, 'Zero-credit org is blocked with 0 remaining');
 const drained = { ...usage1, messagesThisMonth: { yearMonth: ym, count: 50 } };
@@ -2406,20 +2424,25 @@ if (partPaid.ok) {
 console.log('\n===== Cloud store & cost guardrail =====');
 
 const catalog = storeCatalog();
-assert(catalog.length === 7, 'Store catalog lists every SKU (6 singles + the Pro bundle)');
+assert(catalog.length === 8, 'Store catalog lists every SKU (7 singles + the Pro bundle)');
 assert(catalog[catalog.length - 1].id === 'pro', 'Pro bundle is listed last');
 assert(skuGrantLabel(catalog.find(s => s.id === 'messaging') as any).startsWith('1,000'), 'Messaging grant label advertises the credits');
+assert(skuGrantLabel(catalog.find(s => s.id === 'growth') as any).startsWith('Up to 500'), 'Growth grant label advertises the student cap');
 assert(skuGrantLabel(catalog.find(s => s.id === 'app') as any) === 'Play-Store Android app under your brand', 'App grant label advertises the branded app');
 assert(skuGrantLabel(catalog.find(s => s.id === 'video') as any) === '1,200 video minutes / month', 'Video grant label advertises hosted minutes');
 
 const skuReq = buildSkuPurchaseLinkRequest('org-apex', 'messaging', { customer: { name: 'Apex Academy' } });
-assert(skuReq !== null && skuReq.amount === 49900, 'SKU purchase link prices the SKU in paise');
+assert(skuReq !== null && skuReq.amount === 69900, 'SKU purchase link prices the SKU in paise (₹699/mo)');
 assert(skuReq?.currency === 'INR' && skuReq?.accept_partial === false, 'SKU purchase carries Razorpay scalars');
 assert(
   skuReq?.notes.sku === 'messaging' && skuReq?.notes.orgId === 'org-apex' && skuReq?.notes.source === 'vidyaos',
   'SKU purchase notes carry the grant keys'
 );
 assert(buildSkuPurchaseLinkRequest('org-apex', 'nonsense' as any) === null, 'Unknown SKU ids are rejected');
+
+// Pricing sanity: no SKU priced so low that COGS exceeds list (numerator check).
+assert(getCloudSku('messaging')?.priceMonthly === 699, 'Messaging SKU embeds the WhatsApp platform fee at ₹699/mo');
+assert(getCloudSku('growth')?.priceMonthly === 299, 'Growth SKU is ₹299/mo');
 
 assert(estimatedMonthlyCloudCost(resolveEntitlements({ entitlements: {} } as any)) === 0, 'Free org has no estimated spend');
 assert(estimatedMonthlyCloudCost(resolveEntitlements({ entitlements: { skus: ['media', 'ai'] } } as any)) === 99 + 299, 'Estimated spend sums the owned SKU prices');
@@ -2428,6 +2451,38 @@ const granted = resolveEntitlements({ entitlements: { skus: ['messaging'] } } as
 assert(granted.messagingCredits === 1000 && granted.period === 'active', 'Owning Cloud Messaging grants its credits and activates the org');
 const videoGranted = resolveEntitlements({ entitlements: { skus: ['video'] } } as any);
 assert(videoGranted.videoMinutes === 1200, 'Owning Video Cloud grants hosted minutes');
+
+// Growth + Pro raise the student/branch caps so the enforced free cap has an exit hatch.
+const growthGranted = resolveEntitlements({ entitlements: { skus: ['growth'] } } as any);
+assert(growthGranted.maxStudents === 500 && growthGranted.maxBranches === 10, 'Growth SKU raises students to 500 and branches to 10');
+assert(withinStudentCap(growthGranted, 499) === true && withinStudentCap(growthGranted, 500) === false, 'Growth cap is enforced at 500');
+const proCaps = resolveEntitlements({ entitlements: { skus: ['pro'] } } as any);
+assert(isUnlimited(proCaps.maxStudents) && isUnlimited(proCaps.maxBranches), 'Cloud Pro removes the student/branch caps entirely');
+
+// SKU lifecycle: 30-day monthly grants, expiry drops the grant, renewal extends.
+const since = '2026-10-01T00:00:00.000Z';
+const renewed = skuRenewsAt(since, 1);
+assert(new Date(renewed).getTime() - new Date(since).getTime() === 30 * 24 * 60 * 60 * 1000, 'One SKU period is exactly 30 days');
+const activeMeta: Record<string, { since: string; renewsAt: string }> = {
+  media: { since, renewsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() }
+};
+const activeLife = resolveEntitlements({ entitlements: { skus: ['media'], skuMeta: activeMeta } } as any);
+assert(activeLife.skus.includes('media') && activeLife.mediaBytesQuota === 10 * 1024 * 1024 * 1024, 'A SKU renewing in the future still grants');
+assert(isSkuActive(activeLife, 'media') === true, 'Future renewal reads active');
+assert(skuNextRenewal(activeLife, 'media') === activeMeta.media.renewsAt, 'Renewal date surfaces for the UI');
+
+const expiredMeta: Record<string, { since: string; renewsAt: string }> = {
+  media: { since, renewsAt: '2026-09-01T00:00:00.000Z' } // already past
+};
+const expiredLife = resolveEntitlements({ entitlements: { skus: ['media'], skuMeta: expiredMeta } } as any);
+assert(expiredLife.skus.length === 0 && expiredLife.mediaBytesQuota === FREE_ENTITLEMENTS.mediaBytesQuota, 'An expired SKU stops granting and rolls back to free');
+assert(hasSku(expiredLife, 'media') === false, 'Expired SKU is not counted as owned');
+assert(isSkuActive(expiredLife, 'media') === false, 'Past renewal reads expired');
+assert(expiredLife.period === 'free', 'A fully-expired SKU set rolls the org rollback to the free period');
+
+// Grandfathered grant (no meta) is treated as a permanent one-time purchase.
+const grandfathered = resolveEntitlements({ entitlements: { skus: ['media'] } } as any);
+assert(grandfathered.skus.length === 1 && grandfathered.period === 'active', 'Legacy SKUs without meta stay active forever');
 
 const freeBoard = usageBoard(resolveEntitlements({} as any), { mediaBytes: 0, messagesSent: 0, videoMinutes: 0, aiCreditsUsed: 0, updatedAt: '' });
 assert(

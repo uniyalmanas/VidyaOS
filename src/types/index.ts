@@ -539,6 +539,7 @@ export interface SubscriptionPlan {
 export type CloudSkuId =
   | 'media' // extra photo / file storage
   | 'messaging' // automated WhatsApp / SMS / email credits
+  | 'growth' // raise the free-tier student & branch caps
   | 'brand' // custom domain, logo & theme
   | 'app' // branded Play-Store Android app
   | 'video' // hosted lectures + secure streaming
@@ -570,6 +571,13 @@ export interface Entitlements {
   aiCredits: number;
   /** Purchased add-ons currently active. */
   skus: CloudSkuId[];
+  /**
+   * Per-SKU billing lifecycle (set by the billing webhook): when the SKU was
+   * granted and when it needs renewal. A SKU without a meta entry is treated as
+   * a grandfathered one-time grant (never expires), which keeps pre-billing
+   * data and demo orgs working. Expired SKUs are dropped by `resolveEntitlements`.
+   */
+  skuMeta?: Record<CloudSkuId, { since: string; renewsAt: string; lastPaymentId?: string }>;
   renewsAt?: string;
 }
 

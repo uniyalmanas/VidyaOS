@@ -60,11 +60,12 @@ export async function enqueueOutboundMessage(
   const usage = opts.usage;
 
   if (opts.entitlements) {
-    const check = canSendMessage(opts.entitlements, usage, month);
+    const creditCost = estimateCreditCost(draft.channel, draft.templateId);
+    const check = canSendMessage(opts.entitlements, usage, month, creditCost);
     if (!check.allowed) return { ok: false, error: 'quota', remaining: check.remaining };
   }
 
-  const creditCost = estimateCreditCost(draft.channel);
+  const creditCost = estimateCreditCost(draft.channel, draft.templateId);
   const message: OutboundMessage = {
     id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     orgId,
@@ -90,7 +91,7 @@ export async function enqueueOutboundMessage(
 
   let remaining: number | undefined;
   try {
-    const nextUsage = bumpMessageUsage(usage, month, now);
+    const nextUsage = bumpMessageUsage(usage, month, now, creditCost);
     await updateDoc(doc(db, 'organizations', orgId), { usage: nextUsage });
     if (opts.entitlements) {
       remaining = remainingMessageCredits(opts.entitlements, nextUsage, month);

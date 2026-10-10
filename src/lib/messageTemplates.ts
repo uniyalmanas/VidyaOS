@@ -31,6 +31,8 @@ export interface MessageTemplate {
   label: string;
   description: string;
   channels: MessageChannel[];
+  /** WhatsApp pricing category — utility ≈ ₹0.115, marketing ≈ ₹0.86/msg (2026 India). */
+  whatsappCategory?: 'utility' | 'marketing';
   emailSubject?: (v: MessageTemplateVariables, ctx: MessageTemplateContext) => string;
   build: (v: MessageTemplateVariables, ctx: MessageTemplateContext) => string;
 }
@@ -45,6 +47,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     label: 'Absent / Late alert',
     description: 'Notify a parent that their ward missed class',
     channels: ['whatsapp', 'sms'],
+    whatsappCategory: 'utility',
     build: ({ studentName, className, date }, { orgName }) =>
       `Namaste Ji,\n\nThis is to notify you that ${studentName || 'your ward'} was marked *ABSENT*${
         className ? ` in ${className}` : ''
@@ -56,6 +59,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     label: 'Fee due reminder',
     description: 'Gentle reminder about a pending installment',
     channels: ['whatsapp', 'sms', 'email'],
+    whatsappCategory: 'utility',
     emailSubject: () => 'Fee installment due — please pay',
     build: ({ parentName, amount, dueDate }, { orgName, upiId }) =>
       `Namaste Ji${parentName ? `, ${parentName}` : ''},\n\n` +
@@ -69,6 +73,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     label: 'Payment receipt',
     description: 'Confirm a fee payment was received',
     channels: ['whatsapp', 'sms', 'email'],
+    whatsappCategory: 'utility',
     emailSubject: ({ studentName }) => `Payment receipt${studentName ? ` — ${studentName}` : ''}`,
     build: ({ parentName, studentName, amount }, { orgName }) =>
       `Namaste Ji${parentName ? `, ${parentName}` : ''},\n\n` +
@@ -80,6 +85,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     label: 'Results & rank',
     description: 'Share an exam/test result with the parent',
     channels: ['whatsapp', 'sms', 'email'],
+    whatsappCategory: 'utility',
     emailSubject: ({ studentName }) => `Test results${studentName ? ` — ${studentName}` : ''}`,
     build: ({ studentName, className, subject, marks, link }, { orgName }) =>
       `Namaste Ji,\n\nAcademic test result${subject ? ` for *${subject}*` : ''}${
@@ -93,6 +99,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     label: 'Parent-Teacher Meet',
     description: 'Invite a parent to a scheduled PTM',
     channels: ['whatsapp', 'sms'],
+    whatsappCategory: 'utility',
     build: ({ parentName, studentName, date }, { orgName }) =>
       `Namaste Ji${parentName ? `, ${parentName}` : ''},\n\n` +
       `Parent-Teacher Meeting at *${orgName}*${date ? ` on ${date}` : ''}${
@@ -104,6 +111,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     label: 'General announcement',
     description: 'A center-wide notice to parents',
     channels: ['whatsapp', 'sms', 'email'],
+    whatsappCategory: 'marketing',
     emailSubject: (_v, { orgName }) => `Announcement — ${orgName}`,
     build: ({ message }, { orgName }) =>
       `Dear Parent,\n\n${message || ''}\n\n— ${orgName}`
@@ -114,12 +122,22 @@ export function getMessageTemplate(id: MessageTemplateId): MessageTemplate | und
   return MESSAGE_TEMPLATES.find(t => t.id === id);
 }
 
-/** Channel metadata: label, cloud provider, credit cost (1 credit per message). */
+/**
+ * Channel metadata: label, cloud provider, base credit cost.
+ *
+ * Credit weighting reflects real COGS (2026 India): 1 credit ≈ ₹0.70 sell
+ * (Cloud Messaging ₹699 for 1,000 credits).
+ *  - email  : marginal cost ~₹0.02 → 1 credit (big margin)
+ *  - sms    : MSG91 bulk ₹0.18–0.25 → 1 credit (healthy margin)
+ *  - whatsapp: Meta utility ₹0.115 / marketing ₹0.86. Base 2 credits covers
+ *    utility + amortised platform fee; marketing templates cost 4 credits via
+ *    `estimateCreditCost` when the template declares `whatsappCategory`.
+ */
 export const CHANNEL_META: Record<
   MessageChannel,
   { label: string; provider: OutboundMessage['provider']; creditCost: number }
 > = {
-  whatsapp: { label: 'WhatsApp', provider: 'meta-whatsapp', creditCost: 1 },
+  whatsapp: { label: 'WhatsApp', provider: 'meta-whatsapp', creditCost: 2 },
   sms: { label: 'SMS', provider: 'msg91', creditCost: 1 },
   email: { label: 'Email', provider: 'email', creditCost: 1 }
 };

@@ -61,8 +61,18 @@ export const CLOUD_SKUS: CloudSku[] = [
     id: 'messaging',
     name: 'Cloud Messaging',
     tagline: 'Automated WhatsApp + SMS + email to parents',
-    priceMonthly: 499,
+    // ₹699, not ₹499: covers MSG91's ₹500/mo WhatsApp platform fee per number
+    // plus a per-message cushion. Credits are channel-weighted (see CHANNEL_META
+    // in lib/messageTemplates.ts) so WhatsApp marketing traffic can't undercut COGS.
+    priceMonthly: 699,
     grants: { messagingCredits: 1000, pushEnabled: true }
+  },
+  {
+    id: 'growth',
+    name: 'Growth',
+    tagline: 'More students & branches for larger centers',
+    priceMonthly: 299,
+    grants: { maxStudents: 500, maxBranches: 10 }
   },
   {
     id: 'brand',
@@ -98,6 +108,8 @@ export const CLOUD_SKUS: CloudSku[] = [
     tagline: 'Everything in the cloud store',
     priceMonthly: 1999,
     grants: {
+      maxStudents: UNLIMITED,
+      maxBranches: UNLIMITED,
       mediaBytesQuota: 25 * GB,
       messagingCredits: 3000,
       pushEnabled: true,
@@ -116,6 +128,11 @@ export function getCloudSku(id: CloudSkuId): CloudSku | undefined {
 /**
  * Resolve the effective entitlements for an org:
  *   free base → legacy tier caps → explicit overrides → purchased SKU grants.
+ *
+ * SKU lifecycle: a SKU whose `skuMeta[id].renewsAt` has passed no longer grants
+ * (the org falls back to free for that meter until it renews). SKUs with no
+ * meta entry are grandfathered — treated as active forever — so pre-billing
+ * data and demo orgs are never silently stripped.
  */
 export function resolveEntitlements(org: Partial<Organization> | null | undefined): Entitlements {
   const base: Entitlements = { ...FREE_ENTITLEMENTS, skus: [] };
@@ -124,12 +141,26 @@ export function resolveEntitlements(org: Partial<Organization> | null | undefine
   if (org?.maxStudents && org.maxStudents > 0) base.maxStudents = org.maxStudents;
   if (org?.maxBranches && org.maxBranches > 0) base.maxBranches = org.maxBranches;
 
-  const overrides = org?.entitlements || {};
+  const overrides: Partial<Entitlements> = org?.entitlements || {};
   const merged: Entitlements = {
     ...base,
     ...overrides,
     skus: [...(overrides.skus || [])]
   };
+
+  // Drop expired SKUs (meta present + renewsAt passed). Grandfathered SKUs
+  // (no meta) stay active.
+  const now = Date.now();
+  const meta = (overrides.skuMeta || {}) as Record<CloudSkuId, { since: string; renewsAt: string; lastPaymentId?: string }>;
+  const activeSkus = merged.skus.filter(id => {
+    const entry = meta[id];
+    if (!entry?.renewsAt) return true; // grandfathered one-time grant
+    return new Date(entry.renewsAt).getTime() > now;
+  });
+
+  merged.skus = activeSkus;
+  // Carry renewal meta through so the UI can show "renews on <date>" / expired.
+  merged.skuMeta = meta;
 
   // Apply each purchased SKU's grants on top of the resolved base.
   for (const id of merged.skus) {
@@ -137,8 +168,33 @@ export function resolveEntitlements(org: Partial<Organization> | null | undefine
     if (sku) Object.assign(merged, sku.grants);
   }
   if (merged.skus.length > 0 && merged.period === 'free') merged.period = 'active';
+  // A fully-expired SKU set rolls the org back to the free period.
+  if (merged.skus.length === 0 && overrides.period === 'active') {
+    merged.period = 'free';
+  }
 
   return merged;
+}
+
+/** Monthly billing period for one SKU grant (30 days). */
+export const SKU_PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** ISO date `periods` SKU-months after `since` (defaults to one renewal). */
+export function skuRenewsAt(sinceIso: string, periods: number = 1): string {
+  return new Date(new Date(sinceIso).getTime() + periods * SKU_PERIOD_MS).toISOString();
+}
+
+/** Next renewal date for a SKU, or null when the SKU is not owned. */
+export function skuNextRenewal(ent: Entitlements, id: CloudSkuId): string | null {
+  return ent.skuMeta?.[id]?.renewsAt ?? null;
+}
+
+/** True when the org holds a SKU that has not expired. */
+export function isSkuActive(ent: Entitlements, id: CloudSkuId): boolean {
+  if (!hasSku(ent, id)) return false;
+  const meta = ent.skuMeta?.[id];
+  if (!meta?.renewsAt) return true; // grandfathered
+  return new Date(meta.renewsAt).getTime() > Date.now();
 }
 
 /** True when the org has a given cloud SKU (Cloud Pro satisfies any SKU). */

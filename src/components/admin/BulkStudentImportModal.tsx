@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { IndianBoard } from '../../types';
 import { PROGRAM_TRACKS } from '../../lib/programs';
+import { resolveEntitlements, isUnlimited } from '../../lib/entitlements';
 import {
   Upload,
   FileSpreadsheet,
@@ -37,7 +38,7 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
   isOpen,
   onClose
 }) => {
-  const { currentOrg, batches, addStudent, showToast } = useApp();
+  const { currentOrg, batches, students, addStudent, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
   const [pastedText, setPastedText] = useState<string>('');
   const [selectedBatchId, setSelectedBatchId] = useState<string>(batches[0]?.id || '');
@@ -172,13 +173,30 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
     const validRows = parsedRows.filter(r => r.isValid);
     if (validRows.length === 0) return;
 
+    // Free-tier cap gate before any row is written: import only what fits and
+    // tell the owner how many were skipped and why.
+    const ent = resolveEntitlements(currentOrg);
+    const curCount = students.filter(s => s.orgId === currentOrg.id).length;
+    const unlimited = isUnlimited(ent.maxStudents);
+    const remainingSlots = unlimited ? validRows.length : Math.max(0, ent.maxStudents - curCount);
+    const rowsToImport = validRows.slice(0, unlimited ? validRows.length : remainingSlots);
+    const skipped = validRows.length - rowsToImport.length;
+
+    if (rowsToImport.length === 0) {
+      showToast(
+        `Student limit reached (${ent.maxStudents}). Add the Growth or Cloud Pro SKU to import more students.`,
+        'error'
+      );
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
       let importedCount = 0;
       const branchId = currentOrg.branches?.[0]?.id || 'branch-1';
 
-      validRows.forEach((row, i) => {
+      rowsToImport.forEach((row, i) => {
         const rollNumber = String(100 + i + 1);
         addStudent({
           branchId,
@@ -207,7 +225,12 @@ export const BulkStudentImportModal: React.FC<BulkStudentImportModalProps> = ({
         importedCount++;
       });
 
-      showToast(`Admitted ${importedCount} students to ${currentOrg.name}!`, 'success');
+      showToast(
+        skipped > 0
+          ? `Admitted ${importedCount} students — ${skipped} skipped (student cap of ${ent.maxStudents} reached). Add the Growth or Cloud Pro SKU to admit more.`
+          : `Admitted ${importedCount} students to ${currentOrg.name}!`,
+        skipped > 0 ? 'warning' : 'success'
+      );
       setIsProcessing(false);
       onClose();
     } catch (err) {

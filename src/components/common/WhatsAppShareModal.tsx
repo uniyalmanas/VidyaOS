@@ -18,7 +18,7 @@ import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { easings, tSpring, fadeUp, staggerContainerFast } from '../../lib/motion';
 import { resolveEntitlements } from '../../lib/entitlements';
 import { enqueueOutboundMessage } from '../../lib/messagingService';
-import { canSendMessage } from '../../lib/messagingUtils';
+import { canSendMessage, estimateCreditCost } from '../../lib/messagingUtils';
 import { CHANNEL_META, MESSAGE_TEMPLATES, composeMessage } from '../../lib/messageTemplates';
 import { MessageChannel, MessageTemplateId } from '../../types';
 
@@ -77,7 +77,8 @@ export const WhatsAppShareModal: React.FC = () => {
 
   // G3 — automated cloud delivery (uses monthly message credits)
   const ent = resolveEntitlements(currentOrg);
-  const creditCheck = canSendMessage(ent, currentOrg?.usage);
+  const creditCost = estimateCreditCost(channel, templateId);
+  const creditCheck = canSendMessage(ent, currentOrg?.usage, undefined, creditCost);
 
   const handlePickTemplate = (id: MessageTemplateId | 'custom') => {
     setTemplateId(id);
@@ -318,6 +319,17 @@ export const WhatsAppShareModal: React.FC = () => {
                   </span>
                 </div>
 
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
+                    This message costs <b>{creditCost} credit{creditCost === 1 ? '' : 's'}</b>
+                  </span>
+                  <span className="text-[10px] text-[#5F6368] dark:text-[#9AA0A6]">
+                    {CHANNEL_META[channel].provider === 'meta-whatsapp'
+                      ? 'via WhatsApp Business'
+                      : `via ${CHANNEL_META[channel].provider.toUpperCase()}`}
+                  </span>
+                </div>
+
                 {/* Channel pills */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {(Object.keys(CHANNEL_META) as MessageChannel[]).map((c) => (
@@ -378,7 +390,7 @@ export const WhatsAppShareModal: React.FC = () => {
                   className="w-full py-2.5 bg-[#188038] hover:bg-[#137333] text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-emerald-700/20 disabled:opacity-50 cursor-pointer"
                 >
                   {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  <span>{sending ? 'Queuing…' : 'Send via cloud (1 credit)'}</span>
+                  <span>{sending ? 'Queuing…' : `Send via cloud (${creditCost} credit${creditCost === 1 ? '' : 's'})`}</span>
                 </button>
               </motion.div>
             </motion.div>

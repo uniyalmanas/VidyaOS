@@ -99,6 +99,7 @@ const freeCore = {
 const skuTints: Record<CloudSkuId, { emoji: string; tint: string }> = {
   media: { emoji: '🖼️', tint: 'bg-sky-500/10 text-sky-600 dark:text-sky-300' },
   messaging: { emoji: '💬', tint: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' },
+  growth: { emoji: '🚀', tint: 'bg-teal-500/10 text-teal-600 dark:text-teal-300' },
   brand: { emoji: '🎨', tint: 'bg-pink-500/10 text-pink-600 dark:text-pink-300' },
   app: { emoji: '📱', tint: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' },
   video: { emoji: '🎬', tint: 'bg-purple-500/10 text-purple-600 dark:text-purple-300' },
@@ -109,6 +110,7 @@ const skuTints: Record<CloudSkuId, { emoji: string; tint: string }> = {
 const skuIcons: Record<CloudSkuId, React.ElementType> = {
   media: Image,
   messaging: MessageCircle,
+  growth: TrendingUp,
   brand: Palette,
   app: Smartphone,
   video: Video,
@@ -119,7 +121,7 @@ const skuIcons: Record<CloudSkuId, React.ElementType> = {
 /** Rough cloud-stack forecast by center size (used by the ROI calculator). */
 const cloudTierBySize: { max: number; label: string; detail: string; price: string; tone: 'free' | 'mid' | 'pro' }[] = [
   { max: 150, label: 'Free Forever Core', detail: 'Full ERP · ₹0/mo · no card', price: '₹0', tone: 'free' },
-  { max: 300, label: 'Growth Meters', detail: 'Cloud Messaging + Cloud Media', price: '₹598/mo', tone: 'mid' },
+  { max: 500, label: 'Growth', detail: 'More students & branches + Cloud Messaging + Media', price: '₹1,097/mo', tone: 'mid' },
   { max: Infinity, label: 'Cloud Pro', detail: 'Everything in the cloud store', price: '₹1,999/mo', tone: 'pro' }
 ];
 

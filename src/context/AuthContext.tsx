@@ -370,8 +370,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   trialEndsAt: '',
                   currentCycleEnd: new Date().toISOString().split('T')[0],
                   createdAt: new Date().toISOString().split('T')[0],
-                  maxStudents: 300,
-                  maxBranches: 1,
+                  maxStudents: 150,
+                  maxBranches: 2,
                   branches: [
                     {
                       id: `branch-${Date.now()}`,
@@ -599,8 +599,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 trialEndsAt: '',
                 currentCycleEnd: new Date().toISOString().split('T')[0],
                 createdAt: new Date().toISOString().split('T')[0],
-                maxStudents: 300,
-                maxBranches: 1,
+                maxStudents: 150,
+                maxBranches: 2,
                 branches: [{
                   id: `branch-${Date.now()}`,
                   orgId: autoOrgId,

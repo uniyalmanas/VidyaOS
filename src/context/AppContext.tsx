@@ -50,6 +50,7 @@ import {
   persistUserRoleToFirestore,
   seedInitialFirestoreDataIfEmpty
 } from '../lib/firestoreService';
+import { FREE_ENTITLEMENTS } from '../lib/entitlements';
 
 // Domain Slices
 import { StudentProvider, useStudents, EnrollmentResult } from './slices/StudentContext';
@@ -913,7 +914,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createNewOrganization = async (orgData: Partial<Organization>): Promise<Organization> => {
     const id = orgData.id || `org-${Date.now()}`;
     const resolvedPlanId = (orgData.planId as any) || 'starter';
-    const selectedPlan = SUBSCRIPTION_PLANS.find(p => p.id === resolvedPlanId);
     const newOrg: Organization = {
       id,
       ownerUid: orgData.ownerUid || currentUser.id,
@@ -934,8 +934,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       trialEndsAt: '',
       currentCycleEnd: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString().split('T')[0],
-      maxStudents: selectedPlan?.maxStudents || 100,
-      maxBranches: selectedPlan?.maxBranches || 1,
+      // New orgs always start at the free-forever caps — the legacy plan fields
+      // on `SUBSCRIPTION_PLANS` are a tier label only, not the pricing surface.
+      maxStudents: FREE_ENTITLEMENTS.maxStudents,
+      maxBranches: FREE_ENTITLEMENTS.maxBranches,
       branches: [
         {
           id: `branch-${Date.now()}`,

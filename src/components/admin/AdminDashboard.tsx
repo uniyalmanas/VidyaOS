@@ -57,7 +57,8 @@ import {
   Video,
   Bot,
   Crown,
-  ShoppingCart
+  ShoppingCart,
+  RefreshCw
 } from 'lucide-react';
 import { IndianBoard, AttendanceStatus, Batch, FeeInvoice, StudyMaterial, User, Teacher, Student, Inquiry, ExamKind, RazorpayPaymentLink, CloudSkuId } from '../../types';
 import { uploadFileToStorage } from '../../lib/firebase';
@@ -83,7 +84,7 @@ import {
   DEFAULT_INSTALLMENT_INTERVAL_DAYS
 } from '../../lib/installments';
 import { requestPaymentLink, requestCloudSkuPurchase, subscribeToPaymentLinks } from '../../lib/firestoreService';
-import { resolveEntitlements, hasSku, entitlementSummary } from '../../lib/entitlements';
+import { resolveEntitlements, hasSku, withinStudentCap, entitlementSummary, skuNextRenewal } from '../../lib/entitlements';
 import { usageBoard, estimatedMonthlyCloudCost, skuGrantLabel, storeCatalog } from '../../lib/cloudStore';
 import { EditProfileModal } from '../profile/EditProfileModal';
 import { BulkStudentImportModal } from './BulkStudentImportModal';
@@ -692,6 +693,20 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!stName.trim() || !stGender) return;
 
+    // Free-tier cap gate — enforce before any auth account is provisioned so we
+    // never strand an orphaned login behind an over-cap admission.
+    const admitEnt = resolveEntitlements(currentOrg);
+    const curCount = students.filter(s => s.orgId === currentOrg.id).length;
+    if (!withinStudentCap(admitEnt, curCount)) {
+      showToast(
+        `Student limit reached (${admitEnt.maxStudents}). Add the Growth or Cloud Pro SKU to admit more students.`,
+        'error'
+      );
+      setShowAddStudentModal(false);
+      setCurrentModule('subscription');
+      return;
+    }
+
     const studentDigits = stStudentPhone.replace(/[^0-9]/g, '').slice(-10);
     const parentDigits = stPhone.replace(/[^0-9]/g, '').slice(-10);
     const studentPassword = stStudentPassword.trim();
@@ -825,6 +840,17 @@ export const AdminDashboard: React.FC = () => {
             : `✓ "${newStudent.name}" admitted.`,
           'success'
         );
+      }
+    } catch (capErr) {
+      // Defensive backstop for the free-tier cap (the pre-check above normally
+      // catches it earlier with a nicer paywall message).
+      const msg = capErr instanceof Error && capErr.message.startsWith('STUDENT_CAP_REACHED') ? capErr.message : '';
+      if (msg) {
+        showToast(msg.split(':').slice(1).join(' '), 'error');
+        setShowAddStudentModal(false);
+        setCurrentModule('subscription');
+      } else {
+        throw capErr;
       }
     } finally {
       setIsAdmitting(false);
@@ -1020,6 +1046,7 @@ export const AdminDashboard: React.FC = () => {
     switch (id) {
       case 'media': return <Cloud className={`${cls} text-[#AB47BC]`} />;
       case 'messaging': return <Zap className={`${cls} text-[#1A73E8]`} />;
+      case 'growth': return <TrendingUp className={`${cls} text-[#188038]`} />;
       case 'brand': return <Palette className={`${cls} text-[#F9AB00]`} />;
       case 'app': return <Smartphone className={`${cls} text-[#188038]`} />;
       case 'video': return <Video className={`${cls} text-[#E8710A]`} />;
@@ -3744,14 +3771,21 @@ export const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {storeCatalog().map(sku => {
                 const owned = hasSku(ent, sku.id);
+                const renewsAt = skuNextRenewal(ent, sku.id);
+                const wasGranted = !!ent.skuMeta?.[sku.id]?.renewsAt; // owned before but now expired
                 const purchase = skuPurchaseLinks.find(l => l.notes?.sku === sku.id);
+                const renewsLabel = renewsAt
+                  ? new Date(renewsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : null;
                 return (
                   <div
                     key={sku.id}
                     className={`rounded-2xl p-5 border flex flex-col justify-between space-y-4 transition ${
                       owned
                         ? 'border-2 border-[#188038]/50 bg-[#E6F4EA]/20 dark:bg-[#188038]/10 shadow-md'
-                        : 'border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20]'
+                        : wasGranted
+                          ? 'border-2 border-[#D93025]/40 bg-[#FCE8E6]/15 dark:bg-[#D93025]/10'
+                          : 'border-[#DADCE0] dark:border-[#3C4043] bg-white dark:bg-[#1E1F20]'
                     }`}
                   >
                     <div className="space-y-3">
@@ -3759,7 +3793,11 @@ export const AdminDashboard: React.FC = () => {
                         <div className="w-9 h-9 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] flex items-center justify-center">
                           {skuIcon(sku.id)}
                         </div>
-                        {owned && <StatusChip label="ACTIVE" variant="success" size="xs" />}
+                        {owned ? (
+                          <StatusChip label={renewsLabel ? `RENEWS ${renewsLabel}` : 'ACTIVE'} variant="success" size="xs" />
+                        ) : wasGranted ? (
+                          <StatusChip label="EXPIRED" variant="error" size="xs" />
+                        ) : null}
                       </div>
 
                       <div>
@@ -3784,8 +3822,18 @@ export const AdminDashboard: React.FC = () => {
                     <div>
                       {owned ? (
                         <div className="w-full text-center py-2 px-3 rounded-xl bg-[#E6F4EA] dark:bg-[#188038]/20 text-[#188038] dark:text-[#81C995] font-bold text-xs">
-                          Included in your plan
+                          {renewsLabel ? `Included · renews ${renewsLabel}` : 'Included in your plan'}
                         </div>
+                      ) : wasGranted ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleBuySku(sku.id)}
+                          disabled={rzpBusy}
+                          className="w-full py-2 bg-[#D93025] hover:bg-[#B3261E] text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-md shadow-red-700/20 disabled:opacity-50 cursor-pointer"
+                        >
+                          {rzpBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          <span>Renew ₹{sku.priceMonthly.toLocaleString('en-IN')}/mo</span>
+                        </button>
                       ) : purchase?.url ? (
                         <a
                           href={purchase.url}

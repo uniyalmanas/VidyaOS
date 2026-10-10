@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { CloudSkuId, Organization } from '../../types';
 import { UserRoleDistributionCard } from './UserRoleDistributionCard';
-import { CLOUD_SKUS } from '../../lib/entitlements';
+import { CLOUD_SKUS, resolveEntitlements } from '../../lib/entitlements';
 import { skuGrantLabel } from '../../lib/cloudStore';
 import {
   PageHeader,
@@ -73,11 +73,11 @@ export const PlatformDashboard: React.FC = () => {
   const activeOrgs = organizations.filter(o => o.subscriptionStatus === 'active' || o.subscriptionStatus === 'trial');
   const totalPlatformStudents = students.length;
 
-  // Cloud-meter MRR: sum of the store price of every SKU each org has adopted.
-  // Free-core orgs (no SKUs) contribute ₹0 — the ERP itself is never metered.
+  // Cloud-meter MRR: sum of the store price of every ACTIVE (non-expired) SKU each
+  // org holds. Free-core orgs (no SKUs) contribute ₹0 — the ERP itself is never metered.
   const cloudMrr = organizations.reduce((acc, org) => {
     if (org.subscriptionStatus === 'suspended') return acc;
-    const skus = (org.entitlements?.skus ?? []) as CloudSkuId[];
+    const skus = resolveEntitlements(org).skus as CloudSkuId[];
     return acc + skus.reduce((sum, id) => sum + (CLOUD_SKUS.find(s => s.id === id)?.priceMonthly ?? 0), 0);
   }, 0);
 
@@ -230,15 +230,16 @@ export const PlatformDashboard: React.FC = () => {
             header: 'Student Quota',
             render: (org) => {
               const orgStudentsCount = students.filter(s => s.orgId === org.id).length;
+              const resolvedMax = resolveEntitlements(org).maxStudents;
               return (
                 <div>
                   <div className="font-mono font-semibold text-xs text-[#202124] dark:text-[#E8EAED]">
-                    {orgStudentsCount} / {org.maxStudents}
+                    {orgStudentsCount} / {resolvedMax}
                   </div>
                   <div className="w-24 h-1.5 bg-[#F1F3F4] dark:bg-[#282A2C] rounded-full mt-1 overflow-hidden">
                     <div
                       className="h-full bg-[#FFA000] rounded-full"
-                      style={{ width: `${Math.min(100, (orgStudentsCount / org.maxStudents) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (orgStudentsCount / resolvedMax) * 100)}%` }}
                     />
                   </div>
                 </div>

@@ -180,10 +180,13 @@ export const billingWebhook = onRequest(async (req, res) => {
   }
 
   // 4a. Cloud-store SKU purchase (payment link with notes.sku, no invoice):
-  // grant the entitlement on the org, server-side, exactly once.
+  // grant the entitlement on the org, server-side, exactly once per payment.
+  // Each SKU is a MONTHLY subscription: the grant carries `skuMeta[sku]` with a
+  // `renewsAt` 30 days out. Re-paying for an owned SKU (a renewal) extends the
+  // window instead of double-granting; the same paymentId never applies twice.
   if (verified && event && !invoiceId && event.notes.sku) {
     const sku = event.notes.sku;
-    const knownSkus = ['media', 'messaging', 'brand', 'app', 'video', 'ai', 'pro'];
+    const knownSkus = ['media', 'messaging', 'growth', 'brand', 'app', 'video', 'ai', 'pro'];
     try {
       await db.runTransaction(async txn => {
         const orgRef = db.doc(`organizations/${event.notes.orgId}`);
@@ -192,11 +195,25 @@ export const billingWebhook = onRequest(async (req, res) => {
         if (event.amountPaise < 9900) return; // ₹99 floor — underpaid grants nothing
         const data = snapshot.data();
         const current: string[] = Array.isArray(data.entitlements?.skus) ? data.entitlements.skus : [];
-        if (current.includes(sku)) return;
+        const skuMeta = (data.entitlements?.skuMeta || {}) as Record<string, { since: string; renewsAt: string; lastPaymentId?: string }>;
+        const prev = skuMeta[sku];
+        // Idempotency: a retried delivery of the same payment must not extend twice.
+        if (prev && prev.lastPaymentId === event.paymentId) return;
+
+        const since = prev?.since || receivedAt;
+        // Renewal extends from the later of (now, previous expiry) so the billing
+        // cycle stays continuous; first grant counts from today.
+        const baseMs = prev?.renewsAt ? Math.max(new Date(receivedAt).getTime(), new Date(prev.renewsAt).getTime()) : new Date(receivedAt).getTime();
+        const renewsAt = new Date(baseMs + 30 * 24 * 60 * 60 * 1000).toISOString();
+
         txn.update(orgRef, {
           entitlements: {
             ...(data.entitlements || {}),
-            skus: [...current, sku],
+            skus: current.includes(sku) ? current : [...current, sku],
+            skuMeta: {
+              ...skuMeta,
+              [sku]: { since, renewsAt, lastPaymentId: event.paymentId }
+            },
             period: 'active'
           }
         });

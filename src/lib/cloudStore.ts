@@ -120,8 +120,12 @@ export function estimatedMonthlyCloudCost(ent: Entitlements): number {
 /** One-line "what this SKU grants" for the storefront card. */
 export function skuGrantLabel(sku: CloudSku): string {
   const g = sku.grants;
+  if (g.maxStudents && g.maxStudents > 0) {
+    const branches = g.maxBranches && g.maxBranches > 0 ? ` · ${g.maxBranches} branches` : '';
+    return `Up to ${g.maxStudents.toLocaleString('en-IN')} students${branches}`;
+  }
   if (g.messagingCredits && g.messagingCredits > 0) {
-    return `${g.messagingCredits.toLocaleString('en-IN')} message credits / month`;
+    return `${g.messagingCredits.toLocaleString('en-IN')} credits / month`;
   }
   if (g.videoMinutes && g.videoMinutes > 0) {
     return `${g.videoMinutes.toLocaleString('en-IN')} video minutes / month`;

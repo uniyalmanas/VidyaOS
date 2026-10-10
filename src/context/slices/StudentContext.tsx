@@ -12,6 +12,7 @@ import {
   deleteStudentAtomically
 } from '../../lib/firestoreService';
 import { reconcileBatchMembership } from '../../lib/rosterSync';
+import { resolveEntitlements, withinStudentCap } from '../../lib/entitlements';
 import { auth } from '../../lib/firebase';
 
 /** Outcome of a roster change. `error` is safe to show verbatim in a toast. */
@@ -301,7 +302,17 @@ export const StudentProvider: React.FC<StudentProviderProps> = ({
   }, [students, selectedChildId, currentUser.role, authorizedStudentIds]);
 
   const addStudent = (data: Omit<Student, 'id' | 'orgId' | 'enrollmentNo'> & Partial<Pick<Student, 'userId'>>): Student => {
-    const nextNum = students.filter(s => s.orgId === currentOrg.id).length + 1;
+    // Cap enforcement (defensive backstop — the UI paths also pre-check and
+    // point at the upgrade path, so this should only fire on a race/tamper).
+    const ent = resolveEntitlements(currentOrg);
+    const currentCount = students.filter(s => s.orgId === currentOrg.id).length;
+    if (!withinStudentCap(ent, currentCount)) {
+      throw new Error(
+        `STUDENT_CAP_REACHED:${ent.maxStudents}:Free tier admits up to ${ent.maxStudents} students — add a Growth or Cloud Pro SKU to raise the cap.`
+      );
+    }
+
+    const nextNum = currentCount + 1;
     const enrollmentNo = `${currentOrg.logoText || 'ORG'}/${new Date().getFullYear()}/${String(nextNum).padStart(3, '0')}`;
     const cleanDigits = (data.phone || '').replace(/[^0-9]/g, '').slice(-10);
     const uniqueUserId = data.userId || `user-stud-${cleanDigits || Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
